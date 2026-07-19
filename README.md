@@ -8,6 +8,8 @@ It is designed to run locally with each user’s own API credentials.
 ## Capabilities
 
 - Analyze official product pages and documentation.
+- Switch between Simplified Chinese and English for the interface, generated
+  analysis, validation messages, dates, and exports.
 - Discover linked GitHub repositories and enrich open-source products with
   license, README, and repository metadata.
 - Keep verified, vendor-provided, and inferred evidence visibly separate.
@@ -26,8 +28,8 @@ It is designed to run locally with each user’s own API credentials.
 ## Run locally
 
 ```bash
-npm install
-npm run dev
+pnpm install
+pnpm dev
 ```
 
 Open `http://localhost:3000`.
@@ -63,9 +65,9 @@ GITHUB_TOKEN=
 ## Development commands
 
 ```bash
-npm test
-npm run lint
-npm run build
+pnpm test
+pnpm lint
+pnpm build
 ```
 
 ## Project structure
@@ -90,3 +92,5 @@ test/                 URL-safety and scoring tests
   files.
 - Product source material is sent to the configured OpenAI model to generate
   the structured comparison.
+- The selected locale is stored locally. Existing reports keep the language in
+  which they were generated.
