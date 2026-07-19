@@ -17,24 +17,47 @@ const requestSchema = z
   .object({
     urls: z.tuple([z.string().url(), z.string().url()]),
     context: z.string().trim().min(10).max(2_000),
-    priorities: z
-      .object({
-        openness: z.number().min(0).max(100),
-        agentWorkflow: z.number().min(0).max(100),
-        performance: z.number().min(0).max(100),
-        polish: z.number().min(0).max(100),
-        automation: z.number().min(0).max(100),
-      })
-      .strict(),
+    criteria: z
+      .array(
+        z
+          .object({
+            key: z.string().trim().min(1).max(80),
+            label: z.string().trim().min(1).max(80),
+            hint: z.string().trim().max(200),
+            weight: z.number().min(0).max(100),
+          })
+          .strict(),
+      )
+      .min(2)
+      .max(8)
+      .refine(
+        (criteria) =>
+          new Set(criteria.map((criterion) => criterion.key)).size ===
+          criteria.length,
+        "Criterion keys must be unique",
+      ),
     locale: z.enum(["zh-CN", "en"]).default("zh-CN"),
   })
   .strict();
 
-function isSamplePair(urls: [string, string]) {
+function isBundledSampleRequest(body: AnalyzeRequest) {
+  const urls = body.urls;
   const hosts = urls
     .map((url) => new URL(url).hostname.replace(/^www\./, ""))
     .sort();
-  return hosts.includes("cmux.com") && hosts.includes("otty.sh");
+  const sampleKeys = new Set([
+    "openness",
+    "agentWorkflow",
+    "performance",
+    "polish",
+    "automation",
+  ]);
+  return (
+    hosts.includes("cmux.com") &&
+    hosts.includes("otty.sh") &&
+    body.criteria.length === sampleKeys.size &&
+    body.criteria.every((criterion) => sampleKeys.has(criterion.key))
+  );
 }
 
 export async function POST(request: Request) {
@@ -60,10 +83,20 @@ export async function POST(request: Request) {
     const apiKey = sessionApiKey || process.env.OPENAI_API_KEY;
     const body = requestSchema.parse(input) as AnalyzeRequest;
 
-    if (!apiKey && isSamplePair(body.urls)) {
+    if (!apiKey && isBundledSampleRequest(body)) {
+      const sample = sampleComparisonForLocale(locale);
+      const sampleDimensions = new Map(
+        sample.dimensions.map((dimension) => [dimension.key, dimension]),
+      );
       return NextResponse.json({
-        ...sampleComparisonForLocale(locale),
+        ...sample,
         generatedAt: new Date().toISOString(),
+        dimensions: body.criteria.map((criterion) => ({
+          ...sampleDimensions.get(criterion.key)!,
+          key: criterion.key,
+          label: criterion.label,
+          weight: criterion.weight,
+        })),
       });
     }
 

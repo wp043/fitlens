@@ -32,13 +32,7 @@ const productSchema = z
 
 const dimensionSchema = z
   .object({
-    key: z.enum([
-      "openness",
-      "agentWorkflow",
-      "performance",
-      "polish",
-      "automation",
-    ]),
+    key: z.string(),
     label: z.string(),
     weight: z.number().int().min(0).max(100),
     productScores: z.record(z.number().int().min(0).max(100)),
@@ -59,7 +53,7 @@ const comparisonSchema = z
       })
       .strict(),
     products: z.array(productSchema).length(2),
-    dimensions: z.array(dimensionSchema).length(5),
+    dimensions: z.array(dimensionSchema).min(2).max(8),
     unknowns: z.array(z.string()).min(2).max(5),
     trialPlan: z
       .array(
@@ -113,13 +107,15 @@ export async function analyzeWithModel(
       "vendor 用于产品官网或厂商文档中的声明。",
       "inferred 用于明确标记的推断；“没有找到”不能写成“确定不存在”。",
       "website-only 产品的置信度应低于同时有源码和官网证据的产品。",
-      "五个 dimension 必须各出现一次，并使用用户提供的权重。",
+      request.locale === "zh-CN"
+        ? "每个 CRITERIA 项必须在 dimensions 中恰好出现一次，保留相同的 key、label 和 weight；不要增加或遗漏维度。"
+        : "Return exactly one dimension for every CRITERIA item, preserving its key, label, and weight. Do not add or omit dimensions.",
       "分数表示对该用户的适配度，不表示普遍产品质量。",
       "trialPlan 必须是可在 30 分钟内比较两款产品的具体任务。",
     ].join("\n"),
     input: JSON.stringify({
       USER_CONTEXT: request.context,
-      PRIORITIES: request.priorities,
+      CRITERIA: request.criteria,
       SOURCES: sources.map(sourceForPrompt),
     }),
     text: {
@@ -132,6 +128,23 @@ export async function analyzeWithModel(
   }
 
   const parsed = response.output_parsed;
+  const returnedDimensions = new Map(
+    parsed.dimensions.map((dimension) => [dimension.key, dimension]),
+  );
+  if (
+    returnedDimensions.size !== request.criteria.length ||
+    request.criteria.some(
+      (criterion) => !returnedDimensions.has(criterion.key),
+    )
+  ) {
+    throw new Error(messages[request.locale].modelFailed);
+  }
+  const dimensions = request.criteria.map((criterion) => ({
+    ...returnedDimensions.get(criterion.key)!,
+    key: criterion.key,
+    label: criterion.label,
+    weight: criterion.weight,
+  }));
   const products = parsed.products.map((product, index) => {
     const source = sources[index];
     const safeEvidence = product.evidence.map((evidence) => ({
@@ -153,5 +166,6 @@ export async function analyzeWithModel(
     ...parsed,
     generatedAt: new Date().toISOString(),
     products,
+    dimensions,
   };
 }

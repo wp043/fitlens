@@ -15,12 +15,18 @@ priorities change the outcome, and important unknowns should remain visible.
   repository metadata.
 - Separates verified evidence, vendor claims, and explicit inference.
 - Produces a structured recommendation for the user's stated workflow.
-- Recalculates the winner immediately when priority weights change.
+- Supports 2–8 editable comparison dimensions with reusable general,
+  developer-tool, privacy-first, and everyday-software templates.
+- Saves custom comparison templates in the local browser.
+- Recalculates the winner immediately when dimension weights change.
+- Refreshes an existing report and shows recommendation, score, evidence,
+  dimension, and unknown-item changes.
+- Keeps the five most recent source-report revisions with each report.
 - Shows confidence, evidence coverage, unknowns, and a short hands-on trial
   plan.
 - Supports Simplified Chinese and English across the interface, analysis,
   validation, dates, and exports.
-- Keeps recent reports, research notes, and preference profiles in the local
+- Keeps recent reports, research notes, and comparison templates in the local
   browser.
 - Imports and exports portable JSON reports and exports readable Markdown.
 - Accepts an OpenAI API key from `.env.local` or only for the current browser
@@ -56,7 +62,7 @@ GITHUB_TOKEN=
 
 ```mermaid
 flowchart LR
-    U[Browser workspace] -->|URLs, workflow, priorities, locale| A[Next.js analysis API]
+    U[Browser workspace] -->|URLs, workflow, criteria, locale| A[Next.js analysis API]
     A --> V[URL validation and SSRF guard]
     V --> W[Official websites and docs]
     V --> G[GitHub API and README]
@@ -66,13 +72,16 @@ flowchart LR
     M --> R[Structured comparison]
     R --> U
     U --> H[(Local report history)]
-    U --> P[(Local preferences and notes)]
+    U --> P[(Local templates and notes)]
+    U --> D[Deterministic report diff]
+    H --> D
     U --> X[Markdown and JSON files]
 ```
 
 The model produces one shared report schema for both products. The browser
-owns the interactive weighting step, so changing a priority does not require
-another model request.
+owns the interactive weighting step, so changing a weight does not require
+another model request. Refreshing does collect the sources again, while the
+result-to-result diff is calculated deterministically in the browser.
 
 ## Analysis sequence
 
@@ -85,7 +94,7 @@ sequenceDiagram
     participant Model as OpenAI model
 
     User->>UI: Add two URLs and describe the workflow
-    UI->>API: Submit URLs, priorities, locale, and optional session key
+    UI->>API: Submit URLs, criteria, locale, and optional session key
     API->>API: Validate request and reject unsafe targets
     par Product A
         API->>Sources: Collect website and repository evidence
@@ -98,6 +107,12 @@ sequenceDiagram
     API-->>UI: Validated report
     UI->>UI: Recalculate weighted fit scores
     UI->>UI: Save report locally
+    opt Refresh later
+        User->>UI: Refresh report
+        UI->>API: Re-run the same comparison
+        API-->>UI: Newly collected report
+        UI->>UI: Store prior revision and calculate diff
+    end
 ```
 
 ## Evidence model
@@ -132,16 +147,18 @@ fit(p) = Σ(weight[d] × score[p,d]) / Σ(weight[d])
 ```
 
 - Each weight is between 0 and 100.
-- Each product receives a 0–100 score for every dimension.
+- A comparison contains 2–8 dimensions.
+- Each product receives a 0–100 score for every selected dimension.
 - The model explains each dimension score.
 - The browser recomputes normalized totals whenever a slider changes.
 - A fit score describes suitability for this workflow, not universal product
   quality.
 
-The current dimensions are openness, agent workflow, performance, polish, and
-automation. Making these dimensions user-defined is the highest-priority
-product change because the existing set is still oriented toward technical
-tools.
+Dimension keys remain stable inside a report while names, descriptions, and
+weights are editable. The analysis response is checked against the submitted
+criteria, then normalized back to the exact requested keys, labels, and
+weights. This prevents a model response from silently changing the scoring
+contract.
 
 ## Privacy and data boundaries
 
@@ -172,7 +189,7 @@ flowchart TB
 
 | Data | Location | Persistence |
 | --- | --- | --- |
-| Reports, notes, custom preferences | `localStorage` | Until cleared by the user |
+| Reports, revisions, notes, custom templates | `localStorage` | Until cleared by the user |
 | Key entered in the interface | `sessionStorage` | Current browser session |
 | Key configured in `.env.local` | Local server environment | Until the file changes |
 | Product source material | Sent to the configured OpenAI model | Governed by the API account |
@@ -190,17 +207,25 @@ stateDiagram-v2
     Draft --> Analyzed: Collect evidence
     Analyzed --> Reweighted: Change priorities
     Reweighted --> Analyzed: Change priorities again
+    Analyzed --> Refreshed: Collect sources again
+    Reweighted --> Refreshed: Collect sources again
+    Refreshed --> Diffed: Compare with prior revision
+    Diffed --> Refreshed: Refresh again
     Analyzed --> Annotated: Add hands-on notes
     Reweighted --> Annotated: Add hands-on notes
+    Diffed --> Annotated: Add hands-on notes
     Annotated --> Exported: Export Markdown or JSON
     Analyzed --> Exported: Export Markdown or JSON
+    Diffed --> Exported: Export Markdown or JSON
     Exported --> Imported: Open JSON on another device
     Imported --> Reweighted: Adjust local priorities
 ```
 
 Portable reports include a schema version, original locale, input URLs,
-workflow context, priorities, structured result, notes, and timestamps. Import
-validation only accepts HTTP and HTTPS evidence links.
+workflow context, criteria, structured result, revision history, notes, and
+timestamps. Import validation only accepts HTTP and HTTPS evidence links.
+Version 1 files and browser history are migrated to the dynamic criteria model
+when loaded.
 
 ## Internationalization
 
@@ -221,8 +246,10 @@ components/
   compare-workbench.tsx  Local interactive workspace
 lib/
   analyzer.ts            Structured model analysis
+  criteria.ts            Localized built-in templates and criteria migration
+  diff.ts                Deterministic report-to-report comparison
   i18n.ts                Typed Chinese and English dictionaries
-  report.ts              Portable reports and evidence coverage
+  report.ts              Versioned reports, migration, and evidence coverage
   scoring.ts             Preference-weighted scoring
   source.ts              Website and GitHub evidence collection
   types.ts               Shared request and report types
@@ -244,12 +271,14 @@ security settings and the PostCSS override live in `pnpm-workspace.yaml`.
 
 ## Product roadmap
 
+The current foundation includes editable comparison criteria, reusable
+templates, report refresh, local revision history, and deterministic change
+summaries.
+
 The most valuable next changes, ordered by product impact:
 
 | Priority | Feature | Why it matters | Relative effort |
 | --- | --- | --- | --- |
-| P0 | Custom dimensions and reusable comparison templates | Removes the current technical-tool bias and makes the scoring model useful across product categories | Medium |
-| P0 | Refresh and report diff | Shows what changed in pricing, evidence, repository health, and recommendation over time | Medium |
 | P0 | Manual evidence capture | Lets users add pricing pages, policy text, screenshots, or hands-on findings for closed products | Medium |
 | P1 | Multi-product shortlist | Supports discovery workflows where the user begins with more than two candidates | High |
 | P1 | Dedicated source adapters | Collects richer pricing, changelog, release, privacy, and documentation evidence | Medium |
@@ -261,17 +290,17 @@ The most valuable next changes, ordered by product impact:
 
 ```mermaid
 flowchart LR
-    C[Custom dimensions] --> D[Refresh and diff]
-    C --> E[Manual evidence]
+    E[Manual evidence] --> T[Trial-based rescoring]
+    E --> A[Dedicated source adapters]
+    A --> D[Deeper report diffs]
     D --> L[Local research library]
-    E --> T[Trial-based rescoring]
-    C --> N[Multi-product shortlist]
-    D --> S[Dedicated source adapters]
+    E --> N[Multi-product shortlist]
+    N --> P[Model-provider abstraction]
 ```
 
-Custom dimensions should come first: refresh, multi-product scoring, report
-search, and trial-based rescoring all depend on a comparison schema that is not
-hard-coded to one product category.
+Manual evidence capture is the strongest next step because it closes the
+largest information gap for products whose useful evidence is not available
+through a public repository or a server-rendered product page.
 
 ## Current constraints
 
@@ -281,5 +310,6 @@ hard-coded to one product category.
 - JavaScript-heavy pages may expose less text to the current HTML collector.
 - Dimension scores are model-generated and should be treated as explainable
   judgments, not measurements.
+- A report retains at most five prior revisions in local history and exports.
 - Reports are local to one browser unless exported.
 - Live analysis requires the user's own API credentials.

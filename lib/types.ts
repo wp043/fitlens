@@ -1,13 +1,15 @@
 export type EvidenceLevel = "verified" | "vendor" | "inferred";
 
-export type PriorityKey =
-  | "openness"
-  | "agentWorkflow"
-  | "performance"
-  | "polish"
-  | "automation";
+export type PriorityKey = string;
 
 export type PriorityWeights = Record<PriorityKey, number>;
+
+export interface ComparisonCriterion {
+  key: string;
+  label: string;
+  hint: string;
+  weight: number;
+}
 
 export interface Evidence {
   claim: string;
@@ -62,7 +64,7 @@ export interface ComparisonResult {
 export interface AnalyzeRequest {
   urls: [string, string];
   context: string;
-  priorities: PriorityWeights;
+  criteria: ComparisonCriterion[];
   locale: Locale;
 }
 import type { Locale } from "@/lib/i18n";

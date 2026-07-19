@@ -8,12 +8,14 @@ export function calculateWeightedWinner(
   priorities: PriorityWeights,
 ) {
   const totals: Record<string, number> = {};
-  const totalWeight =
-    Object.values(priorities).reduce((sum, value) => sum + value, 0) / 100;
+  let totalWeight = 0;
   for (const product of result.products) totals[product.name] = 0;
 
   for (const dimension of result.dimensions) {
-    const weight = priorities[dimension.key] / 100;
+    const requestedWeight = priorities[dimension.key];
+    if (requestedWeight === undefined) continue;
+    const weight = requestedWeight / 100;
+    totalWeight += weight;
     for (const [product, score] of Object.entries(dimension.productScores)) {
       totals[product] = (totals[product] ?? 0) + score * weight;
     }

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   calculateEvidenceCoverage,
+  normalizeSavedReport,
   parseReport,
   serializeReport,
   type SavedReport,
@@ -14,84 +15,53 @@ import {
   type Locale,
   type Messages,
 } from "@/lib/i18n";
+import { examplePriorities, sampleComparisonForLocale } from "@/lib/sample";
 import {
-  defaultPriorities,
-  examplePriorities,
-  sampleComparisonForLocale,
-} from "@/lib/sample";
+  cloneCriteria,
+  criteriaToWeights,
+  getBuiltInCriteriaTemplates,
+  type CriteriaTemplate,
+} from "@/lib/criteria";
+import { compareResults, type ComparisonDiff } from "@/lib/diff";
 import { calculateWeightedWinner } from "@/lib/scoring";
 import type {
+  ComparisonCriterion,
   ComparisonResult,
   EvidenceLevel,
-  PriorityKey,
   PriorityWeights,
 } from "@/lib/types";
 
-interface PreferenceProfile {
+interface LegacyPreferenceProfile {
   id: string;
   name: string;
   weights: PriorityWeights;
-  builtIn?: boolean;
-  nameKey?:
-    | "profileBalanced"
-    | "profileOpen"
-    | "profileAgent"
-    | "profilePolish";
 }
 
 const historyKey = "fitlens-report-history-v1";
 const sessionApiKey = "fitlens-openai-api-key-v1";
 const preferenceProfilesKey = "fitlens-preference-profiles-v1";
+const criteriaTemplatesKey = "fitlens-criteria-templates-v1";
 const localeKey = "fitlens-locale-v1";
 
-const builtInProfiles: PreferenceProfile[] = [
-  {
-    id: "balanced",
-    name: "",
-    nameKey: "profileBalanced",
-    weights: defaultPriorities,
-    builtIn: true,
-  },
-  {
-    id: "open-control",
-    name: "",
-    nameKey: "profileOpen",
-    weights: {
-      openness: 95,
-      agentWorkflow: 72,
-      performance: 68,
-      polish: 42,
-      automation: 82,
-    },
-    builtIn: true,
-  },
-  {
-    id: "agent-heavy",
-    name: "",
-    nameKey: "profileAgent",
-    weights: {
-      openness: 62,
-      agentWorkflow: 96,
-      performance: 72,
-      polish: 58,
-      automation: 90,
-    },
-    builtIn: true,
-  },
-  {
-    id: "polish-first",
-    name: "",
-    nameKey: "profilePolish",
-    weights: {
-      openness: 38,
-      agentWorkflow: 70,
-      performance: 72,
-      polish: 96,
-      automation: 44,
-    },
-    builtIn: true,
-  },
-];
+const maxSavedReports = 6;
+const maxRevisions = 5;
+
+function initialCriteria(exampleMode: boolean, locale: Locale) {
+  const templates = getBuiltInCriteriaTemplates(locale);
+  const template = templates.find(
+    (item) => item.id === (exampleMode ? "developer-tools" : "general"),
+  )!;
+  return template.criteria.map((criterion) => ({
+    ...criterion,
+    weight: exampleMode
+      ? (examplePriorities[criterion.key] ?? criterion.weight)
+      : criterion.weight,
+  }));
+}
+
+function formatDelta(value: number) {
+  return value > 0 ? `+${value}` : `${value}`;
+}
 
 function comparisonAsMarkdown(
   result: ComparisonResult,
@@ -200,33 +170,10 @@ export function CompareWorkbench({
 }: CompareWorkbenchProps) {
   const [locale, setLocale] = useState<Locale>("zh-CN");
   const t = messages[locale];
-  const priorityMeta: Array<{
-    key: PriorityKey;
-    label: string;
-    hint: string;
-  }> = [
-    {
-      key: "openness",
-      label: t.priorityOpenness,
-      hint: t.hintOpenness,
-    },
-    {
-      key: "agentWorkflow",
-      label: t.priorityAgent,
-      hint: t.hintAgent,
-    },
-    {
-      key: "performance",
-      label: t.priorityPerformance,
-      hint: t.hintPerformance,
-    },
-    { key: "polish", label: t.priorityPolish, hint: t.hintPolish },
-    {
-      key: "automation",
-      label: t.priorityAutomation,
-      hint: t.hintAutomation,
-    },
-  ];
+  const builtInTemplates = useMemo(
+    () => getBuiltInCriteriaTemplates(locale),
+    [locale],
+  );
   const evidenceLabels: Record<EvidenceLevel, string> = {
     verified: t.verified,
     vendor: t.vendor,
@@ -242,13 +189,19 @@ export function CompareWorkbench({
       ? messages["zh-CN"].exampleContext
       : "",
   );
-  const [priorities, setPriorities] = useState<PriorityWeights>(
-    exampleMode ? examplePriorities : defaultPriorities,
+  const [criteria, setCriteria] = useState<ComparisonCriterion[]>(
+    initialCriteria(exampleMode, "zh-CN"),
+  );
+  const priorities = useMemo(() => criteriaToWeights(criteria), [criteria]);
+  const [activeTemplateId, setActiveTemplateId] = useState(
+    exampleMode ? "developer-tools" : "general",
   );
   const [result, setResult] = useState<ComparisonResult | undefined>(
     initialResult,
   );
-  const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
+  const [status, setStatus] = useState<
+    "idle" | "loading" | "refreshing" | "error"
+  >("idle");
   const [error, setError] = useState("");
   const [history, setHistory] = useState<SavedReport[]>([]);
   const [copied, setCopied] = useState(false);
@@ -256,8 +209,11 @@ export function CompareWorkbench({
   const [showApiKey, setShowApiKey] = useState(false);
   const [currentReportId, setCurrentReportId] = useState<string>();
   const [notes, setNotes] = useState("");
-  const [customProfiles, setCustomProfiles] = useState<PreferenceProfile[]>([]);
-  const [profileName, setProfileName] = useState("");
+  const [customTemplates, setCustomTemplates] = useState<CriteriaTemplate[]>(
+    [],
+  );
+  const [templateName, setTemplateName] = useState("");
+  const [comparisonDiff, setComparisonDiff] = useState<ComparisonDiff>();
   const importInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -265,18 +221,17 @@ export function CompareWorkbench({
       try {
         const stored = window.localStorage.getItem(historyKey);
         if (stored) {
-          const saved = (JSON.parse(stored) as SavedReport[]).map((report) => ({
-            ...report,
-            notes: report.notes ?? "",
-            locale: report.locale ?? "zh-CN",
-          }));
+          const saved = (JSON.parse(stored) as unknown[])
+            .map((report) => {
+              try {
+                return normalizeSavedReport(report);
+              } catch {
+                return undefined;
+              }
+            })
+            .filter((report): report is SavedReport => Boolean(report));
           setHistory(saved);
-        }
-        const storedProfiles = window.localStorage.getItem(
-          preferenceProfilesKey,
-        );
-        if (storedProfiles) {
-          setCustomProfiles(JSON.parse(storedProfiles) as PreferenceProfile[]);
+          window.localStorage.setItem(historyKey, JSON.stringify(saved));
         }
         setApiKey(window.sessionStorage.getItem(sessionApiKey) ?? "");
         const requestedLocale = new URLSearchParams(window.location.search).get(
@@ -289,9 +244,55 @@ export function CompareWorkbench({
         );
         setLocale(nextLocale);
         document.documentElement.lang = nextLocale;
+
+        const storedTemplates = window.localStorage.getItem(
+          criteriaTemplatesKey,
+        );
+        if (storedTemplates) {
+          setCustomTemplates(
+            (JSON.parse(storedTemplates) as CriteriaTemplate[]).map(
+              (template) => ({
+                ...template,
+                builtIn: false,
+                criteria: cloneCriteria(template.criteria),
+              }),
+            ),
+          );
+        } else {
+          const legacyProfiles = window.localStorage.getItem(
+            preferenceProfilesKey,
+          );
+          if (legacyProfiles) {
+            const developerCriteria =
+              getBuiltInCriteriaTemplates(nextLocale).find(
+                (template) => template.id === "developer-tools",
+              )!.criteria;
+            const migrated = (
+              JSON.parse(legacyProfiles) as LegacyPreferenceProfile[]
+            ).map((profile) => ({
+              id: profile.id,
+              name: profile.name,
+              criteria: developerCriteria.map((criterion) => ({
+                ...criterion,
+                weight: profile.weights[criterion.key] ?? criterion.weight,
+              })),
+              builtIn: false,
+            }));
+            setCustomTemplates(migrated);
+            window.localStorage.setItem(
+              criteriaTemplatesKey,
+              JSON.stringify(migrated),
+            );
+            window.localStorage.removeItem(preferenceProfilesKey);
+          }
+        }
+
         if (exampleMode) {
           setContext(messages[nextLocale].exampleContext);
           setResult(sampleComparisonForLocale(nextLocale));
+          setCriteria(initialCriteria(true, nextLocale));
+        } else {
+          setCriteria(initialCriteria(false, nextLocale));
         }
       } catch {
         // A malformed or unavailable local store should never block comparing.
@@ -301,7 +302,20 @@ export function CompareWorkbench({
   }, [exampleMode]);
 
   function changeLocale(nextLocale: Locale) {
+    const localizedTemplate = getBuiltInCriteriaTemplates(nextLocale).find(
+      (template) => template.id === activeTemplateId,
+    );
     setLocale(nextLocale);
+    if (localizedTemplate) {
+      setCriteria(
+        localizedTemplate.criteria.map((criterion) => ({
+          ...criterion,
+          weight:
+            criteria.find((current) => current.key === criterion.key)?.weight ??
+            criterion.weight,
+        })),
+      );
+    }
     window.localStorage.setItem(localeKey, nextLocale);
     document.documentElement.lang = nextLocale;
     const currentUrl = new URL(window.location.href);
@@ -310,6 +324,7 @@ export function CompareWorkbench({
     if (exampleMode && !currentReportId) {
       setContext(messages[nextLocale].exampleContext);
       setResult(sampleComparisonForLocale(nextLocale));
+      setCriteria(initialCriteria(true, nextLocale));
     }
   }
 
@@ -327,27 +342,45 @@ export function CompareWorkbench({
     (product) => product.name === weightedWinner,
   );
   const canAnalyze =
-    urls.every((url) => url.trim().length > 0) && context.trim().length >= 10;
+    urls.every((url) => url.trim().length > 0) &&
+    context.trim().length >= 10 &&
+    criteria.length >= 2 &&
+    criteria.length <= 8 &&
+    criteria.every(
+      (criterion) =>
+        criterion.label.trim().length > 0 && criterion.key.trim().length > 0,
+    );
+
+  async function requestAnalysis() {
+    const response = await fetch("/api/analyze", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(apiKey.trim()
+          ? { "X-FitLens-OpenAI-Key": apiKey.trim() }
+          : {}),
+      },
+      body: JSON.stringify({
+        urls,
+        context,
+        criteria: cloneCriteria(criteria),
+        locale,
+      }),
+    });
+    const payload = await response.json();
+    if (!response.ok) {
+      throw new Error(payload.error ?? t.analyzeFailed);
+    }
+    return payload as ComparisonResult;
+  }
 
   async function analyze() {
     setStatus("loading");
     setError("");
     try {
-      const response = await fetch("/api/analyze", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(apiKey.trim()
-            ? { "X-FitLens-OpenAI-Key": apiKey.trim() }
-            : {}),
-        },
-        body: JSON.stringify({ urls, context, priorities, locale }),
-      });
-      const payload = await response.json();
-      if (!response.ok) {
-        throw new Error(payload.error ?? t.analyzeFailed);
-      }
+      const payload = await requestAnalysis();
       setResult(payload);
+      setComparisonDiff(undefined);
       const saved: SavedReport = {
         id: crypto.randomUUID(),
         title: payload.title,
@@ -355,11 +388,13 @@ export function CompareWorkbench({
         urls,
         context,
         priorities,
+        criteria: cloneCriteria(criteria),
         result: payload,
         notes: "",
         locale,
+        revisions: [],
       };
-      const nextHistory = [saved, ...history].slice(0, 6);
+      const nextHistory = [saved, ...history].slice(0, maxSavedReports);
       setHistory(nextHistory);
       setCurrentReportId(saved.id);
       setNotes("");
@@ -378,14 +413,61 @@ export function CompareWorkbench({
     }
   }
 
+  async function refreshAnalysis() {
+    if (!result || !canAnalyze) return;
+    setStatus("refreshing");
+    setError("");
+    try {
+      const previous = result;
+      const payload = await requestAnalysis();
+      const nextDiff = compareResults(previous, payload, criteria);
+      const stored = history.find((report) => report.id === currentReportId);
+      const reportId = stored?.id ?? currentReportId ?? crypto.randomUUID();
+      const saved: SavedReport = {
+        id: reportId,
+        title: payload.title,
+        savedAt: stored?.savedAt ?? new Date().toISOString(),
+        urls,
+        context,
+        priorities,
+        criteria: cloneCriteria(criteria),
+        result: payload,
+        notes,
+        locale,
+        revisions: [...(stored?.revisions ?? []), previous].slice(
+          -maxRevisions,
+        ),
+      };
+      const nextHistory = stored
+        ? history.map((report) => (report.id === reportId ? saved : report))
+        : [saved, ...history].slice(0, maxSavedReports);
+      setResult(payload);
+      setComparisonDiff(nextDiff);
+      setHistory(nextHistory);
+      setCurrentReportId(reportId);
+      window.localStorage.setItem(historyKey, JSON.stringify(nextHistory));
+      setStatus("idle");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : t.refreshFailed);
+      setStatus("error");
+    }
+  }
+
   function loadReport(saved: SavedReport) {
     changeLocale(saved.locale ?? "zh-CN");
     setUrls(saved.urls);
     setContext(saved.context);
-    setPriorities(saved.priorities);
+    setCriteria(cloneCriteria(saved.criteria));
+    setActiveTemplateId("");
     setResult(saved.result);
     setCurrentReportId(saved.id);
     setNotes(saved.notes ?? "");
+    const previous = saved.revisions.at(-1);
+    setComparisonDiff(
+      previous
+        ? compareResults(previous, saved.result, saved.criteria)
+        : undefined,
+    );
     setTimeout(
       () =>
         document
@@ -435,9 +517,11 @@ export function CompareWorkbench({
       urls,
       context,
       priorities,
+      criteria: cloneCriteria(criteria),
       result,
       notes,
       locale: stored?.locale ?? locale,
+      revisions: stored?.revisions ?? [],
     };
   }
 
@@ -467,7 +551,7 @@ export function CompareWorkbench({
         savedAt: new Date().toISOString(),
         notes: imported.notes ?? "",
       };
-      const nextHistory = [saved, ...history].slice(0, 6);
+      const nextHistory = [saved, ...history].slice(0, maxSavedReports);
       setHistory(nextHistory);
       window.localStorage.setItem(historyKey, JSON.stringify(nextHistory));
       loadReport(saved);
@@ -495,31 +579,73 @@ export function CompareWorkbench({
     window.localStorage.setItem(historyKey, JSON.stringify(nextHistory));
   }
 
-  function savePreferenceProfile() {
-    const name = profileName.trim();
+  function applyTemplate(template: CriteriaTemplate) {
+    setCriteria(cloneCriteria(template.criteria));
+    setActiveTemplateId(template.id);
+  }
+
+  function updateCriterion(
+    key: string,
+    update: Partial<Omit<ComparisonCriterion, "key">>,
+  ) {
+    setCriteria((current) =>
+      current.map((criterion) =>
+        criterion.key === key ? { ...criterion, ...update } : criterion,
+      ),
+    );
+    setActiveTemplateId("");
+  }
+
+  function addCriterion() {
+    if (criteria.length >= 8) return;
+    setCriteria((current) => [
+      ...current,
+      {
+        key: `custom-${crypto.randomUUID()}`,
+        label: t.newCriterion,
+        hint: t.newCriterionHint,
+        weight: 60,
+      },
+    ]);
+    setActiveTemplateId("");
+  }
+
+  function removeCriterion(key: string) {
+    if (criteria.length <= 2) return;
+    setCriteria((current) =>
+      current.filter((criterion) => criterion.key !== key),
+    );
+    setActiveTemplateId("");
+  }
+
+  function saveCriteriaTemplate() {
+    const name = templateName.trim();
     if (!name) return;
-    const nextProfiles = [
-      ...customProfiles,
+    const nextTemplates = [
+      ...customTemplates,
       {
         id: crypto.randomUUID(),
         name,
-        weights: priorities,
+        criteria: cloneCriteria(criteria),
+        builtIn: false,
       },
     ];
-    setCustomProfiles(nextProfiles);
-    setProfileName("");
+    setCustomTemplates(nextTemplates);
+    setTemplateName("");
     window.localStorage.setItem(
-      preferenceProfilesKey,
-      JSON.stringify(nextProfiles),
+      criteriaTemplatesKey,
+      JSON.stringify(nextTemplates),
     );
   }
 
-  function deletePreferenceProfile(id: string) {
-    const nextProfiles = customProfiles.filter((profile) => profile.id !== id);
-    setCustomProfiles(nextProfiles);
+  function deleteCriteriaTemplate(id: string) {
+    const nextTemplates = customTemplates.filter(
+      (template) => template.id !== id,
+    );
+    setCustomTemplates(nextTemplates);
     window.localStorage.setItem(
-      preferenceProfilesKey,
-      JSON.stringify(nextProfiles),
+      criteriaTemplatesKey,
+      JSON.stringify(nextTemplates),
     );
   }
 
@@ -530,6 +656,7 @@ export function CompareWorkbench({
     setError("");
     setCurrentReportId(undefined);
     setNotes("");
+    setComparisonDiff(undefined);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -687,19 +814,24 @@ export function CompareWorkbench({
             </div>
             <div className="preference-profiles">
               <div className="profile-chips">
-                {[...builtInProfiles, ...customProfiles].map((profile) => (
-                  <span className="profile-chip" key={profile.id}>
+                {[...builtInTemplates, ...customTemplates].map((template) => (
+                  <span
+                    className={`profile-chip ${
+                      activeTemplateId === template.id ? "active" : ""
+                    }`}
+                    key={template.id}
+                  >
                     <button
                       type="button"
-                      onClick={() => setPriorities(profile.weights)}
+                      onClick={() => applyTemplate(template)}
                     >
-                      {profile.nameKey ? t[profile.nameKey] : profile.name}
+                      {template.name}
                     </button>
-                    {!profile.builtIn && (
+                    {!template.builtIn && (
                       <button
                         type="button"
-                        aria-label={`${t.deletePreference}: ${profile.name}`}
-                        onClick={() => deletePreferenceProfile(profile.id)}
+                        aria-label={`${t.deleteTemplate}: ${template.name}`}
+                        onClick={() => deleteCriteriaTemplate(template.id)}
                       >
                         ×
                       </button>
@@ -709,53 +841,102 @@ export function CompareWorkbench({
               </div>
               <div className="save-profile">
                 <input
-                  value={profileName}
+                  value={templateName}
                   maxLength={32}
-                  placeholder={t.saveWeightsPlaceholder}
-                  aria-label={t.preferenceNameAria}
-                  onChange={(event) => setProfileName(event.target.value)}
+                  placeholder={t.saveTemplatePlaceholder}
+                  aria-label={t.templateNameAria}
+                  onChange={(event) => setTemplateName(event.target.value)}
                   onKeyDown={(event) => {
-                    if (event.key === "Enter") savePreferenceProfile();
+                    if (event.key === "Enter") saveCriteriaTemplate();
                   }}
                 />
                 <button
                   type="button"
-                  disabled={!profileName.trim()}
-                  onClick={savePreferenceProfile}
+                  disabled={!templateName.trim()}
+                  onClick={saveCriteriaTemplate}
                 >
                   {t.save}
                 </button>
               </div>
             </div>
-            <div className="sliders">
-              {priorityMeta.map((item) => (
-                <label key={item.key}>
-                  <span className="slider-copy">
-                    <span>
-                      <strong>{item.label}</strong>
-                      <small>{item.hint}</small>
+            <div className="criteria-editor">
+              <p className="criteria-help">{t.criteriaHelp}</p>
+              {criteria.map((criterion, index) => (
+                <div className="criterion-card" key={criterion.key}>
+                  <div className="criterion-fields">
+                    <span className="criterion-index">
+                      {String(index + 1).padStart(2, "0")}
                     </span>
-                    <b>{priorities[item.key]}</b>
-                  </span>
-                  <input
-                    type="range"
-                    min="0"
-                    max="100"
-                    value={priorities[item.key]}
-                    onChange={(event) =>
-                      setPriorities((current) => ({
-                        ...current,
-                        [item.key]: Number(event.target.value),
-                      }))
-                    }
-                    style={
-                      {
-                        "--range": `${priorities[item.key]}%`,
-                      } as React.CSSProperties
-                    }
-                  />
-                </label>
+                    <label>
+                      <span>{t.criterionName}</span>
+                      <input
+                        value={criterion.label}
+                        maxLength={80}
+                        onChange={(event) =>
+                          updateCriterion(criterion.key, {
+                            label: event.target.value,
+                          })
+                        }
+                      />
+                    </label>
+                    <label>
+                      <span>{t.criterionDescription}</span>
+                      <input
+                        value={criterion.hint}
+                        maxLength={200}
+                        onChange={(event) =>
+                          updateCriterion(criterion.key, {
+                            hint: event.target.value,
+                          })
+                        }
+                      />
+                    </label>
+                    <button
+                      className="remove-criterion"
+                      type="button"
+                      disabled={criteria.length <= 2}
+                      aria-label={`${t.removeCriterion}: ${criterion.label}`}
+                      onClick={() => removeCriterion(criterion.key)}
+                    >
+                      ×
+                    </button>
+                  </div>
+                  <label className="criterion-weight">
+                    <span className="slider-copy">
+                      <span>
+                        <strong>{t.weight}</strong>
+                        <small>{criterion.hint}</small>
+                      </span>
+                      <b>{criterion.weight}</b>
+                    </span>
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      value={criterion.weight}
+                      onChange={(event) =>
+                        updateCriterion(criterion.key, {
+                          weight: Number(event.target.value),
+                        })
+                      }
+                      style={
+                        {
+                          "--range": `${criterion.weight}%`,
+                        } as React.CSSProperties
+                      }
+                    />
+                  </label>
+                </div>
               ))}
+              <button
+                className="add-criterion"
+                type="button"
+                disabled={criteria.length >= 8}
+                onClick={addCriterion}
+              >
+                <span>+</span> {t.addCriterion}
+                <small>{criteria.length}/8</small>
+              </button>
             </div>
           </div>
         </div>
@@ -767,7 +948,9 @@ export function CompareWorkbench({
           </div>
           <button
             onClick={analyze}
-            disabled={status === "loading" || !canAnalyze}
+            disabled={
+              status === "loading" || status === "refreshing" || !canAnalyze
+            }
           >
             {status === "loading" ? t.analyzing : t.analyze}
             {status !== "loading" && <span>↗</span>}
@@ -843,6 +1026,9 @@ export function CompareWorkbench({
                     <small>
                       {new Date(saved.savedAt).toLocaleDateString(locale)} ·{" "}
                       {saved.result.recommendation.winner}
+                      {saved.revisions.length > 0
+                        ? ` · ${saved.revisions.length} ${t.revisions}`
+                        : ""}
                     </small>
                     <b>{t.open}</b>
                   </button>
@@ -867,6 +1053,15 @@ export function CompareWorkbench({
             })}
           </span>
           <div className="report-actions">
+            <button
+              className="refresh-report"
+              onClick={refreshAnalysis}
+              disabled={
+                status === "refreshing" || status === "loading" || !canAnalyze
+              }
+            >
+              {status === "refreshing" ? t.refreshing : t.refreshReport}
+            </button>
             <button onClick={copyBrief}>
               {copied ? t.copied : t.copyBrief}
             </button>
@@ -880,6 +1075,7 @@ export function CompareWorkbench({
             )}
           </div>
         </div>
+        {error && <div className="error-banner report-error">{error}</div>}
 
         <div className="verdict-card">
           <div className="verdict-main">
@@ -919,6 +1115,104 @@ export function CompareWorkbench({
             <p>{result.recommendation.switchWhen}</p>
           </div>
         </div>
+
+        {comparisonDiff && (
+          <section className="diff-card" aria-labelledby="diff-title">
+            <header>
+              <div>
+                <p className="eyebrow">{t.sinceLastRefresh}</p>
+                <h2 id="diff-title">
+                  {comparisonDiff.hasChanges ? t.whatChanged : t.noChanges}
+                </h2>
+              </div>
+              <span className={comparisonDiff.winnerChanged ? "changed" : ""}>
+                {comparisonDiff.winnerChanged
+                  ? `${comparisonDiff.previousWinner} → ${comparisonDiff.currentWinner}`
+                  : `${t.winnerStable}: ${comparisonDiff.currentWinner}`}
+              </span>
+            </header>
+
+            {comparisonDiff.hasChanges && (
+              <div className="diff-grid">
+                <div>
+                  <h3>{t.fitScoreChanges}</h3>
+                  {comparisonDiff.scoreChanges.map((change) => (
+                    <p key={change.product}>
+                      <strong>{change.product}</strong>
+                      <span>
+                        {change.before} → {change.after}
+                        <b className={change.delta < 0 ? "negative" : ""}>
+                          {formatDelta(change.delta)}
+                        </b>
+                      </span>
+                    </p>
+                  ))}
+                </div>
+                <div>
+                  <h3>{t.evidenceChanges}</h3>
+                  {comparisonDiff.evidenceChanges.map((change) => (
+                    <p key={change.product}>
+                      <strong>{change.product}</strong>
+                      <span>
+                        {change.total.before} → {change.total.after}
+                        <b className={change.total.delta < 0 ? "negative" : ""}>
+                          {formatDelta(change.total.delta)}
+                        </b>
+                      </span>
+                      <small>
+                        {t.verified}{" "}
+                        {formatDelta(change.levels.verified.delta)} · {t.vendor}{" "}
+                        {formatDelta(change.levels.vendor.delta)} · {t.inferred}{" "}
+                        {formatDelta(change.levels.inferred.delta)}
+                      </small>
+                    </p>
+                  ))}
+                </div>
+                <div className="dimension-diffs">
+                  <h3>{t.dimensionChanges}</h3>
+                  {comparisonDiff.dimensionChanges.length > 0 ? (
+                    comparisonDiff.dimensionChanges.map((change) => (
+                      <p key={`${change.key}-${change.product}`}>
+                        <strong>
+                          {change.label} · {change.product}
+                        </strong>
+                        <span>
+                          {change.before} → {change.after}
+                          <b className={change.delta < 0 ? "negative" : ""}>
+                            {formatDelta(change.delta)}
+                          </b>
+                        </span>
+                      </p>
+                    ))
+                  ) : (
+                    <small>{t.none}</small>
+                  )}
+                </div>
+                <div className="unknown-diffs">
+                  <h3>{t.unknownChanges}</h3>
+                  {comparisonDiff.addedUnknowns.map((unknown) => (
+                    <p key={`added-${unknown}`}>
+                      <b>+</b> {unknown}
+                    </p>
+                  ))}
+                  {comparisonDiff.removedUnknowns.map((unknown) => (
+                    <p className="resolved" key={`removed-${unknown}`}>
+                      <b>✓</b> {unknown}
+                    </p>
+                  ))}
+                  {comparisonDiff.addedUnknowns.length === 0 &&
+                    comparisonDiff.removedUnknowns.length === 0 && (
+                      <small>{t.none}</small>
+                    )}
+                </div>
+              </div>
+            )}
+            <footer>
+              {new Date(comparisonDiff.from).toLocaleString(locale)} →{" "}
+              {new Date(comparisonDiff.to).toLocaleString(locale)}
+            </footer>
+          </section>
+        )}
 
         <div className="product-grid">
           {result.products.map((product, index) => {
@@ -1040,7 +1334,7 @@ export function CompareWorkbench({
                   <div className="matrix-label">
                     <strong>{dimension.label}</strong>
                     <small>
-                      {t.weight} {priorities[dimension.key]}
+                      {t.weight} {priorities[dimension.key] ?? 0}
                     </small>
                   </div>
                   <div className="matrix-bars">

@@ -22,3 +22,13 @@ test("polish-heavy priorities can select Otty", () => {
   });
   assert.equal(result.winner, "Otty");
 });
+
+test("criteria not present in a report do not dilute its fit score", () => {
+  const result = calculateWeightedWinner(sampleComparison, {
+    openness: 100,
+    notYetAnalyzed: 100,
+  });
+
+  assert.equal(result.normalized.cmux, 98);
+  assert.equal(result.normalized.Otty, 35);
+});

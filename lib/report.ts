@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { Locale } from "@/lib/i18n";
 import type {
+  ComparisonCriterion,
   ComparisonResult,
   PriorityWeights,
   ProductResult,
@@ -14,15 +15,16 @@ const httpUrlSchema = z
     return protocol === "http:" || protocol === "https:";
   }, "Only HTTP and HTTPS URLs are allowed");
 
-const prioritySchema = z
+const prioritySchema = z.record(z.number().min(0).max(100));
+
+const criterionSchema = z
   .object({
-    openness: z.number().min(0).max(100),
-    agentWorkflow: z.number().min(0).max(100),
-    performance: z.number().min(0).max(100),
-    polish: z.number().min(0).max(100),
-    automation: z.number().min(0).max(100),
+    key: z.string(),
+    label: z.string(),
+    hint: z.string(),
+    weight: z.number().min(0).max(100),
   })
-  .strict();
+  .passthrough();
 
 const evidenceSchema = z
   .object({
@@ -65,13 +67,7 @@ const resultSchema = z
     dimensions: z.array(
       z
         .object({
-          key: z.enum([
-            "openness",
-            "agentWorkflow",
-            "performance",
-            "polish",
-            "automation",
-          ]),
+          key: z.string(),
           label: z.string(),
           weight: z.number(),
           productScores: z.record(z.number()),
@@ -103,12 +99,14 @@ const savedReportSchema = z
     result: resultSchema,
     notes: z.string().optional().default(""),
     locale: z.enum(["zh-CN", "en"]).optional().default("zh-CN"),
+    criteria: z.array(criterionSchema).min(2).max(8).optional(),
+    revisions: z.array(resultSchema).max(5).optional().default([]),
   })
   .passthrough();
 
 const portableReportSchema = z
   .object({
-    schemaVersion: z.literal(1),
+    schemaVersion: z.union([z.literal(1), z.literal(2)]),
     exportedAt: z.string(),
     report: savedReportSchema,
   })
@@ -121,9 +119,11 @@ export interface SavedReport {
   urls: [string, string];
   context: string;
   priorities: PriorityWeights;
+  criteria: ComparisonCriterion[];
   result: ComparisonResult;
   notes: string;
   locale: Locale;
+  revisions: ComparisonResult[];
 }
 
 export interface EvidenceCoverage {
@@ -173,7 +173,7 @@ export function calculateEvidenceCoverage(
 export function serializeReport(report: SavedReport) {
   return JSON.stringify(
     {
-      schemaVersion: 1,
+      schemaVersion: 2,
       exportedAt: new Date().toISOString(),
       report,
     },
@@ -182,7 +182,23 @@ export function serializeReport(report: SavedReport) {
   );
 }
 
+export function normalizeSavedReport(input: unknown): SavedReport {
+  const report = savedReportSchema.parse(input);
+  return {
+    ...report,
+    criteria:
+      report.criteria ??
+      report.result.dimensions.map((dimension) => ({
+        key: dimension.key,
+        label: dimension.label,
+        hint: dimension.explanation,
+        weight: report.priorities[dimension.key] ?? dimension.weight ?? 60,
+      })),
+    revisions: report.revisions ?? [],
+  } as SavedReport;
+}
+
 export function parseReport(input: string): SavedReport {
   const parsed = portableReportSchema.parse(JSON.parse(input));
-  return parsed.report as SavedReport;
+  return normalizeSavedReport(parsed.report);
 }
