@@ -41,7 +41,11 @@ The default model is `gpt-5.6-luna`; override it with `OPENAI_MODEL`.
 npm test
 npm run lint
 npm run build
+npm run build:sites
 ```
+
+`build:sites` packages the Next.js output as an OpenNext Cloudflare Worker in
+`.open-next/`, which is the artifact shape used by Sites.
 
 ## Current MVP boundary
 
