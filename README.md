@@ -1,41 +1,54 @@
 # FitLens
 
-FitLens compares two similar products against one person's real workflow. It
-keeps three evidence levels separate:
+FitLens is an evidence-first product comparison tool. It analyzes two similar
+products against a person’s actual workflow, separates verifiable facts from
+vendor claims and inference, and explains why one option is a better fit.
 
-- **Verified** — public source code, repository metadata, or README evidence.
-- **Vendor** — claims found on the official product site.
-- **Inferred** — an explicitly labeled conclusion, never presented as fact.
+## Capabilities
 
-The homepage is a blank, product-agnostic comparison flow. A separate
-[`/examples/cmux-vs-otty`](http://localhost:3000/examples/cmux-vs-otty) report
-shows a completed comparison of [cmux](https://cmux.com/) and
-[Otty](https://otty.sh/). The example remains available without API
-credentials; arbitrary URL comparisons require an OpenAI API key.
+- Analyze official product pages and documentation.
+- Discover linked GitHub repositories and enrich open-source products with
+  license, README, and repository metadata.
+- Keep verified, vendor-provided, and inferred evidence visibly separate.
+- Recalculate the recommendation as personal priorities change.
+- Surface unknowns and generate a short hands-on trial plan.
+- Keep recent reports in local browser storage.
+- Copy a decision brief or export a complete report as Markdown.
+- Reject local and private-network URLs before fetching external content.
 
 ## Run locally
 
 ```bash
 npm install
-cp .env.example .env.local
 npm run dev
 ```
 
 Open `http://localhost:3000`.
+Create `.env.local` with the variables below to enable live analysis.
 
-## How analysis works
+## Configuration
 
-1. Validate both URLs and reject local/private-network targets.
-2. Extract the public homepage text.
-3. Discover a linked GitHub repository when one is present.
-4. Enrich open-source products with repository metadata and README content.
-5. Use the OpenAI Responses API with Structured Outputs to produce the same
-   comparison schema for both products.
-6. Recalculate the winner in the browser as preference weights change.
+```dotenv
+OPENAI_API_KEY=
+OPENAI_MODEL=gpt-5.6-luna
+GITHUB_TOKEN=
+```
 
-The default model is `gpt-5.6-luna`; override it with `OPENAI_MODEL`.
+`OPENAI_API_KEY` enables analysis for arbitrary product URLs.
+`GITHUB_TOKEN` is optional and raises GitHub API rate limits.
 
-## Commands
+## Analysis pipeline
+
+1. Validate both URLs and reject local or private-network targets.
+2. Extract relevant text from each public product page.
+3. Discover an official GitHub repository when one is linked.
+4. Collect repository metadata and README content.
+5. Produce a shared comparison schema with the OpenAI Responses API and
+   Structured Outputs.
+6. Recalculate weighted fit scores in the browser.
+7. Save completed reports locally for quick return and export.
+
+## Development commands
 
 ```bash
 npm test
@@ -44,16 +57,17 @@ npm run build
 npm run build:sites
 ```
 
-`build:sites` packages the Next.js output as an OpenNext Cloudflare Worker in
-`.open-next/`, which is the artifact shape used by Sites.
+`build:sites` packages the application as an OpenNext Cloudflare Worker in
+`.open-next/`.
 
-## Current MVP boundary
+## Project structure
 
-- Two products per report.
-- One homepage and one discovered GitHub repository per product.
-- No persistence or login yet.
-- The deployed sample works without secrets; arbitrary analyses require
-  `OPENAI_API_KEY`.
-
-See [the example methodology](docs/examples/cmux-vs-otty.md) for the evidence
-boundary used in the bundled report.
+```text
+app/                  Next.js routes and API endpoint
+components/           Interactive comparison workspace
+lib/source.ts         Homepage and GitHub evidence collection
+lib/analyzer.ts       Structured model analysis
+lib/scoring.ts        Preference-weighted scoring
+docs/                 Research and product documentation
+test/                 URL-safety and scoring tests
+```
