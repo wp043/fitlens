@@ -3,7 +3,7 @@ import test from "node:test";
 import { defaultPriorities, sampleComparison } from "../lib/sample.ts";
 import { calculateWeightedWinner } from "../lib/scoring.ts";
 
-test("default power-user priorities select cmux", () => {
+test("balanced default priorities select the stronger overall fit", () => {
   const result = calculateWeightedWinner(
     sampleComparison,
     defaultPriorities,

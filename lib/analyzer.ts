@@ -88,8 +88,9 @@ function sourceForPrompt(source: CollectedSource) {
 export async function analyzeWithModel(
   request: AnalyzeRequest,
   sources: [CollectedSource, CollectedSource],
+  apiKey?: string,
 ): Promise<ComparisonResult> {
-  const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  const client = new OpenAI({ apiKey: apiKey || process.env.OPENAI_API_KEY });
   const allowedUrls = new Set(
     sources.flatMap((source) =>
       [source.inputUrl, source.homepageUrl, source.repo?.url].filter(

@@ -1,6 +1,14 @@
 import type { ComparisonResult, PriorityWeights } from "@/lib/types";
 
 export const defaultPriorities: PriorityWeights = {
+  openness: 60,
+  agentWorkflow: 60,
+  performance: 60,
+  polish: 60,
+  automation: 60,
+};
+
+export const examplePriorities: PriorityWeights = {
   openness: 88,
   agentWorkflow: 92,
   performance: 72,

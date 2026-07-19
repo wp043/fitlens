@@ -33,22 +33,35 @@ function isSamplePair(urls: [string, string]) {
 
 export async function POST(request: Request) {
   try {
+    const sessionApiKey = request.headers
+      .get("x-fitlens-openai-key")
+      ?.trim();
+    if (
+      sessionApiKey &&
+      (sessionApiKey.length < 20 || sessionApiKey.length > 512)
+    ) {
+      return NextResponse.json(
+        { error: "OpenAI API key 格式不正确。" },
+        { status: 400 },
+      );
+    }
+    const apiKey = sessionApiKey || process.env.OPENAI_API_KEY;
     const body = requestSchema.parse(
       await request.json(),
     ) as AnalyzeRequest;
 
-    if (!process.env.OPENAI_API_KEY && isSamplePair(body.urls)) {
+    if (!apiKey && isSamplePair(body.urls)) {
       return NextResponse.json({
         ...sampleComparison,
         generatedAt: new Date().toISOString(),
       });
     }
 
-    if (!process.env.OPENAI_API_KEY) {
+    if (!apiKey) {
       return NextResponse.json(
         {
           error:
-            "通用分析尚未配置 OPENAI_API_KEY；你可以先体验 cmux vs Otty 示例。",
+            "请在 Local API setup 中临时输入自己的 OpenAI API key，或在 .env.local 配置 OPENAI_API_KEY。",
         },
         { status: 503 },
       );
@@ -58,10 +71,11 @@ export async function POST(request: Request) {
       body.urls.map((url) => collectProductSource(url)),
     )) as Awaited<ReturnType<typeof collectProductSource>>[];
 
-    const result = await analyzeWithModel(body, [
-      sources[0],
-      sources[1],
-    ]);
+    const result = await analyzeWithModel(
+      body,
+      [sources[0], sources[1]],
+      apiKey,
+    );
     return NextResponse.json(result);
   } catch (error) {
     const message =
