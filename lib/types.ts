@@ -63,4 +63,6 @@ export interface AnalyzeRequest {
   urls: [string, string];
   context: string;
   priorities: PriorityWeights;
+  locale: Locale;
 }
+import type { Locale } from "@/lib/i18n";

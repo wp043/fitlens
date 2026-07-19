@@ -1,6 +1,7 @@
 import OpenAI from "openai";
 import { zodTextFormat } from "openai/helpers/zod";
 import { z } from "zod";
+import { messages } from "@/lib/i18n";
 import type { AnalyzeRequest, ComparisonResult } from "@/lib/types";
 import type { CollectedSource } from "@/lib/source";
 
@@ -103,7 +104,9 @@ export async function analyzeWithModel(
     model: process.env.OPENAI_MODEL || "gpt-5.6-luna",
     reasoning: { effort: "low" },
     instructions: [
-      "你是严谨的产品研究员。用中文输出。",
+      request.locale === "zh-CN"
+        ? "你是严谨的产品研究员。所有面向用户的内容都用简体中文输出。"
+        : "You are a rigorous product researcher. Write all user-facing content in English.",
       "目标是判断哪个产品更适合用户的具体场景，不是比较谁的功能更多。",
       "只能依据 SOURCES 中给出的内容。不要把未出现的信息当成事实。",
       "verified 只用于可由公开源码、repository metadata 或 README 直接核验的事实。",
@@ -125,7 +128,7 @@ export async function analyzeWithModel(
   });
 
   if (!response.output_parsed) {
-    throw new Error("模型未返回可用的结构化结果。");
+    throw new Error(messages[request.locale].modelFailed);
   }
 
   const parsed = response.output_parsed;

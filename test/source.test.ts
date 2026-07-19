@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { toPublicUrl } from "../lib/source.ts";
+import { SourceError, toPublicUrl } from "../lib/source.ts";
 
 test("accepts a public product URL", () => {
   assert.equal(toPublicUrl("https://otty.sh/#pricing").toString(), "https://otty.sh/");
@@ -13,14 +13,21 @@ test("rejects local and private network targets", () => {
     "http://10.0.0.5",
     "http://192.168.1.2",
   ]) {
-    assert.throws(() => toPublicUrl(url), /私有网络/);
+    assert.throws(
+      () => toPublicUrl(url),
+      (error) => error instanceof SourceError && error.code === "privateNetwork",
+    );
   }
 });
 
 test("rejects non-http protocols and credentials", () => {
-  assert.throws(() => toPublicUrl("file:///etc/passwd"), /http/);
+  assert.throws(
+    () => toPublicUrl("file:///etc/passwd"),
+    (error) => error instanceof SourceError && error.code === "httpOnly",
+  );
   assert.throws(
     () => toPublicUrl("https://user:secret@example.com"),
-    /用户名或密码/,
+    (error) =>
+      error instanceof SourceError && error.code === "credentialsNotAllowed",
   );
 });

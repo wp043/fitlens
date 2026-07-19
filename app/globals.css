@@ -1100,7 +1100,19 @@ body {
     background 160ms ease;
 }
 
-.nav-links a:hover {
+.language-switch {
+  padding: 8px 12px;
+  border: 1px solid rgba(203, 166, 247, 0.3);
+  border-radius: 999px;
+  background: rgba(203, 166, 247, 0.08);
+  color: var(--pink);
+  cursor: pointer;
+  font-family: "DM Mono", monospace;
+  font-size: 10px;
+}
+
+.nav-links a:hover,
+.language-switch:hover {
   background: rgba(205, 214, 244, 0.08);
   color: var(--cream);
 }
@@ -1797,6 +1809,11 @@ footer {
   .nav-links a {
     padding: 8px 10px;
     font-size: 10px;
+  }
+
+  .language-switch {
+    padding: 7px 9px;
+    font-size: 9px;
   }
 
   .hero {

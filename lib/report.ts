@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { Locale } from "@/lib/i18n";
 import type {
   ComparisonResult,
   PriorityWeights,
@@ -101,6 +102,7 @@ const savedReportSchema = z
     priorities: prioritySchema,
     result: resultSchema,
     notes: z.string().optional().default(""),
+    locale: z.enum(["zh-CN", "en"]).optional().default("zh-CN"),
   })
   .passthrough();
 
@@ -121,6 +123,7 @@ export interface SavedReport {
   priorities: PriorityWeights;
   result: ComparisonResult;
   notes: string;
+  locale: Locale;
 }
 
 export interface EvidenceCoverage {

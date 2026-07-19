@@ -1,8 +1,13 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { analyzeWithModel } from "@/lib/analyzer";
-import { sampleComparison } from "@/lib/sample";
-import { collectProductSource } from "@/lib/source";
+import {
+  messages,
+  normalizeLocale,
+  type Locale,
+} from "@/lib/i18n";
+import { sampleComparisonForLocale } from "@/lib/sample";
+import { collectProductSource, SourceError } from "@/lib/source";
 import type { AnalyzeRequest } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -21,6 +26,7 @@ const requestSchema = z
         automation: z.number().min(0).max(100),
       })
       .strict(),
+    locale: z.enum(["zh-CN", "en"]).default("zh-CN"),
   })
   .strict();
 
@@ -32,7 +38,13 @@ function isSamplePair(urls: [string, string]) {
 }
 
 export async function POST(request: Request) {
+  let locale: Locale = "zh-CN";
   try {
+    const input = (await request.json()) as Record<string, unknown>;
+    locale = normalizeLocale(
+      typeof input.locale === "string" ? input.locale : "zh-CN",
+    );
+    const t = messages[locale];
     const sessionApiKey = request.headers
       .get("x-fitlens-openai-key")
       ?.trim();
@@ -41,28 +53,23 @@ export async function POST(request: Request) {
       (sessionApiKey.length < 20 || sessionApiKey.length > 512)
     ) {
       return NextResponse.json(
-        { error: "OpenAI API key 格式不正确。" },
+        { error: t.invalidKey },
         { status: 400 },
       );
     }
     const apiKey = sessionApiKey || process.env.OPENAI_API_KEY;
-    const body = requestSchema.parse(
-      await request.json(),
-    ) as AnalyzeRequest;
+    const body = requestSchema.parse(input) as AnalyzeRequest;
 
     if (!apiKey && isSamplePair(body.urls)) {
       return NextResponse.json({
-        ...sampleComparison,
+        ...sampleComparisonForLocale(locale),
         generatedAt: new Date().toISOString(),
       });
     }
 
     if (!apiKey) {
       return NextResponse.json(
-        {
-          error:
-            "请在 Local API setup 中临时输入自己的 OpenAI API key，或在 .env.local 配置 OPENAI_API_KEY。",
-        },
+        { error: t.missingKey },
         { status: 503 },
       );
     }
@@ -78,12 +85,15 @@ export async function POST(request: Request) {
     );
     return NextResponse.json(result);
   } catch (error) {
+    const t = messages[locale];
     const message =
       error instanceof z.ZodError
-        ? "输入格式不正确，请检查 URL、场景描述和权重。"
+        ? t.invalidInput
+        : error instanceof SourceError
+          ? `${t[error.code]}${error.detail ? `: ${error.detail}` : ""}`
         : error instanceof Error
           ? error.message
-          : "分析失败，请稍后再试。";
+          : t.genericFailure;
     return NextResponse.json({ error: message }, { status: 400 });
   }
 }

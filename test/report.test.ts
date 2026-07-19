@@ -27,11 +27,13 @@ test("portable reports preserve notes and preference weights", () => {
     priorities: defaultPriorities,
     result: sampleComparison,
     notes: "The hands-on test confirmed the notification difference.",
+    locale: "en",
   };
 
   const restored = parseReport(serializeReport(report));
 
   assert.equal(restored.notes, report.notes);
+  assert.equal(restored.locale, "en");
   assert.deepEqual(restored.priorities, defaultPriorities);
   assert.equal(restored.result.products.length, 2);
 });
@@ -46,6 +48,7 @@ test("portable reports reject non-HTTP evidence links", () => {
     priorities: defaultPriorities,
     result: structuredClone(sampleComparison),
     notes: "",
+    locale: "en",
   };
   report.result.products[0].evidence[0].sourceUrl =
     "javascript:alert(document.domain)";

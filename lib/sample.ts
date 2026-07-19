@@ -1,4 +1,5 @@
 import type { ComparisonResult, PriorityWeights } from "@/lib/types";
+import type { Locale } from "@/lib/i18n";
 
 export const defaultPriorities: PriorityWeights = {
   openness: 60,
@@ -176,3 +177,153 @@ export const sampleComparison: ComparisonResult = {
     },
   ],
 };
+
+export const sampleComparisonEn: ComparisonResult = {
+  ...sampleComparison,
+  recommendation: {
+    winner: "cmux",
+    summary:
+      "If you run many Codex or Claude Code sessions and value auditability, scripting, and long-term control, cmux is currently the better fit.",
+    reasons: [
+      "Its source and GPL-3.0-or-later license are directly verifiable, making product risk more transparent.",
+      "The CLI, socket API, and built-in browser are a stronger base for composing your own agent workflow.",
+      "Otty pushes further on prompt queues, session history, and interaction polish, but the public evidence is mainly vendor-provided.",
+    ],
+    switchWhen:
+      "Prefer Otty if a ready-made agent UI, prompt queues, and fork/branch matter more than auditing or extending the underlying behavior.",
+  },
+  products: [
+    {
+      ...sampleComparison.products[0],
+      tagline: "An open, programmable agent-terminal primitive",
+      verdict: "Better for power users who want control and automation.",
+      strengths: [
+        "GPL source makes implementation and progress inspectable",
+        "CLI, socket API, and built-in browser",
+        "Native Swift/AppKit application using libghostty",
+        "Agent notifications, workspaces, and session restore",
+      ],
+      tradeoffs: [
+        "Currently available only on macOS",
+        "A composable primitive that asks you to shape the workflow",
+        "Mobile access and some AI features remain early",
+      ],
+      evidence: [
+        {
+          ...sampleComparison.products[0].evidence[0],
+          claim:
+            "The source is public under the GPL-3.0-or-later license.",
+          sourceLabel: "GitHub repository",
+        },
+        {
+          ...sampleComparison.products[0].evidence[1],
+          claim:
+            "The project provides a CLI, socket API, split panes, and a built-in browser.",
+          sourceLabel: "README and product site",
+        },
+        {
+          ...sampleComparison.products[0].evidence[2],
+          claim:
+            "It is a native macOS Swift/AppKit application with terminal rendering based on libghostty.",
+          sourceLabel: "README",
+        },
+      ],
+    },
+    {
+      ...sampleComparison.products[1],
+      tagline: "A more complete, productized agent terminal",
+      verdict:
+        "Better for people who want a polished workflow without assembling it themselves.",
+      strengths: [
+        "Prompt queue, fork/branch, and session history",
+        "Command palette, autocomplete, and recipes",
+        "Free on macOS without requiring an account",
+        "Emphasis on native GPU rendering and modern interaction",
+      ],
+      tradeoffs: [
+        "No public source link was found on the product site",
+        "Implementation, telemetry, and long-term business choices are harder to verify",
+        "Windows and Linux versions are not generally available",
+      ],
+      evidence: [
+        {
+          ...sampleComparison.products[1].evidence[0],
+          claim: "The macOS version is free and does not require an account.",
+          sourceLabel: "Otty product site",
+        },
+        {
+          ...sampleComparison.products[1].evidence[1],
+          claim:
+            "The product site lists agent task monitoring, session history, fork/branch, and a prompt queue.",
+          sourceLabel: "Otty product site",
+        },
+        {
+          ...sampleComparison.products[1].evidence[2],
+          claim:
+            "The current homepage does not expose a public source repository or license.",
+          sourceLabel: "Homepage inspection",
+        },
+      ],
+    },
+  ],
+  dimensions: [
+    {
+      ...sampleComparison.dimensions[0],
+      label: "Openness and control",
+      explanation:
+        "cmux has verifiable source and licensing; for Otty, we can only confirm that its homepage does not link to source.",
+    },
+    {
+      ...sampleComparison.dimensions[1],
+      label: "Agent workflow",
+      explanation:
+        "Otty offers a more complete prompt queue and fork/branch flow; cmux is more general and composable.",
+    },
+    {
+      ...sampleComparison.dimensions[2],
+      label: "Native performance",
+      explanation:
+        "Both claim native GPU rendering, while cmux allows the implementation to be inspected.",
+    },
+    {
+      ...sampleComparison.dimensions[3],
+      label: "Out-of-box polish",
+      explanation:
+        "Based on the public interface and feature scope, Otty behaves more like a finished product and cmux more like a tool primitive.",
+    },
+    {
+      ...sampleComparison.dimensions[4],
+      label: "Automation",
+      explanation:
+        "cmux publicly documents a CLI, socket API, and browser scripting interface.",
+    },
+  ],
+  unknowns: [
+    "Whether Otty collects telemetry, how its business model may evolve, and where paid feature boundaries will sit.",
+    "Memory use and stability for both products during an eight-hour session in a real repository.",
+    "Whether Otty's automation surface can cover the user's existing agent hooks.",
+  ],
+  trialPlan: [
+    {
+      task:
+        "Start six agent sessions and record how long it takes to find the one waiting for input.",
+      reason:
+        "This tests multi-task attention management instead of counting features.",
+    },
+    {
+      task:
+        "Restart the application and restore the workspace, checking directories, scrollback, and agent sessions.",
+      reason: "This reveals the real boundary of session restore.",
+    },
+    {
+      task:
+        "Connect one frequent action to a shortcut or script and record the setup time.",
+      reason:
+        "This distinguishes a need for a finished workflow from a programmable primitive.",
+    },
+  ],
+};
+
+export function sampleComparisonForLocale(locale: Locale) {
+  return locale === "zh-CN" ? sampleComparison : sampleComparisonEn;
+}

@@ -1,5 +1,26 @@
 import * as cheerio from "cheerio";
 
+export type SourceErrorCode =
+  | "invalidUrl"
+  | "httpOnly"
+  | "credentialsNotAllowed"
+  | "privateNetwork"
+  | "fetchFailed"
+  | "pageTooLarge"
+  | "githubFailed";
+
+export class SourceError extends Error {
+  readonly code: SourceErrorCode;
+  readonly detail?: string;
+
+  constructor(code: SourceErrorCode, detail?: string) {
+    super(code);
+    this.name = "SourceError";
+    this.code = code;
+    this.detail = detail;
+  }
+}
+
 export interface CollectedSource {
   inputUrl: string;
   homepageUrl: string;
@@ -44,19 +65,19 @@ export function toPublicUrl(raw: string): URL {
   try {
     parsed = new URL(raw);
   } catch {
-    throw new Error(`无效 URL：${raw}`);
+    throw new SourceError("invalidUrl", raw);
   }
 
   if (!["http:", "https:"].includes(parsed.protocol)) {
-    throw new Error("只支持 http 或 https URL。");
+    throw new SourceError("httpOnly");
   }
   if (parsed.username || parsed.password) {
-    throw new Error("URL 不能包含用户名或密码。");
+    throw new SourceError("credentialsNotAllowed");
   }
   if (
     PRIVATE_HOST_PATTERNS.some((pattern) => pattern.test(parsed.hostname))
   ) {
-    throw new Error("不能分析本地或私有网络地址。");
+    throw new SourceError("privateNetwork");
   }
 
   parsed.hash = "";
@@ -79,19 +100,22 @@ async function fetchText(url: string, accept = "text/html"): Promise<string> {
   const response = await fetch(url, {
     headers: {
       Accept: accept,
-      "User-Agent": "FitLens/0.1 (+https://fitlens-tools.sites.openai.com)",
+      "User-Agent": "FitLens/0.2 (local product research tool)",
     },
     redirect: "follow",
     signal: AbortSignal.timeout(12_000),
   });
 
   if (!response.ok) {
-    throw new Error(`抓取 ${new URL(url).hostname} 失败（${response.status}）。`);
+    throw new SourceError(
+      "fetchFailed",
+      `${new URL(url).hostname} (${response.status})`,
+    );
   }
 
   const contentLength = Number(response.headers.get("content-length") ?? 0);
   if (contentLength > 2_000_000) {
-    throw new Error("网页内容过大，暂时无法分析。");
+    throw new SourceError("pageTooLarge");
   }
 
   return (await response.text()).slice(0, 1_000_000);
@@ -149,7 +173,7 @@ async function collectGitHub(fullName: string) {
     signal: AbortSignal.timeout(12_000),
   });
   if (!response.ok) {
-    throw new Error(`读取 GitHub repository 失败（${response.status}）。`);
+    throw new SourceError("githubFailed", String(response.status));
   }
 
   const repo = (await response.json()) as {
