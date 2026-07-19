@@ -7,9 +7,11 @@ keeps three evidence levels separate:
 - **Vendor** — claims found on the official product site.
 - **Inferred** — an explicitly labeled conclusion, never presented as fact.
 
-The included demo compares [cmux](https://cmux.com/) with
-[Otty](https://otty.sh/). The interface remains useful without API credentials;
-arbitrary URL comparisons require an OpenAI API key.
+The homepage is a blank, product-agnostic comparison flow. A separate
+[`/examples/cmux-vs-otty`](http://localhost:3000/examples/cmux-vs-otty) report
+shows a completed comparison of [cmux](https://cmux.com/) and
+[Otty](https://otty.sh/). The example remains available without API
+credentials; arbitrary URL comparisons require an OpenAI API key.
 
 ## Run locally
 
@@ -48,3 +50,6 @@ npm run build
 - No persistence or login yet.
 - The deployed sample works without secrets; arbitrary analyses require
   `OPENAI_API_KEY`.
+
+See [the example methodology](docs/examples/cmux-vs-otty.md) for the evidence
+boundary used in the bundled report.

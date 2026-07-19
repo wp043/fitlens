@@ -1,7 +1,8 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
-import { defaultPriorities, sampleComparison } from "@/lib/sample";
+import { defaultPriorities } from "@/lib/sample";
 import { calculateWeightedWinner } from "@/lib/scoring";
 import type {
   ComparisonResult,
@@ -53,28 +54,48 @@ function SourcePill({
   );
 }
 
-export function CompareWorkbench() {
-  const [urls, setUrls] = useState<[string, string]>([
-    "https://cmux.com/",
-    "https://otty.sh/",
-  ]);
+interface CompareWorkbenchProps {
+  exampleMode?: boolean;
+  initialResult?: ComparisonResult;
+}
+
+export function CompareWorkbench({
+  exampleMode = false,
+  initialResult,
+}: CompareWorkbenchProps) {
+  const [urls, setUrls] = useState<[string, string]>(
+    exampleMode
+      ? ["https://cmux.com/", "https://otty.sh/"]
+      : ["", ""],
+  );
   const [context, setContext] = useState(
-    "我在 macOS 上同时运行多个 Codex / Claude Code session。重视开源、速度、隐私和自动化；不介意做少量配置。",
+    exampleMode
+      ? "我在 macOS 上同时运行多个 Codex / Claude Code session。重视开源、速度、隐私和自动化；不介意做少量配置。"
+      : "",
   );
   const [priorities, setPriorities] =
     useState<PriorityWeights>(defaultPriorities);
-  const [result, setResult] =
-    useState<ComparisonResult>(sampleComparison);
+  const [result, setResult] = useState<ComparisonResult | undefined>(
+    initialResult,
+  );
   const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
   const [error, setError] = useState("");
 
-  const weightedDecision = useMemo(() => {
-    return calculateWeightedWinner(result, priorities);
+  const weightedDecision = useMemo<{
+    winner: string | undefined;
+    totals: Record<string, number>;
+    normalized: Record<string, number>;
+  }>(() => {
+    return result
+      ? calculateWeightedWinner(result, priorities)
+      : { winner: undefined, totals: {}, normalized: {} };
   }, [priorities, result]);
   const weightedWinner = weightedDecision.winner;
-  const currentWinner = result.products.find(
+  const currentWinner = result?.products.find(
     (product) => product.name === weightedWinner,
   );
+  const canAnalyze =
+    urls.every((url) => url.trim().length > 0) && context.trim().length >= 10;
 
   async function analyze() {
     setStatus("loading");
@@ -107,27 +128,45 @@ export function CompareWorkbench() {
   return (
     <main>
       <nav className="topbar">
-        <a className="brand" href="#">
+        <Link className="brand" href="/">
           <BrandMark />
           <span>FitLens</span>
-        </a>
-        <div className="nav-note">
-          <span className="pulse" />
-          Evidence-first comparison
+        </Link>
+        <div className="nav-links">
+          <Link href="/#method">How it works</Link>
+          <Link href="/examples/cmux-vs-otty">Example report</Link>
         </div>
       </nav>
 
       <section className="hero shell">
-        <p className="eyebrow">PRODUCT DECISION, PERSONALIZED</p>
+        <p className="eyebrow">
+          {exampleMode ? "EXAMPLE REPORT / 001" : "YOUR TASTE, BACKED BY EVIDENCE"}
+        </p>
         <h1>
-          不是谁更强。
-          <br />
-          是谁<span>更适合你。</span>
+          {exampleMode ? (
+            <>
+              cmux <i>or</i> Otty?
+              <br />
+              <span>按你的方式来选。</span>
+            </>
+          ) : (
+            <>
+              Similar tools.
+              <br />
+              <span>A choice that feels like you.</span>
+            </>
+          )}
         </h1>
         <p className="hero-copy">
-          同一套尺度分析开源仓库与闭源产品，分清事实、宣传和推断，
-          再按你的真实 workflow 给出选择。
+          {exampleMode
+            ? "这是一个完整示例：同样是面向 coding agents 的原生 terminal，结论会因为你的 workflow 和价值取向而不同。"
+            : "贴上两个产品链接。FitLens 会检查官网、文档与公开源码，分清事实、宣传和推断，再按你的真实 workflow 给出选择。"}
         </p>
+        {exampleMode && (
+          <Link className="back-link" href="/">
+            ← 创建你自己的 comparison
+          </Link>
+        )}
       </section>
 
       <section className="compare-builder shell" aria-label="创建对比">
@@ -136,7 +175,9 @@ export function CompareWorkbench() {
             <span className="step-index">01</span>
             <h2>放进两个候选产品</h2>
           </div>
-          <span className="sample-tag">已载入 cmux vs Otty 示例</span>
+          <span className="sample-tag">
+            {exampleMode ? "Example data loaded" : "Two links · one decision"}
+          </span>
         </div>
 
         <div className="url-grid">
@@ -150,6 +191,11 @@ export function CompareWorkbench() {
                 </svg>
                 <input
                   value={url}
+                  placeholder={
+                    index === 0
+                      ? "https://product-a.com"
+                      : "https://product-b.com"
+                  }
                   onChange={(event) => {
                     const next = [...urls] as [string, string];
                     next[index] = event.target.value;
@@ -170,6 +216,7 @@ export function CompareWorkbench() {
             </div>
             <textarea
               value={context}
+              placeholder="例如：我在 macOS 上每天同时跑多个 coding agents；我重视隐私和自动化，不介意少量配置，但不接受订阅制……"
               onChange={(event) => setContext(event.target.value)}
               rows={7}
             />
@@ -219,7 +266,10 @@ export function CompareWorkbench() {
             <span className="status-dot" />
             自动识别 GitHub repository 与官网证据
           </div>
-          <button onClick={analyze} disabled={status === "loading"}>
+          <button
+            onClick={analyze}
+            disabled={status === "loading" || !canAnalyze}
+          >
             {status === "loading" ? "正在取证…" : "开始分析"}
             {status !== "loading" && <span>↗</span>}
           </button>
@@ -231,6 +281,43 @@ export function CompareWorkbench() {
         )}
       </section>
 
+      {!result && (
+        <section className="methodology shell" id="method">
+          <div className="method-intro">
+            <p className="eyebrow">A FAIRER WAY TO COMPARE</p>
+            <h2>每个结论，都知道自己从哪里来。</h2>
+            <p>
+              开源和闭源产品不会被假装成同等透明。FitLens
+              会把证据强度直接放进推荐里。
+            </p>
+          </div>
+          <div className="method-cards">
+            <article>
+              <span>01</span>
+              <div className="method-icon">◎</div>
+              <h3>Official story</h3>
+              <p>从官网和文档提取功能、平台、价格与厂商承诺。</p>
+            </article>
+            <article>
+              <span>02</span>
+              <div className="method-icon">⌘</div>
+              <h3>Open-source reality</h3>
+              <p>发现 GitHub 后检查 license、README、维护状态与实现证据。</p>
+            </article>
+            <article>
+              <span>03</span>
+              <div className="method-icon">♡</div>
+              <h3>Your kind of better</h3>
+              <p>把性能、开放性、完成度和自动化按你的优先级重算。</p>
+            </article>
+          </div>
+          <Link className="example-link" href="/examples/cmux-vs-otty">
+            看一份 cmux vs Otty example report <span>↗</span>
+          </Link>
+        </section>
+      )}
+
+      {result && (
       <section className="result shell" id="result">
         <div className="result-kicker">
           <span>FITLENS REPORT / 001</span>
@@ -396,12 +483,13 @@ export function CompareWorkbench() {
           </div>
         </div>
       </section>
+      )}
 
       <footer className="shell">
-        <a className="brand" href="#">
+        <Link className="brand" href="/">
           <BrandMark />
           <span>FitLens</span>
-        </a>
+        </Link>
         <p>Choose with evidence. Decide for yourself.</p>
         <span>v0.1 · Built for tools that appear faster than you can test them.</span>
       </footer>
