@@ -313,3 +313,7 @@ through a public repository or a server-rendered product page.
 - A report retains at most five prior revisions in local history and exports.
 - Reports are local to one browser unless exported.
 - Live analysis requires the user's own API credentials.
+
+## License
+
+FitLens is released under the [MIT License](LICENSE).
