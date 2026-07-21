@@ -28,6 +28,8 @@ priorities change the outcome, and important unknowns should remain visible.
   hands-on findings, with manual evidence preserved across refreshes.
 - Turns the suggested trial plan into a saved pass/fail checklist with notes.
 - Records evidence capture times and flags aging or stale sources.
+- Extracts structured pricing tiers, billing cadence, free availability,
+  audience, limits, source strength, and unresolved pricing uncertainty.
 - Keeps the five most recent source-report revisions with each report.
 - Shows confidence, evidence coverage, unknowns, and a short hands-on trial
   plan.
@@ -110,7 +112,7 @@ sequenceDiagram
     end
     Sources-->>API: Website and repository evidence
     API->>Model: Request a structured comparison
-    Model-->>API: Products, dimensions, evidence, unknowns, trial plan
+    Model-->>API: Products, dimensions, evidence, pricing, unknowns, trial plan
     API-->>UI: Validated report
     UI->>UI: Recalculate weighted fit scores
     UI->>UI: Save report locally
@@ -151,6 +153,18 @@ priority based on their evidence levels, and retained in local history and
 exports. The check is intentionally a warning rather than an automatic verdict:
 the user can follow both source links and decide which statement is newer and
 better supported.
+
+## Pricing model
+
+Pricing is stored as evidence-backed data rather than flattened into a single
+number. Each product can include whether a free option is known, a short
+summary, zero or more published plans, and an explicit uncertainty note. A plan
+keeps its published price text, billing cadence, intended audience, important
+limits, source URL, and evidence level. Missing public pricing stays unknown;
+the analysis is instructed not to infer amounts.
+
+This structure is retained in browser history, report revisions, portable JSON,
+and Markdown exports. Older reports without structured pricing remain valid.
 
 ## Scoring
 
@@ -291,7 +305,8 @@ security settings and the PostCSS override live in `pnpm-workspace.yaml`.
 The current foundation includes editable comparison criteria, reusable
 templates, report refresh, local revision history, deterministic change
 summaries, manual evidence capture, trial scoring, and source freshness.
-It also includes evidence conflict detection with bilingual report output.
+It also includes evidence conflict detection, structured pricing comparison,
+and bilingual report output.
 
 The most valuable next changes, ordered by product impact:
 

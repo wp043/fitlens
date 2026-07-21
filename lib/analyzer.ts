@@ -14,6 +14,35 @@ const evidenceSchema = z
   })
   .strict();
 
+const pricingPlanSchema = z
+  .object({
+    name: z.string(),
+    price: z.string(),
+    cadence: z.enum([
+      "free",
+      "monthly",
+      "yearly",
+      "one-time",
+      "usage-based",
+      "custom",
+      "unknown",
+    ]),
+    audience: z.string(),
+    limits: z.array(z.string()).max(6),
+    sourceUrl: z.string(),
+    evidenceLevel: z.enum(["verified", "vendor", "inferred"]),
+  })
+  .strict();
+
+const pricingSchema = z
+  .object({
+    hasFreeOption: z.boolean().nullable(),
+    summary: z.string(),
+    plans: z.array(pricingPlanSchema).max(6),
+    uncertainty: z.string(),
+  })
+  .strict();
+
 const productSchema = z
   .object({
     name: z.string(),
@@ -27,6 +56,7 @@ const productSchema = z
     strengths: z.array(z.string()).min(2).max(5),
     tradeoffs: z.array(z.string()).min(2).max(5),
     evidence: z.array(evidenceSchema).min(2).max(6),
+    pricing: pricingSchema,
   })
   .strict();
 
@@ -111,6 +141,9 @@ export async function analyzeWithModel(
         ? "每个 CRITERIA 项必须在 dimensions 中恰好出现一次，保留相同的 key、label 和 weight；不要增加或遗漏维度。"
         : "Return exactly one dimension for every CRITERIA item, preserving its key, label, and weight. Do not add or omit dimensions.",
       "分数表示对该用户的适配度，不表示普遍产品质量。",
+      request.locale === "zh-CN"
+        ? "为每个产品提取结构化 pricing：免费可用性、套餐名称、页面原文价格、计费周期、适用对象、限制和来源。没有公开价格时保留空 plans，并在 uncertainty 中明确未知；不要猜测数字。"
+        : "Extract structured pricing for every product: free availability, plan names, prices exactly as published, billing cadence, audience, limits, and source. When pricing is not public, return no plans and explain the unknown in uncertainty; never invent numbers.",
       "trialPlan 必须是可在 30 分钟内比较两款产品的具体任务。",
     ].join("\n"),
     input: JSON.stringify({
@@ -153,6 +186,15 @@ export async function analyzeWithModel(
         ? evidence.sourceUrl
         : source.repo?.url || source.homepageUrl,
     }));
+    const safePricing = {
+      ...product.pricing,
+      plans: product.pricing.plans.map((plan) => ({
+        ...plan,
+        sourceUrl: allowedUrls.has(plan.sourceUrl)
+          ? plan.sourceUrl
+          : source.homepageUrl,
+      })),
+    };
     return {
       ...product,
       url: source.homepageUrl,
@@ -163,6 +205,7 @@ export async function analyzeWithModel(
         origin: "collected" as const,
         capturedAt: new Date().toISOString(),
       })),
+      pricing: safePricing,
     };
   });
 

@@ -54,6 +54,12 @@ test("portable reports preserve notes and preference weights", () => {
   assert.equal(restored.trialResults[0].status, "passed");
   assert.equal(restored.trialResults[0].note, "Completed in 12 minutes.");
   assert.equal(restored.result.products.length, 2);
+  assert.equal(restored.result.products[0].pricing?.hasFreeOption, true);
+  assert.equal(restored.result.products[0].pricing?.plans[0].cadence, "free");
+  assert.equal(
+    restored.result.products[0].pricing?.plans[0].sourceUrl,
+    "https://cmux.com/",
+  );
 });
 
 test("version 1 reports migrate criteria and revision history", () => {
@@ -101,6 +107,28 @@ test("portable reports reject non-HTTP evidence links", () => {
     conflicts: [],
   };
   report.result.products[0].evidence[0].sourceUrl =
+    "javascript:alert(document.domain)";
+
+  assert.throws(() => parseReport(serializeReport(report)));
+});
+
+test("portable reports reject unsafe pricing source links", () => {
+  const report: SavedReport = {
+    id: "report-unsafe-pricing",
+    title: sampleComparison.title,
+    savedAt: sampleComparison.generatedAt,
+    urls: ["https://cmux.com/", "https://otty.sh/"],
+    context: "A sufficiently detailed local product comparison context.",
+    priorities: defaultPriorities,
+    criteria,
+    result: structuredClone(sampleComparison),
+    notes: "",
+    locale: "en",
+    revisions: [],
+    trialResults: [],
+    conflicts: [],
+  };
+  report.result.products[0].pricing!.plans[0].sourceUrl =
     "javascript:alert(document.domain)";
 
   assert.throws(() => parseReport(serializeReport(report)));
