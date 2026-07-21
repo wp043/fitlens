@@ -33,6 +33,13 @@ import {
 import { calculateWeightedWinner } from "@/lib/scoring";
 import { createRedactedReport } from "@/lib/redaction";
 import {
+  buildResearchLibrary,
+  filterResearchLibrary,
+  listLibraryProducts,
+  type LibraryReviewFilter,
+  type LibrarySourceFilter,
+} from "@/lib/research-library";
+import {
   detectEvidenceConflicts,
   type EvidenceConflict,
 } from "@/lib/conflicts";
@@ -62,7 +69,7 @@ const preferenceProfilesKey = "fitlens-preference-profiles-v1";
 const criteriaTemplatesKey = "fitlens-criteria-templates-v1";
 const localeKey = "fitlens-locale-v1";
 
-const maxSavedReports = 6;
+const maxSavedReports = 50;
 const maxRevisions = 5;
 
 function initialCriteria(exampleMode: boolean, locale: Locale) {
@@ -372,6 +379,15 @@ export function CompareWorkbench({
   >("idle");
   const [error, setError] = useState("");
   const [history, setHistory] = useState<SavedReport[]>([]);
+  const [libraryQuery, setLibraryQuery] = useState("");
+  const [libraryProduct, setLibraryProduct] = useState("");
+  const [librarySource, setLibrarySource] =
+    useState<LibrarySourceFilter>("all");
+  const [libraryEvidence, setLibraryEvidence] = useState<
+    EvidenceLevel | "all"
+  >("all");
+  const [libraryReview, setLibraryReview] =
+    useState<LibraryReviewFilter>("all");
   const [copied, setCopied] = useState(false);
   const [apiKey, setApiKey] = useState("");
   const [showApiKey, setShowApiKey] = useState(false);
@@ -532,6 +548,26 @@ export function CompareWorkbench({
   );
   const currentWinner = result?.products.find(
     (product) => product.name === weightedWinner,
+  );
+  const libraryEntries = useMemo(() => buildResearchLibrary(history), [history]);
+  const libraryProducts = useMemo(() => listLibraryProducts(history), [history]);
+  const filteredLibrary = useMemo(
+    () =>
+      filterResearchLibrary(libraryEntries, {
+        query: libraryQuery,
+        product: libraryProduct,
+        sourceMode: librarySource,
+        evidenceLevel: libraryEvidence,
+        review: libraryReview,
+      }),
+    [
+      libraryEntries,
+      libraryQuery,
+      libraryProduct,
+      librarySource,
+      libraryEvidence,
+      libraryReview,
+    ],
   );
   const canAnalyze =
     urls.every((url) => url.trim().length > 0) &&
@@ -706,6 +742,21 @@ export function CompareWorkbench({
   function clearHistory() {
     setHistory([]);
     window.localStorage.removeItem(historyKey);
+  }
+
+  function reuseReportInputs(saved: SavedReport) {
+    changeLocale(saved.locale ?? "zh-CN");
+    setUrls(saved.urls);
+    setContext(saved.context);
+    setCriteria(cloneCriteria(saved.criteria));
+    setActiveTemplateId("");
+    setResult(undefined);
+    setCurrentReportId(undefined);
+    setNotes("");
+    setComparisonDiff(undefined);
+    setTrialResults([]);
+    setConflicts([]);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   async function copyBrief() {
@@ -1371,11 +1422,12 @@ export function CompareWorkbench({
             </button>
           </div>
           {history.length > 0 && (
-            <div className="history-panel">
+            <div className="history-panel library-panel">
               <div className="history-head">
                 <div>
-                  <p className="eyebrow">{t.recentEyebrow}</p>
-                  <h3>{t.recentTitle}</h3>
+                  <p className="eyebrow">{t.libraryEyebrow}</p>
+                  <h3>{t.libraryTitle}</h3>
+                  <small>{t.libraryCopy}</small>
                 </div>
                 <div>
                   <button onClick={() => importInputRef.current?.click()}>
@@ -1384,21 +1436,120 @@ export function CompareWorkbench({
                   <button onClick={clearHistory}>{t.clear}</button>
                 </div>
               </div>
-              <div className="history-list">
-                {history.map((saved) => (
-                  <button key={saved.id} onClick={() => loadReport(saved)}>
-                    <span>{saved.title}</span>
-                    <small>
-                      {new Date(saved.savedAt).toLocaleDateString(locale)} ·{" "}
-                      {saved.result.recommendation.winner}
-                      {saved.revisions.length > 0
-                        ? ` · ${saved.revisions.length} ${t.revisions}`
-                        : ""}
-                    </small>
-                    <b>{t.open}</b>
-                  </button>
-                ))}
+              <div className="library-tools">
+                <label className="library-search">
+                  <span aria-hidden="true">⌕</span>
+                  <input
+                    type="search"
+                    value={libraryQuery}
+                    onChange={(event) => setLibraryQuery(event.target.value)}
+                    placeholder={t.librarySearchPlaceholder}
+                    aria-label={t.librarySearchAria}
+                  />
+                </label>
+                <div className="library-filters">
+                  <select
+                    value={libraryProduct}
+                    onChange={(event) => setLibraryProduct(event.target.value)}
+                    aria-label={t.libraryProductFilter}
+                  >
+                    <option value="">{t.libraryAllProducts}</option>
+                    {libraryProducts.map((product) => (
+                      <option key={product} value={product}>{product}</option>
+                    ))}
+                  </select>
+                  <select
+                    value={librarySource}
+                    onChange={(event) =>
+                      setLibrarySource(event.target.value as LibrarySourceFilter)
+                    }
+                    aria-label={t.librarySourceFilter}
+                  >
+                    <option value="all">{t.libraryAllSources}</option>
+                    <option value="open-source">{t.sourceOpen}</option>
+                    <option value="website-only">{t.sourceWebsite}</option>
+                  </select>
+                  <select
+                    value={libraryEvidence}
+                    onChange={(event) =>
+                      setLibraryEvidence(event.target.value as EvidenceLevel | "all")
+                    }
+                    aria-label={t.libraryEvidenceFilter}
+                  >
+                    <option value="all">{t.libraryAllEvidence}</option>
+                    <option value="verified">{t.verified}</option>
+                    <option value="vendor">{t.vendor}</option>
+                    <option value="inferred">{t.inferred}</option>
+                  </select>
+                  <select
+                    value={libraryReview}
+                    onChange={(event) =>
+                      setLibraryReview(event.target.value as LibraryReviewFilter)
+                    }
+                    aria-label={t.libraryReviewFilter}
+                  >
+                    <option value="all">{t.libraryAllDecisions}</option>
+                    <option value="ready">{t.libraryReady}</option>
+                    <option value="needs-review">{t.libraryNeedsReview}</option>
+                  </select>
+                </div>
               </div>
+              <div className="library-summary">
+                {t.libraryShowing
+                  .replace("{shown}", String(filteredLibrary.length))
+                  .replace("{total}", String(history.length))}
+              </div>
+              {filteredLibrary.length > 0 ? (
+                <div className="history-list library-list">
+                  {filteredLibrary.map((entry) => {
+                    const saved = entry.report;
+                    return (
+                      <article key={saved.id} className="library-card">
+                        <div className="library-card-top">
+                          <div>
+                            <span>{saved.title}</span>
+                            <small>
+                              {new Date(saved.savedAt).toLocaleDateString(locale)}
+                              {saved.revisions.length > 0
+                                ? ` · ${saved.revisions.length} ${t.revisions}`
+                                : ""}
+                            </small>
+                          </div>
+                          <i className={entry.needsReview ? "review" : "ready"}>
+                            {entry.needsReview ? t.libraryNeedsReview : t.libraryReady}
+                          </i>
+                        </div>
+                        <div className="library-product-chips">
+                          {entry.products.map((product) => (
+                            <span key={product}>{product}</span>
+                          ))}
+                        </div>
+                        <div className="library-decision">
+                          <small>{t.libraryDecision}</small>
+                          <strong>{saved.result.recommendation.winner}</strong>
+                        </div>
+                        <div className="library-metrics">
+                          <span>{entry.evidenceCount} {t.libraryEvidence}</span>
+                          <span>{entry.verifiedCount} {t.verified}</span>
+                          <span>{entry.sourceCount} {t.sources}</span>
+                        </div>
+                        <div className="library-card-actions">
+                          <button onClick={() => loadReport(saved)}>{t.open}</button>
+                          <button onClick={() => reuseReportInputs(saved)}>
+                            {t.libraryReuseInputs}
+                          </button>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="library-empty">
+                  <span>⌕</span>
+                  <strong>{t.libraryNoResults}</strong>
+                  <small>{t.libraryNoResultsCopy}</small>
+                </div>
+              )}
             </div>
           )}
           <Link className="example-link" href="/examples/cmux-vs-otty">
