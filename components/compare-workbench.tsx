@@ -56,6 +56,45 @@ import type {
   PrivacyFindingStatus,
   PrivacySecurityReview,
 } from "@/lib/types";
+import type { SourceErrorCode } from "@/lib/source";
+
+interface SourceFailure {
+  index: number;
+  url: string;
+  code: SourceErrorCode;
+  message: string;
+}
+
+const sourceErrorCodes = new Set<SourceErrorCode>([
+  "invalidUrl",
+  "httpOnly",
+  "credentialsNotAllowed",
+  "privateNetwork",
+  "fetchFailed",
+  "unsupportedContentType",
+  "pageTooLarge",
+  "githubFailed",
+]);
+
+class SourceCollectionRequestError extends Error {
+  readonly failures: SourceFailure[];
+
+  constructor(message: string, failures: SourceFailure[]) {
+    super(message);
+    this.name = "SourceCollectionRequestError";
+    this.failures = failures;
+  }
+}
+
+function isSourceFailure(value: unknown): value is SourceFailure {
+  if (!value || typeof value !== "object") return false;
+  const candidate = value as Record<string, unknown>;
+  return Number.isInteger(candidate.index) &&
+    typeof candidate.url === "string" &&
+    typeof candidate.code === "string" &&
+    sourceErrorCodes.has(candidate.code as SourceErrorCode) &&
+    typeof candidate.message === "string";
+}
 
 interface LegacyPreferenceProfile {
   id: string;
@@ -378,6 +417,10 @@ export function CompareWorkbench({
     "idle" | "loading" | "refreshing" | "error"
   >("idle");
   const [error, setError] = useState("");
+  const [sourceFailures, setSourceFailures] = useState<SourceFailure[]>([]);
+  const [sourceRetryMode, setSourceRetryMode] = useState<"analyze" | "refresh">(
+    "analyze",
+  );
   const [history, setHistory] = useState<SavedReport[]>([]);
   const [libraryQuery, setLibraryQuery] = useState("");
   const [libraryProduct, setLibraryProduct] = useState("");
@@ -597,11 +640,39 @@ export function CompareWorkbench({
         locale,
       }),
     });
-    const payload = await response.json();
+    const payload = await response.json() as Record<string, unknown>;
     if (!response.ok) {
-      throw new Error(payload.error ?? t.analyzeFailed);
+      if (
+        payload.code === "source_collection_failed" &&
+        Array.isArray(payload.sourceFailures) &&
+        payload.sourceFailures.every(isSourceFailure)
+      ) {
+        throw new SourceCollectionRequestError(
+          typeof payload.error === "string" ? payload.error : t.analyzeFailed,
+          payload.sourceFailures,
+        );
+      }
+      throw new Error(
+        typeof payload.error === "string" ? payload.error : t.analyzeFailed,
+      );
     }
-    return payload as ComparisonResult;
+    return payload as unknown as ComparisonResult;
+  }
+
+  function handleAnalysisError(
+    caught: unknown,
+    retryMode: "analyze" | "refresh",
+    fallback: string,
+  ) {
+    if (caught instanceof SourceCollectionRequestError) {
+      setSourceFailures(caught.failures);
+      setSourceRetryMode(retryMode);
+      setError("");
+    } else {
+      setSourceFailures([]);
+      setError(caught instanceof Error ? caught.message : fallback);
+    }
+    setStatus("error");
   }
 
   function addProductUrl() {
@@ -611,6 +682,14 @@ export function CompareWorkbench({
   function removeProductUrl(index: number) {
     if (urls.length <= 2) return;
     setUrls((current) => current.filter((_, candidate) => candidate !== index));
+    setSourceFailures((current) =>
+      current
+        .filter((failure) => failure.index !== index)
+        .map((failure) => ({
+          ...failure,
+          index: failure.index > index ? failure.index - 1 : failure.index,
+        })),
+    );
   }
 
   function moveProductUrl(index: number, offset: -1 | 1) {
@@ -621,6 +700,17 @@ export function CompareWorkbench({
       [next[index], next[target]] = [next[target], next[index]];
       return next;
     });
+    setSourceFailures((current) =>
+      current.map((failure) => ({
+        ...failure,
+        index:
+          failure.index === index
+            ? target
+            : failure.index === target
+              ? index
+              : failure.index,
+      })),
+    );
   }
 
   async function analyze() {
@@ -630,6 +720,7 @@ export function CompareWorkbench({
       const payload = await requestAnalysis();
       const detectedConflicts = detectEvidenceConflicts(payload);
       setResult(payload);
+      setSourceFailures([]);
       setConflicts(detectedConflicts);
       setTrialResults(
         payload.trialPlan.map((task) => ({ task: task.task, status: "untested", note: "" })),
@@ -672,8 +763,7 @@ export function CompareWorkbench({
         50,
       );
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : t.analyzeFailed);
-      setStatus("error");
+      handleAnalysisError(caught, "analyze", t.analyzeFailed);
     }
   }
 
@@ -713,6 +803,7 @@ export function CompareWorkbench({
         ? history.map((report) => (report.id === reportId ? saved : report))
         : [saved, ...history].slice(0, maxSavedReports);
       setResult(payload);
+      setSourceFailures([]);
       setConflicts(detectedConflicts);
       setTrialResults(
         stored?.trialResults ??
@@ -728,8 +819,7 @@ export function CompareWorkbench({
       window.localStorage.setItem(historyKey, JSON.stringify(nextHistory));
       setStatus("idle");
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : t.refreshFailed);
-      setStatus("error");
+      handleAnalysisError(caught, "refresh", t.refreshFailed);
     }
   }
 
@@ -742,6 +832,8 @@ export function CompareWorkbench({
     setResult(saved.result);
     setTrialResults(saved.trialResults);
     setConflicts(saved.conflicts);
+    setSourceFailures([]);
+    setError("");
     setCurrentReportId(saved.id);
     setNotes(saved.notes ?? "");
     setManualEvidenceProduct(saved.result.products[0]?.name ?? "");
@@ -777,6 +869,8 @@ export function CompareWorkbench({
     setComparisonDiff(undefined);
     setTrialResults([]);
     setConflicts([]);
+    setSourceFailures([]);
+    setError("");
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -1200,55 +1294,75 @@ export function CompareWorkbench({
         )}
 
         <div className="url-grid">
-          {urls.map((url, index) => (
-            <div className="url-field" key={index}>
-              <span>
-                {t.product} {String.fromCharCode(65 + index)}
-              </span>
-              <div className="url-input-row">
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M10 13a5 5 0 0 0 7.1.1l2-2a5 5 0 0 0-7-7.1l-1.1 1" />
-                  <path d="M14 11a5 5 0 0 0-7.1-.1l-2 2a5 5 0 0 0 7 7.1l1.1-1" />
-                </svg>
-                <input
-                  value={url}
-                  placeholder={`https://product-${String.fromCharCode(97 + index)}.com`}
-                  onChange={(event) => {
-                    const next = [...urls];
-                    next[index] = event.target.value;
-                    setUrls(next);
-                  }}
-                  aria-label={`${t.product} ${String.fromCharCode(65 + index)} URL`}
-                />
-                <div className="url-actions">
-                  <button
-                    type="button"
-                    disabled={index === 0}
-                    onClick={() => moveProductUrl(index, -1)}
-                    aria-label={`${t.moveProductUp}: ${index + 1}`}
-                  >
-                    ↑
-                  </button>
-                  <button
-                    type="button"
-                    disabled={index === urls.length - 1}
-                    onClick={() => moveProductUrl(index, 1)}
-                    aria-label={`${t.moveProductDown}: ${index + 1}`}
-                  >
-                    ↓
-                  </button>
-                  <button
-                    type="button"
-                    disabled={urls.length <= 2}
-                    onClick={() => removeProductUrl(index)}
-                    aria-label={`${t.removeProduct}: ${index + 1}`}
-                  >
-                    ×
-                  </button>
+          {urls.map((url, index) => {
+            const sourceFailure = sourceFailures.find(
+              (failure) => failure.index === index,
+            );
+            const diagnosticId = `source-failure-${index}`;
+            return (
+              <div
+                className={`url-field${sourceFailure ? " source-failed" : ""}`}
+                key={index}
+              >
+                <span>
+                  {t.product} {String.fromCharCode(65 + index)}
+                </span>
+                <div className="url-input-row">
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M10 13a5 5 0 0 0 7.1.1l2-2a5 5 0 0 0-7-7.1l-1.1 1" />
+                    <path d="M14 11a5 5 0 0 0-7.1-.1l-2 2a5 5 0 0 0 7 7.1l1.1-1" />
+                  </svg>
+                  <input
+                    value={url}
+                    placeholder={`https://product-${String.fromCharCode(97 + index)}.com`}
+                    onChange={(event) => {
+                      const next = [...urls];
+                      next[index] = event.target.value;
+                      setUrls(next);
+                      setSourceFailures((current) =>
+                        current.filter((failure) => failure.index !== index),
+                      );
+                    }}
+                    aria-label={`${t.product} ${String.fromCharCode(65 + index)} URL`}
+                    aria-invalid={sourceFailure ? true : undefined}
+                    aria-describedby={sourceFailure ? diagnosticId : undefined}
+                  />
+                  <div className="url-actions">
+                    <button
+                      type="button"
+                      disabled={index === 0}
+                      onClick={() => moveProductUrl(index, -1)}
+                      aria-label={`${t.moveProductUp}: ${index + 1}`}
+                    >
+                      ↑
+                    </button>
+                    <button
+                      type="button"
+                      disabled={index === urls.length - 1}
+                      onClick={() => moveProductUrl(index, 1)}
+                      aria-label={`${t.moveProductDown}: ${index + 1}`}
+                    >
+                      ↓
+                    </button>
+                    <button
+                      type="button"
+                      disabled={urls.length <= 2}
+                      onClick={() => removeProductUrl(index)}
+                      aria-label={`${t.removeProduct}: ${index + 1}`}
+                    >
+                      ×
+                    </button>
+                  </div>
                 </div>
+                {sourceFailure && (
+                  <p className="source-failure-detail" id={diagnosticId}>
+                    <strong>{sourceFailure.code}</strong>
+                    {t[sourceFailure.code]}
+                  </p>
+                )}
               </div>
-            </div>
-          ))}
+            );
+          })}
           {urls.length < 8 && (
             <button
               className="add-product-button"
@@ -1425,7 +1539,36 @@ export function CompareWorkbench({
           </button>
         </div>
         {error && (
-          <div className="error-banner">{error}</div>
+          <div className="error-banner" role="alert">
+            {error}
+          </div>
+        )}
+        {sourceFailures.length > 0 && (
+          <div
+            className="source-failure-summary"
+            role="alert"
+            aria-live="assertive"
+          >
+            <div>
+              <strong>
+                {t.sourceFailureSummary.replace(
+                  "{count}",
+                  String(sourceFailures.length),
+                )}
+              </strong>
+              <span>{t.sourceCollectionFailed}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                if (sourceRetryMode === "refresh") void refreshAnalysis();
+                else void analyze();
+              }}
+              disabled={status === "loading" || status === "refreshing"}
+            >
+              {t.retrySources} <span aria-hidden="true">↻</span>
+            </button>
+          </div>
         )}
         <input
           ref={importInputRef}

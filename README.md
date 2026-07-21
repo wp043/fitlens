@@ -305,6 +305,12 @@ are followed manually, limited to five hops, and checked using the same policy.
 Responses must use an expected HTML, JSON, or text content type, and FitLens
 stops streaming a response once its route-specific byte limit is exceeded.
 
+Candidate sources are collected independently. If any link fails, FitLens does
+not send a partial comparison to the model: it reports every affected row with
+a stable public error code and a localized message, keeps the draft intact, and
+lets you correct a URL or retry collection. Upstream response bodies, stack
+traces, and collector details are never included in this diagnostic response.
+
 This is application-layer SSRF hardening, not a network sandbox. Node's built-in
 `fetch` performs its own connection lookup after the policy lookup, so a hostile
 DNS service could theoretically change its answer between those two operations
