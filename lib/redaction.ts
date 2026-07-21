@@ -35,6 +35,14 @@ export function redactComparisonResult(
             })),
           }
         : undefined,
+      privacy: product.privacy
+        ? {
+            ...product.privacy,
+            findings: product.privacy.findings.map((finding) => ({
+              ...finding,
+            })),
+          }
+        : undefined,
     })),
     dimensions: result.dimensions.map((dimension) => ({
       ...dimension,

@@ -45,6 +45,9 @@ import type {
   TrialResult,
   TrialStatus,
   PriorityWeights,
+  PrivacyCategory,
+  PrivacyFindingStatus,
+  PrivacySecurityReview,
 } from "@/lib/types";
 
 interface LegacyPreferenceProfile {
@@ -101,6 +104,37 @@ function cadenceLabel(cadence: BillingCadence, t: Messages) {
     custom: t.cadenceCustom,
     unknown: t.cadenceUnknown,
   }[cadence];
+}
+
+function privacyCategoryLabel(category: PrivacyCategory, t: Messages) {
+  return {
+    telemetry: t.privacyTelemetry,
+    account: t.privacyAccount,
+    retention: t.privacyRetention,
+    permissions: t.privacyPermissions,
+    encryption: t.privacyEncryption,
+    selfHosting: t.privacySelfHosting,
+  }[category];
+}
+
+function privacyStatusLabel(status: PrivacyFindingStatus, t: Messages) {
+  return {
+    positive: t.privacyPositive,
+    caution: t.privacyCaution,
+    unknown: t.privacyUnknown,
+  }[status];
+}
+
+function privacyRiskLabel(
+  riskLevel: PrivacySecurityReview["riskLevel"],
+  t: Messages,
+) {
+  return {
+    low: t.privacyRiskLow,
+    medium: t.privacyRiskMedium,
+    high: t.privacyRiskHigh,
+    unknown: t.privacyRiskUnknown,
+  }[riskLevel];
 }
 
 function confidenceBandLabel(calibration: ConfidenceCalibration, t: Messages) {
@@ -175,6 +209,20 @@ ${pricing.plans.length > 0
 
 `
         : "";
+      const privacy = product.privacy;
+      const privacySection = privacy
+        ? `### ${t.markdownPrivacy}: ${t.privacyRisk} — ${privacyRiskLabel(privacy.riskLevel, t)}
+${privacy.summary}
+
+${privacy.findings
+  .map(
+    (finding) =>
+      `- **${privacyCategoryLabel(finding.category, t)} · ${privacyStatusLabel(finding.status, t)}:** ${finding.finding} ([${evidenceLabels[finding.evidenceLevel]}](${finding.sourceUrl}))\n  - ${t.privacyUncertainty}: ${finding.uncertainty}`,
+  )
+  .join("\n")}
+
+`
+        : "";
       const calibration = calibrations.find((item) => item.product === product.name)!;
       return `## ${product.name} — ${product.score}/100
 
@@ -192,7 +240,7 @@ ${product.strengths.map((item) => `- ${item}`).join("\n")}
 ### ${t.markdownTradeoffs}
 ${product.tradeoffs.map((item) => `- ${item}`).join("\n")}
 
-${pricingSection}### ${t.markdownEvidence}
+${pricingSection}${privacySection}### ${t.markdownEvidence}
 ${product.evidence
   .map(
     (item) =>
@@ -1739,6 +1787,45 @@ export function CompareWorkbench({
                     <strong>{t.pricingUncertainty}</strong>
                     {product.pricing.uncertainty}
                   </p>
+                </section>
+              )}
+
+              {product.privacy && (
+                <section className="privacy-card" aria-label={t.privacyTitle}>
+                  <header>
+                    <div>
+                      <h4>{t.privacyTitle}</h4>
+                      <p>{t.privacyCopy}</p>
+                    </div>
+                    <span className={`privacy-risk ${product.privacy.riskLevel}`}>
+                      <small>{t.privacyRisk}</small>
+                      {privacyRiskLabel(product.privacy.riskLevel, t)}
+                    </span>
+                  </header>
+                  <p className="privacy-summary">{product.privacy.summary}</p>
+                  <div className="privacy-findings">
+                    {product.privacy.findings.map((finding) => (
+                      <a
+                        href={finding.sourceUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className={finding.status}
+                        key={finding.category}
+                      >
+                        <div>
+                          <strong>{privacyCategoryLabel(finding.category, t)}</strong>
+                          <span>{privacyStatusLabel(finding.status, t)}</span>
+                        </div>
+                        <p>{finding.finding}</p>
+                        <small>
+                          <b className={`evidence-badge ${finding.evidenceLevel}`}>
+                            {evidenceLabels[finding.evidenceLevel]}
+                          </b>
+                          {t.privacyUncertainty}: {finding.uncertainty} ↗
+                        </small>
+                      </a>
+                    ))}
+                  </div>
                 </section>
               )}
 

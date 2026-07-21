@@ -72,6 +72,37 @@ const pricingSchema = z
   })
   .passthrough();
 
+const privacySchema = z
+  .object({
+    summary: z.string(),
+    riskLevel: z.enum(["low", "medium", "high", "unknown"]),
+    findings: z
+      .array(
+        z.object({
+          category: z.enum([
+            "telemetry",
+            "account",
+            "retention",
+            "permissions",
+            "encryption",
+            "selfHosting",
+          ]),
+          status: z.enum(["positive", "caution", "unknown"]),
+          finding: z.string(),
+          evidenceLevel: z.enum(["verified", "vendor", "inferred"]),
+          sourceUrl: httpUrlSchema,
+          uncertainty: z.string(),
+        }).passthrough(),
+      )
+      .length(6)
+      .refine(
+        (findings) =>
+          new Set(findings.map((finding) => finding.category)).size === 6,
+        "Privacy review categories must be unique",
+      ),
+  })
+  .passthrough();
+
 const evidenceConflictSchema = z
   .object({
     id: z.string(),
@@ -124,6 +155,7 @@ const productSchema = z
     tradeoffs: z.array(z.string()),
     evidence: z.array(evidenceSchema),
     pricing: pricingSchema.optional(),
+    privacy: privacySchema.optional(),
   })
   .passthrough();
 
@@ -198,7 +230,7 @@ const savedReportSchema = z
 
 const portableReportSchema = z
   .object({
-    schemaVersion: z.union([z.literal(1), z.literal(2)]),
+    schemaVersion: z.union([z.literal(1), z.literal(2), z.literal(3)]),
     exportedAt: z.string(),
     report: savedReportSchema,
   })
@@ -269,7 +301,7 @@ export function calculateEvidenceCoverage(
 export function serializeReport(report: SavedReport) {
   return JSON.stringify(
     {
-      schemaVersion: 2,
+      schemaVersion: 3,
       exportedAt: new Date().toISOString(),
       report,
     },
