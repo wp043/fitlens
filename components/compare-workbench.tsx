@@ -354,7 +354,7 @@ export function CompareWorkbench({
     vendor: t.vendor,
     inferred: t.inferred,
   };
-  const [urls, setUrls] = useState<[string, string]>(
+  const [urls, setUrls] = useState<string[]>(
     exampleMode
       ? ["https://cmux.com/", "https://otty.sh/"]
       : ["", ""],
@@ -570,6 +570,8 @@ export function CompareWorkbench({
     ],
   );
   const canAnalyze =
+    urls.length >= 2 &&
+    urls.length <= 8 &&
     urls.every((url) => url.trim().length > 0) &&
     context.trim().length >= 10 &&
     criteria.length >= 2 &&
@@ -600,6 +602,25 @@ export function CompareWorkbench({
       throw new Error(payload.error ?? t.analyzeFailed);
     }
     return payload as ComparisonResult;
+  }
+
+  function addProductUrl() {
+    if (urls.length < 8) setUrls((current) => [...current, ""]);
+  }
+
+  function removeProductUrl(index: number) {
+    if (urls.length <= 2) return;
+    setUrls((current) => current.filter((_, candidate) => candidate !== index));
+  }
+
+  function moveProductUrl(index: number, offset: -1 | 1) {
+    const target = index + offset;
+    if (target < 0 || target >= urls.length) return;
+    setUrls((current) => {
+      const next = [...current];
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
   }
 
   async function analyze() {
@@ -1180,32 +1201,63 @@ export function CompareWorkbench({
 
         <div className="url-grid">
           {urls.map((url, index) => (
-            <label className="url-field" key={index}>
+            <div className="url-field" key={index}>
               <span>
-                {t.product} {index === 0 ? "A" : "B"}
+                {t.product} {String.fromCharCode(65 + index)}
               </span>
-              <div>
+              <div className="url-input-row">
                 <svg viewBox="0 0 24 24" aria-hidden="true">
                   <path d="M10 13a5 5 0 0 0 7.1.1l2-2a5 5 0 0 0-7-7.1l-1.1 1" />
                   <path d="M14 11a5 5 0 0 0-7.1-.1l-2 2a5 5 0 0 0 7 7.1l1.1-1" />
                 </svg>
                 <input
                   value={url}
-                  placeholder={
-                    index === 0
-                      ? "https://product-a.com"
-                      : "https://product-b.com"
-                  }
+                  placeholder={`https://product-${String.fromCharCode(97 + index)}.com`}
                   onChange={(event) => {
-                    const next = [...urls] as [string, string];
+                    const next = [...urls];
                     next[index] = event.target.value;
                     setUrls(next);
                   }}
-                  aria-label={`${t.product} ${index === 0 ? "A" : "B"} URL`}
+                  aria-label={`${t.product} ${String.fromCharCode(65 + index)} URL`}
                 />
+                <div className="url-actions">
+                  <button
+                    type="button"
+                    disabled={index === 0}
+                    onClick={() => moveProductUrl(index, -1)}
+                    aria-label={`${t.moveProductUp}: ${index + 1}`}
+                  >
+                    ↑
+                  </button>
+                  <button
+                    type="button"
+                    disabled={index === urls.length - 1}
+                    onClick={() => moveProductUrl(index, 1)}
+                    aria-label={`${t.moveProductDown}: ${index + 1}`}
+                  >
+                    ↓
+                  </button>
+                  <button
+                    type="button"
+                    disabled={urls.length <= 2}
+                    onClick={() => removeProductUrl(index)}
+                    aria-label={`${t.removeProduct}: ${index + 1}`}
+                  >
+                    ×
+                  </button>
+                </div>
               </div>
-            </label>
+            </div>
           ))}
+          {urls.length < 8 && (
+            <button
+              className="add-product-button"
+              type="button"
+              onClick={addProductUrl}
+            >
+              + {t.addProduct}
+            </button>
+          )}
         </div>
 
         <div className="profile-grid">
@@ -1786,7 +1838,7 @@ export function CompareWorkbench({
         )}
 
         <div className="product-grid">
-          {result.products.map((product, index) => {
+          {result.products.map((product) => {
             const coverage = calculateEvidenceCoverage(product);
             const freshness = calculateEvidenceFreshness(product);
             const calibration = confidenceCalibrations.find(
@@ -1794,7 +1846,7 @@ export function CompareWorkbench({
             )!;
             return (
               <article
-                className={`product-card ${index === 0 ? "featured" : ""}`}
+                className={`product-card ${product.name === (weightedWinner ?? result.recommendation.winner) ? "featured" : ""}`}
                 key={product.name}
               >
               <header>

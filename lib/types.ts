@@ -126,7 +126,7 @@ export interface ComparisonResult {
 }
 
 export interface AnalyzeRequest {
-  urls: [string, string];
+  urls: string[];
   context: string;
   criteria: ComparisonCriterion[];
   locale: Locale;

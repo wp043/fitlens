@@ -189,7 +189,7 @@ a {
 .url-grid {
   padding: 28px;
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
 }
 
@@ -233,6 +233,38 @@ a {
   color: var(--ink);
   font-family: "DM Mono", monospace;
   font-size: 13px;
+}
+
+.url-actions {
+  display: flex;
+  gap: 5px;
+}
+
+.url-actions button {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid rgba(59, 48, 56, 0.14);
+  border-radius: 9px;
+  background: rgba(203, 166, 247, 0.1);
+  color: #6a4384;
+  cursor: pointer;
+}
+
+.url-actions button:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.add-product-button {
+  min-height: 62px;
+  align-self: end;
+  border: 1px dashed rgba(106, 67, 132, 0.45);
+  border-radius: 16px;
+  background: rgba(203, 166, 247, 0.08);
+  color: #6a4384;
+  font-family: "DM Mono", monospace;
+  cursor: pointer;
 }
 
 .profile-grid {
@@ -477,7 +509,7 @@ a {
 .product-grid {
   margin-top: 24px;
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr));
   gap: 24px;
 }
 

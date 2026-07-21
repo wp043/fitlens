@@ -110,7 +110,7 @@ const comparisonSchema = z
         switchWhen: z.string(),
       })
       .strict(),
-    products: z.array(productSchema).length(2),
+    products: z.array(productSchema).min(2).max(8),
     dimensions: z.array(dimensionSchema).min(2).max(8),
     unknowns: z.array(z.string()).min(2).max(5),
     trialPlan: z
@@ -140,18 +140,10 @@ function sourceForPrompt(source: CollectedSource) {
 
 export async function analyzeWithModel(
   request: AnalyzeRequest,
-  sources: [CollectedSource, CollectedSource],
+  sources: CollectedSource[],
   apiKey?: string,
 ): Promise<ComparisonResult> {
   const client = new OpenAI({ apiKey: apiKey || process.env.OPENAI_API_KEY });
-  const allowedUrls = new Set(
-    sources.flatMap((source) =>
-      [source.inputUrl, source.homepageUrl, source.repo?.url].filter(
-        (value): value is string => Boolean(value),
-      ),
-    ),
-  );
-
   const response = await client.responses.parse({
     model: process.env.OPENAI_MODEL || "gpt-5.6-luna",
     reasoning: { effort: "low" },
@@ -168,6 +160,9 @@ export async function analyzeWithModel(
       request.locale === "zh-CN"
         ? "每个 CRITERIA 项必须在 dimensions 中恰好出现一次，保留相同的 key、label 和 weight；不要增加或遗漏维度。"
         : "Return exactly one dimension for every CRITERIA item, preserving its key, label, and weight. Do not add or omit dimensions.",
+      request.locale === "zh-CN"
+        ? `必须为 ${sources.length} 个 SOURCES 各返回一个产品，并严格保持 SOURCES 的顺序。每个维度的 productScores 必须恰好包含所有产品名称。`
+        : `Return one product for each of the ${sources.length} SOURCES, in the exact SOURCES order. Every dimension's productScores must contain exactly every returned product name.`,
       "分数表示对该用户的适配度，不表示普遍产品质量。",
       request.locale === "zh-CN"
         ? "为每个产品提取结构化 pricing：免费可用性、套餐名称、页面原文价格、计费周期、适用对象、限制和来源。没有公开价格时保留空 plans，并在 uncertainty 中明确未知；不要猜测数字。"
@@ -175,7 +170,9 @@ export async function analyzeWithModel(
       request.locale === "zh-CN"
         ? "为每个产品完成结构化隐私与安全审查，findings 必须按 telemetry、account、retention、permissions、encryption、selfHosting 各返回一次。每项都要区分 positive、caution 或 unknown，附证据等级、来源和明确的不确定性；没有证据时必须是 unknown，不得把未披露当作安全或不安全。"
         : "For every product, return exactly one privacy/security finding for each category: telemetry, account, retention, permissions, encryption, and selfHosting. Classify each as positive, caution, or unknown and include evidence level, source, and explicit uncertainty. Missing disclosure must be unknown, never assumed safe or unsafe.",
-      "trialPlan 必须是可在 30 分钟内比较两款产品的具体任务。",
+      request.locale === "zh-CN"
+        ? "trialPlan 必须是可在 30 分钟内横向比较所有候选产品的具体任务。"
+        : "The trial plan must contain concrete tasks that compare every candidate within 30 minutes.",
     ].join("\n"),
     input: JSON.stringify({
       USER_CONTEXT: request.context,
@@ -192,6 +189,13 @@ export async function analyzeWithModel(
   }
 
   const parsed = response.output_parsed;
+  if (parsed.products.length !== sources.length) {
+    throw new Error(messages[request.locale].modelFailed);
+  }
+  const productNames = parsed.products.map((product) => product.name);
+  if (new Set(productNames).size !== productNames.length) {
+    throw new Error(messages[request.locale].modelFailed);
+  }
   const returnedDimensions = new Map(
     parsed.dimensions.map((dimension) => [dimension.key, dimension]),
   );
@@ -209,8 +213,26 @@ export async function analyzeWithModel(
     label: criterion.label,
     weight: criterion.weight,
   }));
+  if (
+    dimensions.some((dimension) => {
+      const scoreNames = Object.keys(dimension.productScores);
+      return (
+        scoreNames.length !== productNames.length ||
+        productNames.some((name) => !scoreNames.includes(name)) ||
+        (dimension.winner !== "tie" && !productNames.includes(dimension.winner))
+      );
+    }) ||
+    !productNames.includes(parsed.recommendation.winner)
+  ) {
+    throw new Error(messages[request.locale].modelFailed);
+  }
   const products = parsed.products.map((product, index) => {
     const source = sources[index];
+    const allowedUrls = new Set(
+      [source.inputUrl, source.homepageUrl, source.repo?.url].filter(
+        (value): value is string => Boolean(value),
+      ),
+    );
     const safeEvidence = product.evidence.map((evidence) => ({
       ...evidence,
       sourceUrl: allowedUrls.has(evidence.sourceUrl)
