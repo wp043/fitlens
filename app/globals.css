@@ -2533,6 +2533,90 @@ footer {
   border: 0;
 }
 
+.url-field.source-failed > .url-input-row {
+  border-color: rgba(243, 139, 168, 0.72);
+  background: rgba(255, 235, 239, 0.78);
+  box-shadow: 0 0 0 4px rgba(243, 139, 168, 0.13);
+}
+
+.url-field.source-failed > span {
+  color: #8e4058;
+}
+
+.source-failure-detail {
+  margin: 9px 4px 0;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  color: #8e4058;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.source-failure-detail strong {
+  flex: none;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: rgba(243, 139, 168, 0.16);
+  font-family: "DM Mono", monospace;
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.source-failure-summary {
+  padding: 18px 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  border-top: 1px solid rgba(243, 139, 168, 0.32);
+  background: rgba(243, 139, 168, 0.11);
+  color: #75364a;
+}
+
+.source-failure-summary div,
+.source-failure-summary strong,
+.source-failure-summary span {
+  display: block;
+}
+
+.source-failure-summary strong {
+  margin-bottom: 4px;
+  font-size: 13px;
+}
+
+.source-failure-summary span {
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.source-failure-summary button {
+  flex: none;
+  padding: 10px 14px;
+  border: 1px solid rgba(117, 54, 74, 0.28);
+  border-radius: 999px;
+  background: rgba(255, 248, 240, 0.78);
+  color: #75364a;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.source-failure-summary button:hover {
+  background: #fff8f0;
+}
+
+@media (max-width: 640px) {
+  .source-failure-summary {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .source-failure-summary button {
+    width: 100%;
+  }
+}
+
 .local-api-setup {
   padding: 18px 28px;
   display: grid;

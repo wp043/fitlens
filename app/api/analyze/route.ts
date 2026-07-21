@@ -15,6 +15,11 @@ import {
 } from "@/lib/i18n";
 import { sampleComparisonForLocale } from "@/lib/sample";
 import { collectProductSource, SourceError } from "@/lib/source";
+import {
+  collectCandidateSources,
+  createSourceFailureResponse,
+  sourceFailureHttpStatus,
+} from "@/lib/source-diagnostics";
 import type { AnalyzeRequest } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -88,11 +93,22 @@ export async function POST(request: Request) {
       );
     }
 
-    const sources = (await Promise.all(
-      body.urls.map((url) => collectProductSource(url)),
-    )) as Awaited<ReturnType<typeof collectProductSource>>[];
+    const collected = await collectCandidateSources(
+      body.urls,
+      collectProductSource,
+    );
+    if (!collected.ok) {
+      return NextResponse.json(
+        createSourceFailureResponse(
+          collected.failures,
+          t.sourceCollectionFailed,
+          (code) => t[code],
+        ),
+        { status: sourceFailureHttpStatus(collected.failures) },
+      );
+    }
 
-    const result = await analyzeWithModel(body, sources, provider);
+    const result = await analyzeWithModel(body, collected.sources, provider);
     return NextResponse.json(result);
   } catch (error) {
     const t = messages[locale];
@@ -100,7 +116,7 @@ export async function POST(request: Request) {
       error instanceof z.ZodError
         ? t.invalidInput
         : error instanceof SourceError
-          ? `${t[error.code]}${error.detail ? `: ${error.detail}` : ""}`
+          ? t[error.code]
         : error instanceof ModelProviderConfigError ||
             error instanceof ModelProviderRequestError
           ? t[error.code]

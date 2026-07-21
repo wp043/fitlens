@@ -54,6 +54,9 @@ const zh = {
   autoDetect: "自动识别 GitHub repository 与官网证据",
   analyzing: "正在取证…",
   analyze: "开始分析",
+  retrySources: "重新取证",
+  sourceCollectionFailed: "部分候选产品的公开来源无法读取。请检查标出的链接，然后重试。",
+  sourceFailureSummary: "有 {count} 个产品链接取证失败",
   methodEyebrow: "更公平的对比方式",
   methodTitle: "每个结论，都知道自己从哪里来。",
   methodIntro:
@@ -341,6 +344,10 @@ const en: Record<MessageKey, string> = {
   autoDetect: "Automatically finds GitHub repositories and official evidence",
   analyzing: "Collecting evidence…",
   analyze: "Analyze",
+  retrySources: "Retry evidence collection",
+  sourceCollectionFailed:
+    "Some candidate sources could not be read. Check the highlighted links, then retry.",
+  sourceFailureSummary: "Evidence collection failed for {count} product link(s)",
   methodEyebrow: "A FAIRER WAY TO COMPARE",
   methodTitle: "Every conclusion knows where it came from.",
   methodIntro:
