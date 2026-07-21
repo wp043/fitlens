@@ -3,6 +3,12 @@ import { z } from "zod";
 import { parseAnalyzeRequest } from "@/lib/analyze-request";
 import { analyzeWithModel } from "@/lib/analyzer";
 import {
+  ModelProviderConfigError,
+  ModelProviderRequestError,
+  modelProviderCanRun,
+  resolveModelProviderConfig,
+} from "@/lib/model-provider";
+import {
   messages,
   normalizeLocale,
   type Locale,
@@ -55,10 +61,10 @@ export async function POST(request: Request) {
         { status: 400 },
       );
     }
-    const apiKey = sessionApiKey || process.env.OPENAI_API_KEY;
+    const provider = resolveModelProviderConfig(process.env, sessionApiKey);
     const body = parseAnalyzeRequest(input) as AnalyzeRequest;
 
-    if (!apiKey && isBundledSampleRequest(body)) {
+    if (!modelProviderCanRun(provider) && isBundledSampleRequest(body)) {
       const sample = sampleComparisonForLocale(locale);
       const sampleDimensions = new Map(
         sample.dimensions.map((dimension) => [dimension.key, dimension]),
@@ -75,7 +81,7 @@ export async function POST(request: Request) {
       });
     }
 
-    if (!apiKey) {
+    if (!modelProviderCanRun(provider)) {
       return NextResponse.json(
         { error: t.missingKey },
         { status: 503 },
@@ -86,7 +92,7 @@ export async function POST(request: Request) {
       body.urls.map((url) => collectProductSource(url)),
     )) as Awaited<ReturnType<typeof collectProductSource>>[];
 
-    const result = await analyzeWithModel(body, sources, apiKey);
+    const result = await analyzeWithModel(body, sources, provider);
     return NextResponse.json(result);
   } catch (error) {
     const t = messages[locale];
@@ -95,6 +101,9 @@ export async function POST(request: Request) {
         ? t.invalidInput
         : error instanceof SourceError
           ? `${t[error.code]}${error.detail ? `: ${error.detail}` : ""}`
+        : error instanceof ModelProviderConfigError ||
+            error instanceof ModelProviderRequestError
+          ? t[error.code]
         : error instanceof Error
           ? error.message
           : t.genericFailure;

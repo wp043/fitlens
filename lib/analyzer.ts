@@ -1,7 +1,9 @@
-import OpenAI from "openai";
-import { zodTextFormat } from "openai/helpers/zod";
 import { z } from "zod";
 import { messages } from "@/lib/i18n";
+import {
+  requestStructuredOutput,
+  type ModelProviderConfig,
+} from "@/lib/model-provider";
 import type { AnalyzeRequest, ComparisonResult } from "@/lib/types";
 import type { CollectedSource } from "@/lib/source";
 import { calibratePrivacyRisk } from "@/lib/privacy";
@@ -141,12 +143,11 @@ function sourceForPrompt(source: CollectedSource) {
 export async function analyzeWithModel(
   request: AnalyzeRequest,
   sources: CollectedSource[],
-  apiKey?: string,
+  provider: ModelProviderConfig,
 ): Promise<ComparisonResult> {
-  const client = new OpenAI({ apiKey: apiKey || process.env.OPENAI_API_KEY });
-  const response = await client.responses.parse({
-    model: process.env.OPENAI_MODEL || "gpt-5.6-luna",
-    reasoning: { effort: "low" },
+  const parsed = await requestStructuredOutput(provider, {
+    schema: comparisonSchema,
+    schemaName: "fitlens_comparison",
     instructions: [
       request.locale === "zh-CN"
         ? "你是严谨的产品研究员。所有面向用户的内容都用简体中文输出。"
@@ -179,16 +180,11 @@ export async function analyzeWithModel(
       CRITERIA: request.criteria,
       SOURCES: sources.map(sourceForPrompt),
     }),
-    text: {
-      format: zodTextFormat(comparisonSchema, "fitlens_comparison"),
-    },
   });
 
-  if (!response.output_parsed) {
+  if (!parsed) {
     throw new Error(messages[request.locale].modelFailed);
   }
-
-  const parsed = response.output_parsed;
   if (parsed.products.length !== sources.length) {
     throw new Error(messages[request.locale].modelFailed);
   }

@@ -46,8 +46,10 @@ priorities change the outcome, and important unknowns should remain visible.
 - Creates share-safe Markdown and JSON copies that retain conclusions and
   public evidence while removing private context, notes, trials, revisions,
   criterion hints, and manually entered evidence.
-- Accepts an OpenAI API key from `.env.local` or only for the current browser
-  session.
+- Uses OpenAI by default, with an opt-in adapter for compatible Responses APIs
+  that support structured output.
+- Accepts a model API key from `.env.local` or only for the current browser
+  session; provider endpoints and credentials never enter saved reports.
 - Rejects local, private-network, credential-bearing, and non-HTTP URLs, checks
   every redirect, and caps the bytes read from each remote response.
 
@@ -57,7 +59,8 @@ Requirements:
 
 - Node.js 20.9 or newer
 - pnpm 10
-- An OpenAI API key for live comparisons
+- An OpenAI API key, or a local compatible structured-output Responses server,
+  for live comparisons
 
 ```bash
 pnpm install --frozen-lockfile
@@ -76,6 +79,37 @@ GITHUB_TOKEN=
 
 `GITHUB_TOKEN` is optional and increases GitHub API rate limits.
 
+### Model provider configuration
+
+OpenAI is the default provider. The existing browser session key overrides
+`OPENAI_API_KEY` for the current tab session, while `OPENAI_MODEL` selects the
+model:
+
+```dotenv
+OPENAI_API_KEY=
+OPENAI_MODEL=gpt-5.6-luna
+```
+
+To use a compatible implementation of the Responses API, configure it only on
+the local Next.js server:
+
+```dotenv
+FITLENS_MODEL_PROVIDER=compatible
+FITLENS_MODEL_BASE_URL=http://127.0.0.1:11434/v1
+FITLENS_MODEL_MODEL=your-structured-output-model
+FITLENS_MODEL_API_KEY=
+```
+
+The compatible endpoint must implement the Responses API and JSON Schema
+structured output. A session key entered in the UI also overrides
+`FITLENS_MODEL_API_KEY`, without changing the existing browser workflow.
+
+Remote endpoints must use HTTPS. Plain HTTP is deliberately allowed only for
+`localhost`, `127.0.0.1`, and `::1`, so a model server on the same machine can
+remain simple. Base URLs containing credentials, query parameters, or fragments
+are rejected; put credentials in the key setting instead. FitLens does not send
+provider configuration to the browser or include it in reports and exports.
+
 ## System architecture
 
 ```mermaid
@@ -86,8 +120,9 @@ flowchart LR
     V --> G[GitHub API and README]
     W --> E[Normalized evidence bundle]
     G --> E
-    E --> M[OpenAI Responses API]
-    M --> R[Structured comparison]
+    E --> M[Model provider adapter]
+    M --> O[OpenAI or compatible Responses API]
+    O --> R[Structured comparison]
     R --> U
     U --> H[(Local research library)]
     U --> P[(Local templates and notes)]
@@ -111,7 +146,7 @@ sequenceDiagram
     participant UI as Browser UI
     participant API as Local Next.js API
     participant Sources as Product sources
-    participant Model as OpenAI model
+    participant Model as Configured model provider
 
     User->>UI: Add 2–8 URLs and describe the workflow
     UI->>API: Submit URLs, criteria, locale, and optional session key
@@ -232,7 +267,7 @@ flowchart TB
     subgraph External services
         PS[Public product sources]
         GH[GitHub API]
-        OA[OpenAI API]
+        OA[Configured Responses API]
     end
 
     N --> PS
@@ -245,13 +280,14 @@ flowchart TB
 | Research library, revisions, notes, custom templates | `localStorage` | Until cleared by the user |
 | Key entered in the interface | `sessionStorage` | Current browser session |
 | Key configured in `.env.local` | Local server environment | Until the file changes |
-| Product source material | Sent to the configured OpenAI model | Governed by the API account |
+| Product source material | Sent to the configured model provider | Governed by the provider account or local server |
 | JSON and Markdown exports | User-selected local files | Controlled by the user |
 | Share-safe exports | User-selected local files | Private research is removed before download |
 | Locale | `localStorage` and optional `?lang=` query | Until changed |
 
-API keys are excluded from report history, notes, JSON, Markdown, and source
-files.
+API keys, model names, and provider base URLs are excluded from report history,
+notes, JSON, Markdown, and source files. `.env.local` is ignored by Git and the
+server reads provider settings only when handling analysis requests.
 
 Share-safe exports provide an additional privacy boundary for reports sent to
 other people. They keep the recommendation, scores, pricing, criteria labels
@@ -351,6 +387,7 @@ lib/
   evidence.ts            Manual evidence merge and refresh preservation
   freshness.ts           Evidence age classification and summaries
   i18n.ts                Typed Chinese and English dictionaries
+  model-provider.ts      Provider config, Responses adapter, and safe diagnostics
   research-library.ts    Local report indexing, search, facets, and summaries
   report.ts              Versioned reports, migration, and evidence coverage
   scoring.ts             Preference-weighted scoring
@@ -381,14 +418,15 @@ It also includes evidence conflict detection, structured pricing comparison,
 deterministic confidence calibration, and bilingual report output.
 Reports can also be exported as bilingual share-safe copies without private
 research details. A searchable local research library makes saved products,
-evidence, decisions, and comparison inputs reusable.
+evidence, decisions, and comparison inputs reusable. The model boundary keeps
+OpenAI as the default while allowing a locally configured compatible
+structured-output Responses endpoint.
 
 The most valuable next changes, ordered by product impact:
 
 | Priority | Feature | Why it matters | Relative effort |
 | --- | --- | --- | --- |
 | P1 | Dedicated source adapters | Collects richer pricing, changelog, release, privacy, and documentation evidence | Medium |
-| P2 | Model-provider abstraction | Lets local users choose another structured-output provider without changing the evidence pipeline | High |
 
 ### Recommended implementation order
 
@@ -397,7 +435,7 @@ flowchart LR
     E[Evidence foundations] --> A[Dedicated source adapters]
     A --> D[Deeper report diffs]
     L[Local research library] --> D
-    D --> P[Model-provider abstraction]
+    D --> P[Provider-specific capability checks]
 ```
 
 Dedicated source adapters are the strongest next step because they can make
@@ -415,7 +453,10 @@ privacy policies, and release history.
   judgments, not measurements.
 - A report retains at most five prior revisions in local history and exports.
 - The 50-report research library is local to one browser unless exported.
-- Live analysis requires the user's own API credentials.
+- Live analysis requires the user's own API credentials, except for an
+  unauthenticated compatible provider bound to a loopback address.
+- Compatible providers vary: the configured model must support the Responses
+  API and JSON Schema structured output used by FitLens.
 
 ## License
 
