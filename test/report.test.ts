@@ -7,6 +7,7 @@ import {
   type SavedReport,
 } from "../lib/report.ts";
 import { inferCriteria } from "../lib/criteria.ts";
+import { detectEvidenceConflicts } from "../lib/conflicts.ts";
 import { defaultPriorities, sampleComparison } from "../lib/sample.ts";
 
 const criteria = inferCriteria(sampleComparison.dimensions, defaultPriorities);
@@ -40,6 +41,7 @@ test("portable reports preserve notes and preference weights", () => {
         note: "Completed in 12 minutes.",
       },
     ],
+    conflicts: [],
   };
 
   const restored = parseReport(serializeReport(report));
@@ -96,9 +98,42 @@ test("portable reports reject non-HTTP evidence links", () => {
     locale: "en",
     revisions: [],
     trialResults: [],
+    conflicts: [],
   };
   report.result.products[0].evidence[0].sourceUrl =
     "javascript:alert(document.domain)";
 
   assert.throws(() => parseReport(serializeReport(report)));
+});
+
+test("portable reports preserve detected evidence conflicts", () => {
+  const result = structuredClone(sampleComparison);
+  result.products[0].evidence.push({
+    claim: "The project is not open source.",
+    level: "vendor",
+    sourceLabel: "Product policy",
+    sourceUrl: "https://cmux.com/policy",
+  });
+  const conflicts = detectEvidenceConflicts(result);
+  const report: SavedReport = {
+    id: "report-conflict",
+    title: result.title,
+    savedAt: result.generatedAt,
+    urls: ["https://cmux.com/", "https://otty.sh/"],
+    context: "A sufficiently detailed local product comparison context.",
+    priorities: defaultPriorities,
+    criteria,
+    result,
+    notes: "",
+    locale: "en",
+    revisions: [],
+    trialResults: [],
+    conflicts,
+  };
+
+  const restored = parseReport(serializeReport(report));
+
+  assert.equal(restored.conflicts.length, 1);
+  assert.equal(restored.conflicts[0].topic, "openSource");
+  assert.equal(restored.conflicts[0].second.sourceUrl, "https://cmux.com/policy");
 });

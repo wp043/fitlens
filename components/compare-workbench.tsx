@@ -26,6 +26,10 @@ import { compareResults, type ComparisonDiff } from "@/lib/diff";
 import { mergeManualEvidence } from "@/lib/evidence";
 import { calculateEvidenceFreshness } from "@/lib/freshness";
 import { calculateWeightedWinner } from "@/lib/scoring";
+import {
+  detectEvidenceConflicts,
+  type EvidenceConflict,
+} from "@/lib/conflicts";
 import type {
   ComparisonCriterion,
   ComparisonResult,
@@ -68,12 +72,25 @@ function formatDelta(value: number) {
   return value > 0 ? `+${value}` : `${value}`;
 }
 
+function conflictTopicLabel(topic: string, t: Messages) {
+  return {
+    openSource: t.conflictTopicOpenSource,
+    pricing: t.conflictTopicPricing,
+    account: t.conflictTopicAccount,
+    telemetry: t.conflictTopicTelemetry,
+    offline: t.conflictTopicOffline,
+    selfHosting: t.conflictTopicSelfHosting,
+    other: t.conflictTopicOther,
+  }[topic] ?? t.conflictTopicOther;
+}
+
 function comparisonAsMarkdown(
   result: ComparisonResult,
   notes: string,
   locale: Locale,
   t: Messages,
   trialResults: TrialResult[] = [],
+  conflicts: EvidenceConflict[] = [],
 ) {
   const evidenceLabels: Record<EvidenceLevel, string> = {
     verified: t.verified,
@@ -107,6 +124,14 @@ ${product.evidence
   .join("\n")}`,
     )
     .join("\n\n");
+  const conflictSection = conflicts.length
+    ? `## ${t.markdownConflicts}\n${conflicts
+        .map(
+          (conflict) =>
+            `- **${conflict.product} · ${conflictTopicLabel(conflict.topic, t)} (${conflict.severity === "high" ? t.conflictHigh : t.conflictMedium})**\n  - ${conflict.first.claim} ([${conflict.first.sourceLabel}](${conflict.first.sourceUrl}))\n  - ${conflict.second.claim} ([${conflict.second.sourceLabel}](${conflict.second.sourceUrl}))`,
+        )
+        .join("\n")}\n\n`
+    : "";
 
   return `# ${result.title}
 
@@ -122,7 +147,7 @@ ${result.recommendation.reasons.map((item) => `- ${item}`).join("\n")}
 
 ${productSections}
 
-## ${t.markdownUnknowns}
+${conflictSection}## ${t.markdownUnknowns}
 ${result.unknowns.map((item) => `- ${item}`).join("\n")}
 
 ## ${t.markdownTrial}
@@ -232,6 +257,9 @@ export function CompareWorkbench({
   const [templateName, setTemplateName] = useState("");
   const [comparisonDiff, setComparisonDiff] = useState<ComparisonDiff>();
   const [trialResults, setTrialResults] = useState<TrialResult[]>([]);
+  const [conflicts, setConflicts] = useState<EvidenceConflict[]>(() =>
+    initialResult ? detectEvidenceConflicts(initialResult) : [],
+  );
   const [manualEvidenceProduct, setManualEvidenceProduct] = useState("");
   const [manualEvidenceClaim, setManualEvidenceClaim] = useState("");
   const [manualEvidenceSource, setManualEvidenceSource] = useState("");
@@ -315,6 +343,9 @@ export function CompareWorkbench({
         if (exampleMode) {
           setContext(messages[nextLocale].exampleContext);
           setResult(sampleComparisonForLocale(nextLocale));
+          setConflicts(
+            detectEvidenceConflicts(sampleComparisonForLocale(nextLocale)),
+          );
           setCriteria(initialCriteria(true, nextLocale));
         } else {
           setCriteria(initialCriteria(false, nextLocale));
@@ -349,6 +380,9 @@ export function CompareWorkbench({
     if (exampleMode && !currentReportId) {
       setContext(messages[nextLocale].exampleContext);
       setResult(sampleComparisonForLocale(nextLocale));
+      setConflicts(
+        detectEvidenceConflicts(sampleComparisonForLocale(nextLocale)),
+      );
       setCriteria(initialCriteria(true, nextLocale));
     }
   }
@@ -404,7 +438,9 @@ export function CompareWorkbench({
     setError("");
     try {
       const payload = await requestAnalysis();
+      const detectedConflicts = detectEvidenceConflicts(payload);
       setResult(payload);
+      setConflicts(detectedConflicts);
       setTrialResults(
         payload.trialPlan.map((task) => ({ task: task.task, status: "untested", note: "" })),
       );
@@ -426,6 +462,7 @@ export function CompareWorkbench({
           status: "untested",
           note: "",
         })),
+        conflicts: detectedConflicts,
       };
       const nextHistory = [saved, ...history].slice(0, maxSavedReports);
       setHistory(nextHistory);
@@ -453,6 +490,7 @@ export function CompareWorkbench({
     try {
       const previous = result;
       const payload = mergeManualEvidence(previous, await requestAnalysis());
+      const detectedConflicts = detectEvidenceConflicts(payload);
       const nextDiff = compareResults(previous, payload, criteria);
       const stored = history.find((report) => report.id === currentReportId);
       const reportId = stored?.id ?? currentReportId ?? crypto.randomUUID();
@@ -471,11 +509,13 @@ export function CompareWorkbench({
           -maxRevisions,
         ),
         trialResults: stored?.trialResults ?? trialResults,
+        conflicts: detectedConflicts,
       };
       const nextHistory = stored
         ? history.map((report) => (report.id === reportId ? saved : report))
         : [saved, ...history].slice(0, maxSavedReports);
       setResult(payload);
+      setConflicts(detectedConflicts);
       setTrialResults(
         stored?.trialResults ??
           payload.trialPlan.map((task) => ({
@@ -503,6 +543,7 @@ export function CompareWorkbench({
     setActiveTemplateId("");
     setResult(saved.result);
     setTrialResults(saved.trialResults);
+    setConflicts(saved.conflicts);
     setCurrentReportId(saved.id);
     setNotes(saved.notes ?? "");
     setManualEvidenceProduct(saved.result.products[0]?.name ?? "");
@@ -529,7 +570,7 @@ export function CompareWorkbench({
   async function copyBrief() {
     if (!result) return;
     await navigator.clipboard.writeText(
-      comparisonAsMarkdown(result, notes, locale, t, trialResults),
+      comparisonAsMarkdown(result, notes, locale, t, trialResults, conflicts),
     );
     setCopied(true);
     window.setTimeout(() => setCopied(false), 1_600);
@@ -538,7 +579,7 @@ export function CompareWorkbench({
   function exportMarkdown() {
     if (!result) return;
     const blob = new Blob(
-      [comparisonAsMarkdown(result, notes, locale, t, trialResults)],
+      [comparisonAsMarkdown(result, notes, locale, t, trialResults, conflicts)],
       {
       type: "text/markdown;charset=utf-8",
       },
@@ -567,6 +608,7 @@ export function CompareWorkbench({
       locale: stored?.locale ?? locale,
       revisions: stored?.revisions ?? [],
       trialResults,
+      conflicts,
     };
   }
 
@@ -688,14 +730,18 @@ export function CompareWorkbench({
           : product,
       ),
     };
+    const nextConflicts = detectEvidenceConflicts(nextResult);
     setResult(nextResult);
+    setConflicts(nextConflicts);
     const stored = history.find((report) => report.id === currentReportId);
     const previousRevision = stored?.revisions.at(-1);
     if (previousRevision) {
       setComparisonDiff(compareResults(previousRevision, nextResult, criteria));
     }
     const nextHistory = history.map((report) =>
-      report.id === currentReportId ? { ...report, result: nextResult } : report,
+      report.id === currentReportId
+        ? { ...report, result: nextResult, conflicts: nextConflicts }
+        : report,
     );
     setHistory(nextHistory);
     if (currentReportId) {
@@ -784,6 +830,7 @@ export function CompareWorkbench({
     setCurrentReportId(undefined);
     setNotes("");
     setComparisonDiff(undefined);
+    setConflicts([]);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -1242,6 +1289,50 @@ export function CompareWorkbench({
             <p>{result.recommendation.switchWhen}</p>
           </div>
         </div>
+
+        {conflicts.length > 0 && (
+          <section className="conflict-card" aria-labelledby="conflicts-title">
+            <header>
+              <div>
+                <p className="eyebrow">{t.conflictsEyebrow}</p>
+                <h2 id="conflicts-title">{t.conflictsTitle}</h2>
+                <p>{t.conflictsCopy}</p>
+              </div>
+              <strong>{conflicts.length}</strong>
+            </header>
+            <div className="conflict-list">
+              {conflicts.map((conflict) => (
+                <article key={conflict.id}>
+                  <div className="conflict-heading">
+                    <span className={`conflict-severity ${conflict.severity}`}>
+                      {conflict.severity === "high"
+                        ? t.conflictHigh
+                        : t.conflictMedium}
+                    </span>
+                    <strong>{conflict.product}</strong>
+                    <small>{conflictTopicLabel(conflict.topic, t)}</small>
+                  </div>
+                  <div className="conflict-claims">
+                    {[conflict.first, conflict.second].map((evidence, index) => (
+                      <a
+                        href={evidence.sourceUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        key={`${conflict.id}-${index}`}
+                      >
+                        <span className={`evidence-badge ${evidence.level}`}>
+                          {evidenceLabels[evidence.level]}
+                        </span>
+                        <p>{evidence.claim}</p>
+                        <small>{evidence.sourceLabel} ↗</small>
+                      </a>
+                    ))}
+                  </div>
+                </article>
+              ))}
+            </div>
+          </section>
+        )}
 
         {comparisonDiff && (
           <section className="diff-card" aria-labelledby="diff-title">

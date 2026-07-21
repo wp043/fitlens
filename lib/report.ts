@@ -7,6 +7,7 @@ import type {
   ProductResult,
   TrialResult,
 } from "@/lib/types";
+import { detectEvidenceConflicts, type EvidenceConflict } from "./conflicts.ts";
 
 const httpUrlSchema = z
   .string()
@@ -35,6 +36,17 @@ const evidenceSchema = z
     sourceUrl: httpUrlSchema,
     origin: z.enum(["collected", "manual"]).optional(),
     capturedAt: z.string().optional(),
+  })
+  .passthrough();
+
+const evidenceConflictSchema = z
+  .object({
+    id: z.string(),
+    product: z.string(),
+    topic: z.string(),
+    severity: z.enum(["high", "medium"]),
+    first: evidenceSchema,
+    second: evidenceSchema,
   })
   .passthrough();
 
@@ -117,6 +129,7 @@ const savedReportSchema = z
       )
       .optional()
       .default([]),
+    conflicts: z.array(evidenceConflictSchema).optional(),
   })
   .passthrough();
 
@@ -141,6 +154,7 @@ export interface SavedReport {
   locale: Locale;
   revisions: ComparisonResult[];
   trialResults: TrialResult[];
+  conflicts: EvidenceConflict[];
 }
 
 export interface EvidenceCoverage {
@@ -220,6 +234,7 @@ export function normalizeSavedReport(input: unknown): SavedReport {
             status: "untested" as const,
             note: "",
           })),
+    conflicts: report.conflicts ?? detectEvidenceConflicts(report.result),
   } as SavedReport;
 }
 

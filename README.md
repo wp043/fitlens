@@ -14,6 +14,9 @@ priorities change the outcome, and important unknowns should remain visible.
 - Discovers linked GitHub repositories and collects license, README, and
   repository metadata.
 - Separates verified evidence, vendor claims, and explicit inference.
+- Detects opposing claims about pricing, accounts, telemetry, source
+  availability, offline use, and self-hosting, with direct links to both
+  sources.
 - Produces a structured recommendation for the user's stated workflow.
 - Supports 2–8 editable comparison dimensions with reusable general,
   developer-tool, privacy-first, and everyday-software templates.
@@ -142,6 +145,13 @@ combines:
 A closed-source product can still be the best fit, but the report should make
 its lower observability visible.
 
+FitLens also runs a deterministic consistency check across evidence for each
+product. Contradictory claims are paired in the report, assigned a review
+priority based on their evidence levels, and retained in local history and
+exports. The check is intentionally a warning rather than an automatic verdict:
+the user can follow both source links and decide which statement is newer and
+better supported.
+
 ## Scoring
 
 For product `p` and dimension `d`:
@@ -251,6 +261,7 @@ components/
 lib/
   analyzer.ts            Structured model analysis
   criteria.ts            Localized built-in templates and criteria migration
+  conflicts.ts           Deterministic evidence-conflict detection
   diff.ts                Deterministic report-to-report comparison
   evidence.ts            Manual evidence merge and refresh preservation
   freshness.ts           Evidence age classification and summaries
@@ -280,6 +291,7 @@ security settings and the PostCSS override live in `pnpm-workspace.yaml`.
 The current foundation includes editable comparison criteria, reusable
 templates, report refresh, local revision history, deterministic change
 summaries, manual evidence capture, trial scoring, and source freshness.
+It also includes evidence conflict detection with bilingual report output.
 
 The most valuable next changes, ordered by product impact:
 
