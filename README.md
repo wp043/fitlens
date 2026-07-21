@@ -21,6 +21,8 @@ priorities change the outcome, and important unknowns should remain visible.
 - Recalculates the winner immediately when dimension weights change.
 - Refreshes an existing report and shows recommendation, score, evidence,
   dimension, and unknown-item changes.
+- Supports manual evidence capture for pricing, privacy, screenshots, and
+  hands-on findings, with manual evidence preserved across refreshes.
 - Keeps the five most recent source-report revisions with each report.
 - Shows confidence, evidence coverage, unknowns, and a short hands-on trial
   plan.
@@ -272,14 +274,13 @@ security settings and the PostCSS override live in `pnpm-workspace.yaml`.
 ## Product roadmap
 
 The current foundation includes editable comparison criteria, reusable
-templates, report refresh, local revision history, and deterministic change
-summaries.
+templates, report refresh, local revision history, deterministic change
+summaries, and manual evidence capture.
 
 The most valuable next changes, ordered by product impact:
 
 | Priority | Feature | Why it matters | Relative effort |
 | --- | --- | --- | --- |
-| P0 | Manual evidence capture | Lets users add pricing pages, policy text, screenshots, or hands-on findings for closed products | Medium |
 | P1 | Multi-product shortlist | Supports discovery workflows where the user begins with more than two candidates | High |
 | P1 | Dedicated source adapters | Collects richer pricing, changelog, release, privacy, and documentation evidence | Medium |
 | P1 | Trial checklist with post-trial rescoring | Turns suggested tests into recorded outcomes that can affect the final decision | Medium |

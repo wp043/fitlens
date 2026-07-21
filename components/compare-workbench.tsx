@@ -23,10 +23,12 @@ import {
   type CriteriaTemplate,
 } from "@/lib/criteria";
 import { compareResults, type ComparisonDiff } from "@/lib/diff";
+import { mergeManualEvidence } from "@/lib/evidence";
 import { calculateWeightedWinner } from "@/lib/scoring";
 import type {
   ComparisonCriterion,
   ComparisonResult,
+  Evidence,
   EvidenceLevel,
   PriorityWeights,
 } from "@/lib/types";
@@ -214,6 +216,13 @@ export function CompareWorkbench({
   );
   const [templateName, setTemplateName] = useState("");
   const [comparisonDiff, setComparisonDiff] = useState<ComparisonDiff>();
+  const [manualEvidenceProduct, setManualEvidenceProduct] = useState("");
+  const [manualEvidenceClaim, setManualEvidenceClaim] = useState("");
+  const [manualEvidenceSource, setManualEvidenceSource] = useState("");
+  const [manualEvidenceUrl, setManualEvidenceUrl] = useState("");
+  const [manualEvidenceLevel, setManualEvidenceLevel] = useState<Evidence["level"]>(
+    "verified",
+  );
   const importInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -419,7 +428,7 @@ export function CompareWorkbench({
     setError("");
     try {
       const previous = result;
-      const payload = await requestAnalysis();
+      const payload = mergeManualEvidence(previous, await requestAnalysis());
       const nextDiff = compareResults(previous, payload, criteria);
       const stored = history.find((report) => report.id === currentReportId);
       const reportId = stored?.id ?? currentReportId ?? crypto.randomUUID();
@@ -462,6 +471,7 @@ export function CompareWorkbench({
     setResult(saved.result);
     setCurrentReportId(saved.id);
     setNotes(saved.notes ?? "");
+    setManualEvidenceProduct(saved.result.products[0]?.name ?? "");
     const previous = saved.revisions.at(-1);
     setComparisonDiff(
       previous
@@ -577,6 +587,61 @@ export function CompareWorkbench({
     );
     setHistory(nextHistory);
     window.localStorage.setItem(historyKey, JSON.stringify(nextHistory));
+  }
+
+  function addManualEvidence() {
+    const productName = manualEvidenceProduct || result?.products[0]?.name;
+    if (!result || !productName) return;
+    const claim = manualEvidenceClaim.trim();
+    const sourceLabel = manualEvidenceSource.trim();
+    const sourceUrl = manualEvidenceUrl.trim();
+    if (!claim || !sourceLabel) return;
+    try {
+      const parsedUrl = new URL(sourceUrl);
+      if (!['http:', 'https:'].includes(parsedUrl.protocol)) return;
+    } catch {
+      return;
+    }
+    const evidence: Evidence = {
+      claim,
+      level: manualEvidenceLevel,
+      sourceLabel,
+      sourceUrl,
+      origin: "manual",
+    };
+    const nextResult: ComparisonResult = {
+      ...result,
+      products: result.products.map((product) =>
+        product.name === productName
+          ? {
+              ...product,
+              evidence: product.evidence.some(
+                (item) =>
+                  item.claim === evidence.claim &&
+                  item.sourceUrl === evidence.sourceUrl,
+              )
+                ? product.evidence
+                : [...product.evidence, evidence],
+            }
+          : product,
+      ),
+    };
+    setResult(nextResult);
+    const stored = history.find((report) => report.id === currentReportId);
+    const previousRevision = stored?.revisions.at(-1);
+    if (previousRevision) {
+      setComparisonDiff(compareResults(previousRevision, nextResult, criteria));
+    }
+    const nextHistory = history.map((report) =>
+      report.id === currentReportId ? { ...report, result: nextResult } : report,
+    );
+    setHistory(nextHistory);
+    if (currentReportId) {
+      window.localStorage.setItem(historyKey, JSON.stringify(nextHistory));
+    }
+    setManualEvidenceClaim("");
+    setManualEvidenceSource("");
+    setManualEvidenceUrl("");
   }
 
   function applyTemplate(template: CriteriaTemplate) {
@@ -1303,7 +1368,7 @@ export function CompareWorkbench({
                     href={item.sourceUrl}
                     target="_blank"
                     rel="noreferrer"
-                    key={item.claim}
+                    key={`${item.claim}-${item.sourceUrl}`}
                   >
                     <span className={`evidence-badge ${item.level}`}>
                       {evidenceLabels[item.level]}
@@ -1317,6 +1382,84 @@ export function CompareWorkbench({
             );
           })}
         </div>
+
+        <section className="manual-evidence-card" aria-labelledby="manual-evidence-title">
+          <div className="manual-evidence-intro">
+            <p className="eyebrow">{t.manualEvidenceTitle}</p>
+            <h2 id="manual-evidence-title">{t.manualEvidenceTitle}</h2>
+            <p>{t.manualEvidenceCopy}</p>
+          </div>
+          <form
+            className="manual-evidence-form"
+            onSubmit={(event) => {
+              event.preventDefault();
+              addManualEvidence();
+            }}
+          >
+            <label>
+              <span>{t.manualEvidenceProduct}</span>
+              <select
+                value={manualEvidenceProduct || result.products[0]?.name || ""}
+                onChange={(event) => setManualEvidenceProduct(event.target.value)}
+              >
+                {result.products.map((product) => (
+                  <option key={product.name} value={product.name}>
+                    {product.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="manual-evidence-wide">
+              <span>{t.manualEvidenceClaim}</span>
+              <input
+                value={manualEvidenceClaim}
+                placeholder={t.manualEvidenceClaim}
+                onChange={(event) => setManualEvidenceClaim(event.target.value)}
+              />
+            </label>
+            <label>
+              <span>{t.manualEvidenceLevel}</span>
+              <select
+                value={manualEvidenceLevel}
+                onChange={(event) =>
+                  setManualEvidenceLevel(event.target.value as Evidence["level"])
+                }
+              >
+                <option value="verified">{t.verified}</option>
+                <option value="vendor">{t.vendor}</option>
+                <option value="inferred">{t.inferred}</option>
+              </select>
+            </label>
+            <label>
+              <span>{t.manualEvidenceSource}</span>
+              <input
+                value={manualEvidenceSource}
+                placeholder={t.manualEvidenceSource}
+                onChange={(event) => setManualEvidenceSource(event.target.value)}
+              />
+            </label>
+            <label>
+              <span>{t.manualEvidenceUrl}</span>
+              <input
+                type="url"
+                required
+                value={manualEvidenceUrl}
+                placeholder="https://…"
+                onChange={(event) => setManualEvidenceUrl(event.target.value)}
+              />
+            </label>
+            <button
+              type="submit"
+              disabled={
+                !manualEvidenceClaim.trim() ||
+                !manualEvidenceSource.trim() ||
+                !manualEvidenceUrl.trim()
+              }
+            >
+              + {t.addManualEvidence}
+            </button>
+          </form>
+        </section>
 
         <div className="matrix-card">
           <header>

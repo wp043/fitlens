@@ -16,6 +16,7 @@ export interface Evidence {
   level: EvidenceLevel;
   sourceLabel: string;
   sourceUrl: string;
+  origin?: "collected" | "manual";
 }
 
 export interface ProductResult {

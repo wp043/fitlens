@@ -32,6 +32,7 @@ const evidenceSchema = z
     level: z.enum(["verified", "vendor", "inferred"]),
     sourceLabel: z.string(),
     sourceUrl: httpUrlSchema,
+    origin: z.enum(["collected", "manual"]).optional(),
   })
   .passthrough();
 
