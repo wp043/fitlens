@@ -25,16 +25,76 @@ import {
 import { compareResults, type ComparisonDiff } from "@/lib/diff";
 import { mergeManualEvidence } from "@/lib/evidence";
 import { calculateEvidenceFreshness } from "@/lib/freshness";
+import {
+  calibrateComparisonConfidence,
+  type ConfidenceCalibration,
+  type ConfidenceFactor,
+} from "@/lib/confidence";
 import { calculateWeightedWinner } from "@/lib/scoring";
+import { createRedactedReport } from "@/lib/redaction";
+import {
+  buildResearchLibrary,
+  filterResearchLibrary,
+  listLibraryProducts,
+  type LibraryReviewFilter,
+  type LibrarySourceFilter,
+} from "@/lib/research-library";
+import {
+  detectEvidenceConflicts,
+  type EvidenceConflict,
+} from "@/lib/conflicts";
 import type {
   ComparisonCriterion,
   ComparisonResult,
+  BillingCadence,
   Evidence,
   EvidenceLevel,
   TrialResult,
   TrialStatus,
   PriorityWeights,
+  PrivacyCategory,
+  PrivacyFindingStatus,
+  PrivacySecurityReview,
 } from "@/lib/types";
+import type { SourceErrorCode } from "@/lib/source";
+
+interface SourceFailure {
+  index: number;
+  url: string;
+  code: SourceErrorCode;
+  message: string;
+}
+
+const sourceErrorCodes = new Set<SourceErrorCode>([
+  "invalidUrl",
+  "httpOnly",
+  "credentialsNotAllowed",
+  "privateNetwork",
+  "fetchFailed",
+  "unsupportedContentType",
+  "pageTooLarge",
+  "githubFailed",
+]);
+
+class SourceCollectionRequestError extends Error {
+  readonly failures: SourceFailure[];
+
+  constructor(message: string, failures: SourceFailure[]) {
+    super(message);
+    this.name = "SourceCollectionRequestError";
+    this.failures = failures;
+  }
+}
+
+function isSourceFailure(value: unknown): value is SourceFailure {
+  if (!value || typeof value !== "object") return false;
+  const candidate = value as Record<string, unknown>;
+  return Number.isInteger(candidate.index) &&
+    typeof candidate.url === "string" &&
+    typeof candidate.code === "string" &&
+    sourceErrorCodes.has(candidate.code as SourceErrorCode) &&
+    typeof candidate.message === "string";
+}
 
 interface LegacyPreferenceProfile {
   id: string;
@@ -48,7 +108,7 @@ const preferenceProfilesKey = "fitlens-preference-profiles-v1";
 const criteriaTemplatesKey = "fitlens-criteria-templates-v1";
 const localeKey = "fitlens-locale-v1";
 
-const maxSavedReports = 6;
+const maxSavedReports = 50;
 const maxRevisions = 5;
 
 function initialCriteria(exampleMode: boolean, locale: Locale) {
@@ -68,12 +128,96 @@ function formatDelta(value: number) {
   return value > 0 ? `+${value}` : `${value}`;
 }
 
+function conflictTopicLabel(topic: string, t: Messages) {
+  return {
+    openSource: t.conflictTopicOpenSource,
+    pricing: t.conflictTopicPricing,
+    account: t.conflictTopicAccount,
+    telemetry: t.conflictTopicTelemetry,
+    offline: t.conflictTopicOffline,
+    selfHosting: t.conflictTopicSelfHosting,
+    other: t.conflictTopicOther,
+  }[topic] ?? t.conflictTopicOther;
+}
+
+function cadenceLabel(cadence: BillingCadence, t: Messages) {
+  return {
+    free: t.cadenceFree,
+    monthly: t.cadenceMonthly,
+    yearly: t.cadenceYearly,
+    "one-time": t.cadenceOneTime,
+    "usage-based": t.cadenceUsageBased,
+    custom: t.cadenceCustom,
+    unknown: t.cadenceUnknown,
+  }[cadence];
+}
+
+function privacyCategoryLabel(category: PrivacyCategory, t: Messages) {
+  return {
+    telemetry: t.privacyTelemetry,
+    account: t.privacyAccount,
+    retention: t.privacyRetention,
+    permissions: t.privacyPermissions,
+    encryption: t.privacyEncryption,
+    selfHosting: t.privacySelfHosting,
+  }[category];
+}
+
+function privacyStatusLabel(status: PrivacyFindingStatus, t: Messages) {
+  return {
+    positive: t.privacyPositive,
+    caution: t.privacyCaution,
+    unknown: t.privacyUnknown,
+  }[status];
+}
+
+function privacyRiskLabel(
+  riskLevel: PrivacySecurityReview["riskLevel"],
+  t: Messages,
+) {
+  return {
+    low: t.privacyRiskLow,
+    medium: t.privacyRiskMedium,
+    high: t.privacyRiskHigh,
+    unknown: t.privacyRiskUnknown,
+  }[riskLevel];
+}
+
+function confidenceBandLabel(calibration: ConfidenceCalibration, t: Messages) {
+  return {
+    strong: t.confidenceStrong,
+    moderate: t.confidenceModerate,
+    limited: t.confidenceLimited,
+  }[calibration.band];
+}
+
+function confidenceFactorLabel(factor: ConfidenceFactor, t: Messages) {
+  switch (factor.key) {
+    case "directVerification":
+      return `${t.confidenceDirect}: ${factor.value}%`;
+    case "sourceDiversity":
+      return `${t.confidenceDiversity}: ${factor.value}`;
+    case "freshness":
+      return `${t.confidenceFreshness}: ${factor.value}%`;
+    case "transparency":
+      return t.confidenceTransparency;
+    case "limitedSources":
+      return t.confidenceLimitedSources;
+    case "inferenceHeavy":
+      return t.confidenceInferenceHeavy;
+    case "conflicts":
+      return `${t.confidenceConflicts}: ${factor.value}`;
+  }
+}
+
 function comparisonAsMarkdown(
   result: ComparisonResult,
   notes: string,
   locale: Locale,
   t: Messages,
   trialResults: TrialResult[] = [],
+  conflicts: EvidenceConflict[] = [],
+  redacted = false,
 ) {
   const evidenceLabels: Record<EvidenceLevel, string> = {
     verified: t.verified,
@@ -86,11 +230,55 @@ function comparisonAsMarkdown(
     failed: t.trialFailed,
     skipped: t.trialSkipped,
   };
+  const calibrations = calibrateComparisonConfidence(
+    result.products,
+    conflicts,
+    new Date(result.generatedAt),
+  );
   const productSections = result.products
-    .map(
-      (product) => `## ${product.name} — ${product.score}/100
+    .map((product) => {
+      const pricing = product.pricing;
+      const pricingSection = pricing
+        ? `### ${t.markdownPricing}
+${pricing.summary}
+
+${pricing.plans.length > 0
+  ? pricing.plans
+      .map(
+        (plan) =>
+          `- **${plan.name}: ${plan.price} · ${cadenceLabel(plan.cadence, t)}** — ${t.pricingAudience}: ${plan.audience}${plan.limits.length ? `; ${t.pricingLimits}: ${plan.limits.join("; ")}` : ""} ([${evidenceLabels[plan.evidenceLevel]}](${plan.sourceUrl}))`,
+      )
+      .join("\n")
+  : `- ${t.pricingNoPlans}`}
+
+**${t.pricingUncertainty}:** ${pricing.uncertainty}
+
+`
+        : "";
+      const privacy = product.privacy;
+      const privacySection = privacy
+        ? `### ${t.markdownPrivacy}: ${t.privacyRisk} — ${privacyRiskLabel(privacy.riskLevel, t)}
+${privacy.summary}
+
+${privacy.findings
+  .map(
+    (finding) =>
+      `- **${privacyCategoryLabel(finding.category, t)} · ${privacyStatusLabel(finding.status, t)}:** ${finding.finding} ([${evidenceLabels[finding.evidenceLevel]}](${finding.sourceUrl}))\n  - ${t.privacyUncertainty}: ${finding.uncertainty}`,
+  )
+  .join("\n")}
+
+`
+        : "";
+      const calibration = calibrations.find((item) => item.product === product.name)!;
+      return `## ${product.name} — ${product.score}/100
 
 ${product.verdict}
+
+### ${t.markdownConfidence}: ${calibration.score}/100 · ${confidenceBandLabel(calibration, t)}
+${t.confidenceMethod}
+
+- ${t.verified}: ${calibration.verified}; ${t.vendor}: ${calibration.vendor}; ${t.inferred}: ${calibration.inferred}; ${t.sources}: ${calibration.sourceCount}
+${calibration.factors.map((factor) => `- **${factor.effect === "supporting" ? t.confidenceSupporting : t.confidenceLimiting}:** ${confidenceFactorLabel(factor, t)}`).join("\n")}
 
 ### ${t.markdownStrengths}
 ${product.strengths.map((item) => `- ${item}`).join("\n")}
@@ -98,21 +286,40 @@ ${product.strengths.map((item) => `- ${item}`).join("\n")}
 ### ${t.markdownTradeoffs}
 ${product.tradeoffs.map((item) => `- ${item}`).join("\n")}
 
-### ${t.markdownEvidence}
+${pricingSection}${privacySection}### ${t.markdownEvidence}
 ${product.evidence
   .map(
     (item) =>
       `- **${evidenceLabels[item.level]}:** ${item.claim} ([${item.sourceLabel}](${item.sourceUrl}))`,
   )
-  .join("\n")}`,
-    )
+  .join("\n")}`;
+    })
     .join("\n\n");
+  const conflictSection = conflicts.length
+    ? `## ${t.markdownConflicts}\n${conflicts
+        .map(
+          (conflict) =>
+            `- **${conflict.product} · ${conflictTopicLabel(conflict.topic, t)} (${conflict.severity === "high" ? t.conflictHigh : t.conflictMedium})**\n  - ${conflict.first.claim} ([${conflict.first.sourceLabel}](${conflict.first.sourceUrl}))\n  - ${conflict.second.claim} ([${conflict.second.sourceLabel}](${conflict.second.sourceUrl}))`,
+        )
+        .join("\n")}\n\n`
+    : "";
+
+  const trialSection = redacted
+    ? ""
+    : `## ${t.markdownTrial}\n${result.trialPlan
+        .map((item, index) => {
+          const trial = trialResults[index];
+          const status = trial ? ` [${trialStatusLabels[trial.status]}]` : "";
+          const note = trial?.note.trim() ? ` — ${trial.note.trim()}` : "";
+          return `${index + 1}. **${item.task}**${status} — ${item.reason}${note}`;
+        })
+        .join("\n")}\n\n`;
 
   return `# ${result.title}
 
 ${t.markdownAnalyzed}: ${new Date(result.generatedAt).toLocaleString(locale)}.
 
-## ${t.markdownRecommendation}: ${result.recommendation.winner}
+${redacted ? `> ${t.redactedDisclosure}\n\n` : ""}## ${t.markdownRecommendation}: ${result.recommendation.winner}
 
 ${result.recommendation.summary}
 
@@ -122,20 +329,10 @@ ${result.recommendation.reasons.map((item) => `- ${item}`).join("\n")}
 
 ${productSections}
 
-## ${t.markdownUnknowns}
+${conflictSection}## ${t.markdownUnknowns}
 ${result.unknowns.map((item) => `- ${item}`).join("\n")}
 
-## ${t.markdownTrial}
-${result.trialPlan
-  .map((item, index) => {
-    const trial = trialResults[index];
-    const status = trial ? ` [${trialStatusLabels[trial.status]}]` : "";
-    const note = trial?.note.trim() ? ` — ${trial.note.trim()}` : "";
-    return `${index + 1}. **${item.task}**${status} — ${item.reason}${note}`;
-  })
-  .join("\n")}
-
-${notes.trim() ? `## ${t.markdownNotes}\n${notes.trim()}\n\n` : ""}---
+${trialSection}${notes.trim() ? `## ${t.markdownNotes}\n${notes.trim()}\n\n` : ""}---
 ${t.generatedBy} · ${new Date(result.generatedAt).toLocaleDateString(locale)}.
 `;
 }
@@ -196,7 +393,7 @@ export function CompareWorkbench({
     vendor: t.vendor,
     inferred: t.inferred,
   };
-  const [urls, setUrls] = useState<[string, string]>(
+  const [urls, setUrls] = useState<string[]>(
     exampleMode
       ? ["https://cmux.com/", "https://otty.sh/"]
       : ["", ""],
@@ -220,7 +417,20 @@ export function CompareWorkbench({
     "idle" | "loading" | "refreshing" | "error"
   >("idle");
   const [error, setError] = useState("");
+  const [sourceFailures, setSourceFailures] = useState<SourceFailure[]>([]);
+  const [sourceRetryMode, setSourceRetryMode] = useState<"analyze" | "refresh">(
+    "analyze",
+  );
   const [history, setHistory] = useState<SavedReport[]>([]);
+  const [libraryQuery, setLibraryQuery] = useState("");
+  const [libraryProduct, setLibraryProduct] = useState("");
+  const [librarySource, setLibrarySource] =
+    useState<LibrarySourceFilter>("all");
+  const [libraryEvidence, setLibraryEvidence] = useState<
+    EvidenceLevel | "all"
+  >("all");
+  const [libraryReview, setLibraryReview] =
+    useState<LibraryReviewFilter>("all");
   const [copied, setCopied] = useState(false);
   const [apiKey, setApiKey] = useState("");
   const [showApiKey, setShowApiKey] = useState(false);
@@ -232,6 +442,9 @@ export function CompareWorkbench({
   const [templateName, setTemplateName] = useState("");
   const [comparisonDiff, setComparisonDiff] = useState<ComparisonDiff>();
   const [trialResults, setTrialResults] = useState<TrialResult[]>([]);
+  const [conflicts, setConflicts] = useState<EvidenceConflict[]>(() =>
+    initialResult ? detectEvidenceConflicts(initialResult) : [],
+  );
   const [manualEvidenceProduct, setManualEvidenceProduct] = useState("");
   const [manualEvidenceClaim, setManualEvidenceClaim] = useState("");
   const [manualEvidenceSource, setManualEvidenceSource] = useState("");
@@ -315,6 +528,9 @@ export function CompareWorkbench({
         if (exampleMode) {
           setContext(messages[nextLocale].exampleContext);
           setResult(sampleComparisonForLocale(nextLocale));
+          setConflicts(
+            detectEvidenceConflicts(sampleComparisonForLocale(nextLocale)),
+          );
           setCriteria(initialCriteria(true, nextLocale));
         } else {
           setCriteria(initialCriteria(false, nextLocale));
@@ -349,6 +565,9 @@ export function CompareWorkbench({
     if (exampleMode && !currentReportId) {
       setContext(messages[nextLocale].exampleContext);
       setResult(sampleComparisonForLocale(nextLocale));
+      setConflicts(
+        detectEvidenceConflicts(sampleComparisonForLocale(nextLocale)),
+      );
       setCriteria(initialCriteria(true, nextLocale));
     }
   }
@@ -363,10 +582,39 @@ export function CompareWorkbench({
       : { winner: undefined, totals: {}, normalized: {} };
   }, [priorities, result]);
   const weightedWinner = weightedDecision.winner;
+  const confidenceCalibrations = useMemo(
+    () =>
+      result
+        ? calibrateComparisonConfidence(result.products, conflicts)
+        : [],
+    [conflicts, result],
+  );
   const currentWinner = result?.products.find(
     (product) => product.name === weightedWinner,
   );
+  const libraryEntries = useMemo(() => buildResearchLibrary(history), [history]);
+  const libraryProducts = useMemo(() => listLibraryProducts(history), [history]);
+  const filteredLibrary = useMemo(
+    () =>
+      filterResearchLibrary(libraryEntries, {
+        query: libraryQuery,
+        product: libraryProduct,
+        sourceMode: librarySource,
+        evidenceLevel: libraryEvidence,
+        review: libraryReview,
+      }),
+    [
+      libraryEntries,
+      libraryQuery,
+      libraryProduct,
+      librarySource,
+      libraryEvidence,
+      libraryReview,
+    ],
+  );
   const canAnalyze =
+    urls.length >= 2 &&
+    urls.length <= 8 &&
     urls.every((url) => url.trim().length > 0) &&
     context.trim().length >= 10 &&
     criteria.length >= 2 &&
@@ -392,11 +640,77 @@ export function CompareWorkbench({
         locale,
       }),
     });
-    const payload = await response.json();
+    const payload = await response.json() as Record<string, unknown>;
     if (!response.ok) {
-      throw new Error(payload.error ?? t.analyzeFailed);
+      if (
+        payload.code === "source_collection_failed" &&
+        Array.isArray(payload.sourceFailures) &&
+        payload.sourceFailures.every(isSourceFailure)
+      ) {
+        throw new SourceCollectionRequestError(
+          typeof payload.error === "string" ? payload.error : t.analyzeFailed,
+          payload.sourceFailures,
+        );
+      }
+      throw new Error(
+        typeof payload.error === "string" ? payload.error : t.analyzeFailed,
+      );
     }
-    return payload as ComparisonResult;
+    return payload as unknown as ComparisonResult;
+  }
+
+  function handleAnalysisError(
+    caught: unknown,
+    retryMode: "analyze" | "refresh",
+    fallback: string,
+  ) {
+    if (caught instanceof SourceCollectionRequestError) {
+      setSourceFailures(caught.failures);
+      setSourceRetryMode(retryMode);
+      setError("");
+    } else {
+      setSourceFailures([]);
+      setError(caught instanceof Error ? caught.message : fallback);
+    }
+    setStatus("error");
+  }
+
+  function addProductUrl() {
+    if (urls.length < 8) setUrls((current) => [...current, ""]);
+  }
+
+  function removeProductUrl(index: number) {
+    if (urls.length <= 2) return;
+    setUrls((current) => current.filter((_, candidate) => candidate !== index));
+    setSourceFailures((current) =>
+      current
+        .filter((failure) => failure.index !== index)
+        .map((failure) => ({
+          ...failure,
+          index: failure.index > index ? failure.index - 1 : failure.index,
+        })),
+    );
+  }
+
+  function moveProductUrl(index: number, offset: -1 | 1) {
+    const target = index + offset;
+    if (target < 0 || target >= urls.length) return;
+    setUrls((current) => {
+      const next = [...current];
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
+    setSourceFailures((current) =>
+      current.map((failure) => ({
+        ...failure,
+        index:
+          failure.index === index
+            ? target
+            : failure.index === target
+              ? index
+              : failure.index,
+      })),
+    );
   }
 
   async function analyze() {
@@ -404,7 +718,10 @@ export function CompareWorkbench({
     setError("");
     try {
       const payload = await requestAnalysis();
+      const detectedConflicts = detectEvidenceConflicts(payload);
       setResult(payload);
+      setSourceFailures([]);
+      setConflicts(detectedConflicts);
       setTrialResults(
         payload.trialPlan.map((task) => ({ task: task.task, status: "untested", note: "" })),
       );
@@ -426,6 +743,11 @@ export function CompareWorkbench({
           status: "untested",
           note: "",
         })),
+        conflicts: detectedConflicts,
+        confidenceCalibrations: calibrateComparisonConfidence(
+          payload.products,
+          detectedConflicts,
+        ),
       };
       const nextHistory = [saved, ...history].slice(0, maxSavedReports);
       setHistory(nextHistory);
@@ -441,8 +763,7 @@ export function CompareWorkbench({
         50,
       );
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : t.analyzeFailed);
-      setStatus("error");
+      handleAnalysisError(caught, "analyze", t.analyzeFailed);
     }
   }
 
@@ -453,6 +774,7 @@ export function CompareWorkbench({
     try {
       const previous = result;
       const payload = mergeManualEvidence(previous, await requestAnalysis());
+      const detectedConflicts = detectEvidenceConflicts(payload);
       const nextDiff = compareResults(previous, payload, criteria);
       const stored = history.find((report) => report.id === currentReportId);
       const reportId = stored?.id ?? currentReportId ?? crypto.randomUUID();
@@ -471,11 +793,18 @@ export function CompareWorkbench({
           -maxRevisions,
         ),
         trialResults: stored?.trialResults ?? trialResults,
+        conflicts: detectedConflicts,
+        confidenceCalibrations: calibrateComparisonConfidence(
+          payload.products,
+          detectedConflicts,
+        ),
       };
       const nextHistory = stored
         ? history.map((report) => (report.id === reportId ? saved : report))
         : [saved, ...history].slice(0, maxSavedReports);
       setResult(payload);
+      setSourceFailures([]);
+      setConflicts(detectedConflicts);
       setTrialResults(
         stored?.trialResults ??
           payload.trialPlan.map((task) => ({
@@ -490,8 +819,7 @@ export function CompareWorkbench({
       window.localStorage.setItem(historyKey, JSON.stringify(nextHistory));
       setStatus("idle");
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : t.refreshFailed);
-      setStatus("error");
+      handleAnalysisError(caught, "refresh", t.refreshFailed);
     }
   }
 
@@ -503,6 +831,9 @@ export function CompareWorkbench({
     setActiveTemplateId("");
     setResult(saved.result);
     setTrialResults(saved.trialResults);
+    setConflicts(saved.conflicts);
+    setSourceFailures([]);
+    setError("");
     setCurrentReportId(saved.id);
     setNotes(saved.notes ?? "");
     setManualEvidenceProduct(saved.result.products[0]?.name ?? "");
@@ -526,10 +857,27 @@ export function CompareWorkbench({
     window.localStorage.removeItem(historyKey);
   }
 
+  function reuseReportInputs(saved: SavedReport) {
+    changeLocale(saved.locale ?? "zh-CN");
+    setUrls(saved.urls);
+    setContext(saved.context);
+    setCriteria(cloneCriteria(saved.criteria));
+    setActiveTemplateId("");
+    setResult(undefined);
+    setCurrentReportId(undefined);
+    setNotes("");
+    setComparisonDiff(undefined);
+    setTrialResults([]);
+    setConflicts([]);
+    setSourceFailures([]);
+    setError("");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
   async function copyBrief() {
     if (!result) return;
     await navigator.clipboard.writeText(
-      comparisonAsMarkdown(result, notes, locale, t, trialResults),
+      comparisonAsMarkdown(result, notes, locale, t, trialResults, conflicts),
     );
     setCopied(true);
     window.setTimeout(() => setCopied(false), 1_600);
@@ -538,7 +886,7 @@ export function CompareWorkbench({
   function exportMarkdown() {
     if (!result) return;
     const blob = new Blob(
-      [comparisonAsMarkdown(result, notes, locale, t, trialResults)],
+      [comparisonAsMarkdown(result, notes, locale, t, trialResults, conflicts)],
       {
       type: "text/markdown;charset=utf-8",
       },
@@ -567,6 +915,8 @@ export function CompareWorkbench({
       locale: stored?.locale ?? locale,
       revisions: stored?.revisions ?? [],
       trialResults,
+      conflicts,
+      confidenceCalibrations,
     };
   }
 
@@ -580,6 +930,47 @@ export function CompareWorkbench({
     const anchor = document.createElement("a");
     anchor.href = url;
     anchor.download = `${safeFilename(report.title)}.fitlens.json`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function exportRedactedMarkdown() {
+    const localReport = currentPortableReport();
+    if (!localReport) return;
+    const { report } = createRedactedReport(localReport);
+    const blob = new Blob(
+      [
+        comparisonAsMarkdown(
+          report.result,
+          "",
+          locale,
+          t,
+          [],
+          report.conflicts,
+          true,
+        ),
+      ],
+      { type: "text/markdown;charset=utf-8" },
+    );
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `${safeFilename(report.title)}.shared.md`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function exportRedactedJson() {
+    const localReport = currentPortableReport();
+    if (!localReport) return;
+    const { report } = createRedactedReport(localReport);
+    const blob = new Blob([serializeReport(report)], {
+      type: "application/json;charset=utf-8",
+    });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `${safeFilename(report.title)}.shared.fitlens.json`;
     anchor.click();
     URL.revokeObjectURL(url);
   }
@@ -688,14 +1079,26 @@ export function CompareWorkbench({
           : product,
       ),
     };
+    const nextConflicts = detectEvidenceConflicts(nextResult);
     setResult(nextResult);
+    setConflicts(nextConflicts);
     const stored = history.find((report) => report.id === currentReportId);
     const previousRevision = stored?.revisions.at(-1);
     if (previousRevision) {
       setComparisonDiff(compareResults(previousRevision, nextResult, criteria));
     }
     const nextHistory = history.map((report) =>
-      report.id === currentReportId ? { ...report, result: nextResult } : report,
+      report.id === currentReportId
+        ? {
+            ...report,
+            result: nextResult,
+            conflicts: nextConflicts,
+            confidenceCalibrations: calibrateComparisonConfidence(
+              nextResult.products,
+              nextConflicts,
+            ),
+          }
+        : report,
     );
     setHistory(nextHistory);
     if (currentReportId) {
@@ -784,6 +1187,7 @@ export function CompareWorkbench({
     setCurrentReportId(undefined);
     setNotes("");
     setComparisonDiff(undefined);
+    setConflicts([]);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -890,33 +1294,84 @@ export function CompareWorkbench({
         )}
 
         <div className="url-grid">
-          {urls.map((url, index) => (
-            <label className="url-field" key={index}>
-              <span>
-                {t.product} {index === 0 ? "A" : "B"}
-              </span>
-              <div>
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M10 13a5 5 0 0 0 7.1.1l2-2a5 5 0 0 0-7-7.1l-1.1 1" />
-                  <path d="M14 11a5 5 0 0 0-7.1-.1l-2 2a5 5 0 0 0 7 7.1l1.1-1" />
-                </svg>
-                <input
-                  value={url}
-                  placeholder={
-                    index === 0
-                      ? "https://product-a.com"
-                      : "https://product-b.com"
-                  }
-                  onChange={(event) => {
-                    const next = [...urls] as [string, string];
-                    next[index] = event.target.value;
-                    setUrls(next);
-                  }}
-                  aria-label={`${t.product} ${index === 0 ? "A" : "B"} URL`}
-                />
+          {urls.map((url, index) => {
+            const sourceFailure = sourceFailures.find(
+              (failure) => failure.index === index,
+            );
+            const diagnosticId = `source-failure-${index}`;
+            return (
+              <div
+                className={`url-field${sourceFailure ? " source-failed" : ""}`}
+                key={index}
+              >
+                <span>
+                  {t.product} {String.fromCharCode(65 + index)}
+                </span>
+                <div className="url-input-row">
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M10 13a5 5 0 0 0 7.1.1l2-2a5 5 0 0 0-7-7.1l-1.1 1" />
+                    <path d="M14 11a5 5 0 0 0-7.1-.1l-2 2a5 5 0 0 0 7 7.1l1.1-1" />
+                  </svg>
+                  <input
+                    value={url}
+                    placeholder={`https://product-${String.fromCharCode(97 + index)}.com`}
+                    onChange={(event) => {
+                      const next = [...urls];
+                      next[index] = event.target.value;
+                      setUrls(next);
+                      setSourceFailures((current) =>
+                        current.filter((failure) => failure.index !== index),
+                      );
+                    }}
+                    aria-label={`${t.product} ${String.fromCharCode(65 + index)} URL`}
+                    aria-invalid={sourceFailure ? true : undefined}
+                    aria-describedby={sourceFailure ? diagnosticId : undefined}
+                  />
+                  <div className="url-actions">
+                    <button
+                      type="button"
+                      disabled={index === 0}
+                      onClick={() => moveProductUrl(index, -1)}
+                      aria-label={`${t.moveProductUp}: ${index + 1}`}
+                    >
+                      ↑
+                    </button>
+                    <button
+                      type="button"
+                      disabled={index === urls.length - 1}
+                      onClick={() => moveProductUrl(index, 1)}
+                      aria-label={`${t.moveProductDown}: ${index + 1}`}
+                    >
+                      ↓
+                    </button>
+                    <button
+                      type="button"
+                      disabled={urls.length <= 2}
+                      onClick={() => removeProductUrl(index)}
+                      aria-label={`${t.removeProduct}: ${index + 1}`}
+                    >
+                      ×
+                    </button>
+                  </div>
+                </div>
+                {sourceFailure && (
+                  <p className="source-failure-detail" id={diagnosticId}>
+                    <strong>{sourceFailure.code}</strong>
+                    {t[sourceFailure.code]}
+                  </p>
+                )}
               </div>
-            </label>
-          ))}
+            );
+          })}
+          {urls.length < 8 && (
+            <button
+              className="add-product-button"
+              type="button"
+              onClick={addProductUrl}
+            >
+              + {t.addProduct}
+            </button>
+          )}
         </div>
 
         <div className="profile-grid">
@@ -1084,7 +1539,36 @@ export function CompareWorkbench({
           </button>
         </div>
         {error && (
-          <div className="error-banner">{error}</div>
+          <div className="error-banner" role="alert">
+            {error}
+          </div>
+        )}
+        {sourceFailures.length > 0 && (
+          <div
+            className="source-failure-summary"
+            role="alert"
+            aria-live="assertive"
+          >
+            <div>
+              <strong>
+                {t.sourceFailureSummary.replace(
+                  "{count}",
+                  String(sourceFailures.length),
+                )}
+              </strong>
+              <span>{t.sourceCollectionFailed}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                if (sourceRetryMode === "refresh") void refreshAnalysis();
+                else void analyze();
+              }}
+              disabled={status === "loading" || status === "refreshing"}
+            >
+              {t.retrySources} <span aria-hidden="true">↻</span>
+            </button>
+          </div>
         )}
         <input
           ref={importInputRef}
@@ -1133,11 +1617,12 @@ export function CompareWorkbench({
             </button>
           </div>
           {history.length > 0 && (
-            <div className="history-panel">
+            <div className="history-panel library-panel">
               <div className="history-head">
                 <div>
-                  <p className="eyebrow">{t.recentEyebrow}</p>
-                  <h3>{t.recentTitle}</h3>
+                  <p className="eyebrow">{t.libraryEyebrow}</p>
+                  <h3>{t.libraryTitle}</h3>
+                  <small>{t.libraryCopy}</small>
                 </div>
                 <div>
                   <button onClick={() => importInputRef.current?.click()}>
@@ -1146,21 +1631,120 @@ export function CompareWorkbench({
                   <button onClick={clearHistory}>{t.clear}</button>
                 </div>
               </div>
-              <div className="history-list">
-                {history.map((saved) => (
-                  <button key={saved.id} onClick={() => loadReport(saved)}>
-                    <span>{saved.title}</span>
-                    <small>
-                      {new Date(saved.savedAt).toLocaleDateString(locale)} ·{" "}
-                      {saved.result.recommendation.winner}
-                      {saved.revisions.length > 0
-                        ? ` · ${saved.revisions.length} ${t.revisions}`
-                        : ""}
-                    </small>
-                    <b>{t.open}</b>
-                  </button>
-                ))}
+              <div className="library-tools">
+                <label className="library-search">
+                  <span aria-hidden="true">⌕</span>
+                  <input
+                    type="search"
+                    value={libraryQuery}
+                    onChange={(event) => setLibraryQuery(event.target.value)}
+                    placeholder={t.librarySearchPlaceholder}
+                    aria-label={t.librarySearchAria}
+                  />
+                </label>
+                <div className="library-filters">
+                  <select
+                    value={libraryProduct}
+                    onChange={(event) => setLibraryProduct(event.target.value)}
+                    aria-label={t.libraryProductFilter}
+                  >
+                    <option value="">{t.libraryAllProducts}</option>
+                    {libraryProducts.map((product) => (
+                      <option key={product} value={product}>{product}</option>
+                    ))}
+                  </select>
+                  <select
+                    value={librarySource}
+                    onChange={(event) =>
+                      setLibrarySource(event.target.value as LibrarySourceFilter)
+                    }
+                    aria-label={t.librarySourceFilter}
+                  >
+                    <option value="all">{t.libraryAllSources}</option>
+                    <option value="open-source">{t.sourceOpen}</option>
+                    <option value="website-only">{t.sourceWebsite}</option>
+                  </select>
+                  <select
+                    value={libraryEvidence}
+                    onChange={(event) =>
+                      setLibraryEvidence(event.target.value as EvidenceLevel | "all")
+                    }
+                    aria-label={t.libraryEvidenceFilter}
+                  >
+                    <option value="all">{t.libraryAllEvidence}</option>
+                    <option value="verified">{t.verified}</option>
+                    <option value="vendor">{t.vendor}</option>
+                    <option value="inferred">{t.inferred}</option>
+                  </select>
+                  <select
+                    value={libraryReview}
+                    onChange={(event) =>
+                      setLibraryReview(event.target.value as LibraryReviewFilter)
+                    }
+                    aria-label={t.libraryReviewFilter}
+                  >
+                    <option value="all">{t.libraryAllDecisions}</option>
+                    <option value="ready">{t.libraryReady}</option>
+                    <option value="needs-review">{t.libraryNeedsReview}</option>
+                  </select>
+                </div>
               </div>
+              <div className="library-summary">
+                {t.libraryShowing
+                  .replace("{shown}", String(filteredLibrary.length))
+                  .replace("{total}", String(history.length))}
+              </div>
+              {filteredLibrary.length > 0 ? (
+                <div className="history-list library-list">
+                  {filteredLibrary.map((entry) => {
+                    const saved = entry.report;
+                    return (
+                      <article key={saved.id} className="library-card">
+                        <div className="library-card-top">
+                          <div>
+                            <span>{saved.title}</span>
+                            <small>
+                              {new Date(saved.savedAt).toLocaleDateString(locale)}
+                              {saved.revisions.length > 0
+                                ? ` · ${saved.revisions.length} ${t.revisions}`
+                                : ""}
+                            </small>
+                          </div>
+                          <i className={entry.needsReview ? "review" : "ready"}>
+                            {entry.needsReview ? t.libraryNeedsReview : t.libraryReady}
+                          </i>
+                        </div>
+                        <div className="library-product-chips">
+                          {entry.products.map((product) => (
+                            <span key={product}>{product}</span>
+                          ))}
+                        </div>
+                        <div className="library-decision">
+                          <small>{t.libraryDecision}</small>
+                          <strong>{saved.result.recommendation.winner}</strong>
+                        </div>
+                        <div className="library-metrics">
+                          <span>{entry.evidenceCount} {t.libraryEvidence}</span>
+                          <span>{entry.verifiedCount} {t.verified}</span>
+                          <span>{entry.sourceCount} {t.sources}</span>
+                        </div>
+                        <div className="library-card-actions">
+                          <button onClick={() => loadReport(saved)}>{t.open}</button>
+                          <button onClick={() => reuseReportInputs(saved)}>
+                            {t.libraryReuseInputs}
+                          </button>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="library-empty">
+                  <span>⌕</span>
+                  <strong>{t.libraryNoResults}</strong>
+                  <small>{t.libraryNoResultsCopy}</small>
+                </div>
+              )}
             </div>
           )}
           <Link className="example-link" href="/examples/cmux-vs-otty">
@@ -1194,6 +1778,17 @@ export function CompareWorkbench({
             </button>
             <button onClick={exportMarkdown}>{t.exportMarkdown}</button>
             <button onClick={exportJson}>{t.exportJson}</button>
+            <details className="share-menu">
+              <summary>{t.shareSafeCopy}</summary>
+              <div>
+                <strong>{t.shareSafeTitle}</strong>
+                <p>{t.shareSafeCopyDetail}</p>
+                <button onClick={exportRedactedMarkdown}>
+                  {t.shareMarkdown}
+                </button>
+                <button onClick={exportRedactedJson}>{t.shareJson}</button>
+              </div>
+            </details>
             <button onClick={() => importInputRef.current?.click()}>
               {t.import}
             </button>
@@ -1242,6 +1837,50 @@ export function CompareWorkbench({
             <p>{result.recommendation.switchWhen}</p>
           </div>
         </div>
+
+        {conflicts.length > 0 && (
+          <section className="conflict-card" aria-labelledby="conflicts-title">
+            <header>
+              <div>
+                <p className="eyebrow">{t.conflictsEyebrow}</p>
+                <h2 id="conflicts-title">{t.conflictsTitle}</h2>
+                <p>{t.conflictsCopy}</p>
+              </div>
+              <strong>{conflicts.length}</strong>
+            </header>
+            <div className="conflict-list">
+              {conflicts.map((conflict) => (
+                <article key={conflict.id}>
+                  <div className="conflict-heading">
+                    <span className={`conflict-severity ${conflict.severity}`}>
+                      {conflict.severity === "high"
+                        ? t.conflictHigh
+                        : t.conflictMedium}
+                    </span>
+                    <strong>{conflict.product}</strong>
+                    <small>{conflictTopicLabel(conflict.topic, t)}</small>
+                  </div>
+                  <div className="conflict-claims">
+                    {[conflict.first, conflict.second].map((evidence, index) => (
+                      <a
+                        href={evidence.sourceUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        key={`${conflict.id}-${index}`}
+                      >
+                        <span className={`evidence-badge ${evidence.level}`}>
+                          {evidenceLabels[evidence.level]}
+                        </span>
+                        <p>{evidence.claim}</p>
+                        <small>{evidence.sourceLabel} ↗</small>
+                      </a>
+                    ))}
+                  </div>
+                </article>
+              ))}
+            </div>
+          </section>
+        )}
 
         {comparisonDiff && (
           <section className="diff-card" aria-labelledby="diff-title">
@@ -1342,12 +1981,15 @@ export function CompareWorkbench({
         )}
 
         <div className="product-grid">
-          {result.products.map((product, index) => {
+          {result.products.map((product) => {
             const coverage = calculateEvidenceCoverage(product);
             const freshness = calculateEvidenceFreshness(product);
+            const calibration = confidenceCalibrations.find(
+              (item) => item.product === product.name,
+            )!;
             return (
               <article
-                className={`product-card ${index === 0 ? "featured" : ""}`}
+                className={`product-card ${product.name === (weightedWinner ?? result.recommendation.winner) ? "featured" : ""}`}
                 key={product.name}
               >
               <header>
@@ -1364,12 +2006,38 @@ export function CompareWorkbench({
               </header>
 
               <div className="confidence">
-                <span>{t.confidence}</span>
+                <span>{t.confidenceCalibrated}</span>
                 <div>
-                  <i style={{ width: `${product.confidence}%` }} />
+                  <i style={{ width: `${calibration.score}%` }} />
                 </div>
-                <b>{product.confidence}%</b>
+                <b>{calibration.score}%</b>
               </div>
+
+              <section className={`confidence-calibration ${calibration.band}`}>
+                <header>
+                  <div>
+                    <strong>{confidenceBandLabel(calibration, t)}</strong>
+                    <span>{t.confidenceWhy}</span>
+                  </div>
+                  <p>{t.confidenceMethod}</p>
+                </header>
+                <div className="confidence-evidence-mix">
+                  <span><b>{calibration.verified}</b> {t.verified}</span>
+                  <span><b>{calibration.vendor}</b> {t.vendor}</span>
+                  <span><b>{calibration.inferred}</b> {t.inferred}</span>
+                </div>
+                <ul>
+                  {calibration.factors.map((factor) => (
+                    <li className={factor.effect} key={factor.key}>
+                      <span>{factor.effect === "supporting" ? "+" : "!"}</span>
+                      <div>
+                        <b>{factor.effect === "supporting" ? t.confidenceSupporting : t.confidenceLimiting}</b>
+                        <p>{confidenceFactorLabel(factor, t)}</p>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </section>
 
               <div className="coverage-card">
                 <div>
@@ -1400,6 +2068,112 @@ export function CompareWorkbench({
               </div>
 
               <p className="product-verdict">{product.verdict}</p>
+
+              {product.pricing && (
+                <section className="pricing-card" aria-label={t.pricingTitle}>
+                  <div className="pricing-heading">
+                    <div>
+                      <h4>{t.pricingTitle}</h4>
+                      <p>{product.pricing.summary}</p>
+                    </div>
+                    <span
+                      className={
+                        product.pricing.hasFreeOption === true
+                          ? "free"
+                          : product.pricing.hasFreeOption === false
+                            ? "paid"
+                            : "unknown"
+                      }
+                    >
+                      {product.pricing.hasFreeOption === true
+                        ? t.pricingFree
+                        : product.pricing.hasFreeOption === false
+                          ? t.pricingNoFree
+                          : t.pricingFreeUnknown}
+                    </span>
+                  </div>
+                  <div className="pricing-plans">
+                    {product.pricing.plans.length > 0 ? (
+                      product.pricing.plans.map((plan) => (
+                        <a
+                          href={plan.sourceUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          key={`${plan.name}-${plan.price}-${plan.sourceUrl}`}
+                        >
+                          <div>
+                            <strong>{plan.name}</strong>
+                            <span className={`evidence-badge ${plan.evidenceLevel}`}>
+                              {evidenceLabels[plan.evidenceLevel]}
+                            </span>
+                          </div>
+                          <p>
+                            <b>{plan.price}</b>
+                            <small>{cadenceLabel(plan.cadence, t)}</small>
+                          </p>
+                          <dl>
+                            <div>
+                              <dt>{t.pricingAudience}</dt>
+                              <dd>{plan.audience}</dd>
+                            </div>
+                            {plan.limits.length > 0 && (
+                              <div>
+                                <dt>{t.pricingLimits}</dt>
+                                <dd>{plan.limits.join(" · ")}</dd>
+                              </div>
+                            )}
+                          </dl>
+                        </a>
+                      ))
+                    ) : (
+                      <p className="pricing-empty">{t.pricingNoPlans}</p>
+                    )}
+                  </div>
+                  <p className="pricing-uncertainty">
+                    <strong>{t.pricingUncertainty}</strong>
+                    {product.pricing.uncertainty}
+                  </p>
+                </section>
+              )}
+
+              {product.privacy && (
+                <section className="privacy-card" aria-label={t.privacyTitle}>
+                  <header>
+                    <div>
+                      <h4>{t.privacyTitle}</h4>
+                      <p>{t.privacyCopy}</p>
+                    </div>
+                    <span className={`privacy-risk ${product.privacy.riskLevel}`}>
+                      <small>{t.privacyRisk}</small>
+                      {privacyRiskLabel(product.privacy.riskLevel, t)}
+                    </span>
+                  </header>
+                  <p className="privacy-summary">{product.privacy.summary}</p>
+                  <div className="privacy-findings">
+                    {product.privacy.findings.map((finding) => (
+                      <a
+                        href={finding.sourceUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className={finding.status}
+                        key={finding.category}
+                      >
+                        <div>
+                          <strong>{privacyCategoryLabel(finding.category, t)}</strong>
+                          <span>{privacyStatusLabel(finding.status, t)}</span>
+                        </div>
+                        <p>{finding.finding}</p>
+                        <small>
+                          <b className={`evidence-badge ${finding.evidenceLevel}`}>
+                            {evidenceLabels[finding.evidenceLevel]}
+                          </b>
+                          {t.privacyUncertainty}: {finding.uncertainty} ↗
+                        </small>
+                      </a>
+                    ))}
+                  </div>
+                </section>
+              )}
 
               <div className="pros-cons">
                 <div>

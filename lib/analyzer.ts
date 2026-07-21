@@ -1,9 +1,12 @@
-import OpenAI from "openai";
-import { zodTextFormat } from "openai/helpers/zod";
 import { z } from "zod";
 import { messages } from "@/lib/i18n";
+import {
+  requestStructuredOutput,
+  type ModelProviderConfig,
+} from "@/lib/model-provider";
 import type { AnalyzeRequest, ComparisonResult } from "@/lib/types";
 import type { CollectedSource } from "@/lib/source";
+import { calibratePrivacyRisk } from "@/lib/privacy";
 
 const evidenceSchema = z
   .object({
@@ -11,6 +14,61 @@ const evidenceSchema = z
     level: z.enum(["verified", "vendor", "inferred"]),
     sourceLabel: z.string(),
     sourceUrl: z.string(),
+  })
+  .strict();
+
+const pricingPlanSchema = z
+  .object({
+    name: z.string(),
+    price: z.string(),
+    cadence: z.enum([
+      "free",
+      "monthly",
+      "yearly",
+      "one-time",
+      "usage-based",
+      "custom",
+      "unknown",
+    ]),
+    audience: z.string(),
+    limits: z.array(z.string()).max(6),
+    sourceUrl: z.string(),
+    evidenceLevel: z.enum(["verified", "vendor", "inferred"]),
+  })
+  .strict();
+
+const pricingSchema = z
+  .object({
+    hasFreeOption: z.boolean().nullable(),
+    summary: z.string(),
+    plans: z.array(pricingPlanSchema).max(6),
+    uncertainty: z.string(),
+  })
+  .strict();
+
+const privacyFindingSchema = z
+  .object({
+    category: z.enum([
+      "telemetry",
+      "account",
+      "retention",
+      "permissions",
+      "encryption",
+      "selfHosting",
+    ]),
+    status: z.enum(["positive", "caution", "unknown"]),
+    finding: z.string(),
+    evidenceLevel: z.enum(["verified", "vendor", "inferred"]),
+    sourceUrl: z.string(),
+    uncertainty: z.string(),
+  })
+  .strict();
+
+const privacySchema = z
+  .object({
+    summary: z.string(),
+    riskLevel: z.enum(["low", "medium", "high", "unknown"]),
+    findings: z.array(privacyFindingSchema).length(6),
   })
   .strict();
 
@@ -27,6 +85,8 @@ const productSchema = z
     strengths: z.array(z.string()).min(2).max(5),
     tradeoffs: z.array(z.string()).min(2).max(5),
     evidence: z.array(evidenceSchema).min(2).max(6),
+    pricing: pricingSchema,
+    privacy: privacySchema,
   })
   .strict();
 
@@ -52,7 +112,7 @@ const comparisonSchema = z
         switchWhen: z.string(),
       })
       .strict(),
-    products: z.array(productSchema).length(2),
+    products: z.array(productSchema).min(2).max(8),
     dimensions: z.array(dimensionSchema).min(2).max(8),
     unknowns: z.array(z.string()).min(2).max(5),
     trialPlan: z
@@ -82,21 +142,12 @@ function sourceForPrompt(source: CollectedSource) {
 
 export async function analyzeWithModel(
   request: AnalyzeRequest,
-  sources: [CollectedSource, CollectedSource],
-  apiKey?: string,
+  sources: CollectedSource[],
+  provider: ModelProviderConfig,
 ): Promise<ComparisonResult> {
-  const client = new OpenAI({ apiKey: apiKey || process.env.OPENAI_API_KEY });
-  const allowedUrls = new Set(
-    sources.flatMap((source) =>
-      [source.inputUrl, source.homepageUrl, source.repo?.url].filter(
-        (value): value is string => Boolean(value),
-      ),
-    ),
-  );
-
-  const response = await client.responses.parse({
-    model: process.env.OPENAI_MODEL || "gpt-5.6-luna",
-    reasoning: { effort: "low" },
+  const parsed = await requestStructuredOutput(provider, {
+    schema: comparisonSchema,
+    schemaName: "fitlens_comparison",
     instructions: [
       request.locale === "zh-CN"
         ? "你是严谨的产品研究员。所有面向用户的内容都用简体中文输出。"
@@ -110,24 +161,37 @@ export async function analyzeWithModel(
       request.locale === "zh-CN"
         ? "每个 CRITERIA 项必须在 dimensions 中恰好出现一次，保留相同的 key、label 和 weight；不要增加或遗漏维度。"
         : "Return exactly one dimension for every CRITERIA item, preserving its key, label, and weight. Do not add or omit dimensions.",
+      request.locale === "zh-CN"
+        ? `必须为 ${sources.length} 个 SOURCES 各返回一个产品，并严格保持 SOURCES 的顺序。每个维度的 productScores 必须恰好包含所有产品名称。`
+        : `Return one product for each of the ${sources.length} SOURCES, in the exact SOURCES order. Every dimension's productScores must contain exactly every returned product name.`,
       "分数表示对该用户的适配度，不表示普遍产品质量。",
-      "trialPlan 必须是可在 30 分钟内比较两款产品的具体任务。",
+      request.locale === "zh-CN"
+        ? "为每个产品提取结构化 pricing：免费可用性、套餐名称、页面原文价格、计费周期、适用对象、限制和来源。没有公开价格时保留空 plans，并在 uncertainty 中明确未知；不要猜测数字。"
+        : "Extract structured pricing for every product: free availability, plan names, prices exactly as published, billing cadence, audience, limits, and source. When pricing is not public, return no plans and explain the unknown in uncertainty; never invent numbers.",
+      request.locale === "zh-CN"
+        ? "为每个产品完成结构化隐私与安全审查，findings 必须按 telemetry、account、retention、permissions、encryption、selfHosting 各返回一次。每项都要区分 positive、caution 或 unknown，附证据等级、来源和明确的不确定性；没有证据时必须是 unknown，不得把未披露当作安全或不安全。"
+        : "For every product, return exactly one privacy/security finding for each category: telemetry, account, retention, permissions, encryption, and selfHosting. Classify each as positive, caution, or unknown and include evidence level, source, and explicit uncertainty. Missing disclosure must be unknown, never assumed safe or unsafe.",
+      request.locale === "zh-CN"
+        ? "trialPlan 必须是可在 30 分钟内横向比较所有候选产品的具体任务。"
+        : "The trial plan must contain concrete tasks that compare every candidate within 30 minutes.",
     ].join("\n"),
     input: JSON.stringify({
       USER_CONTEXT: request.context,
       CRITERIA: request.criteria,
       SOURCES: sources.map(sourceForPrompt),
     }),
-    text: {
-      format: zodTextFormat(comparisonSchema, "fitlens_comparison"),
-    },
   });
 
-  if (!response.output_parsed) {
+  if (!parsed) {
     throw new Error(messages[request.locale].modelFailed);
   }
-
-  const parsed = response.output_parsed;
+  if (parsed.products.length !== sources.length) {
+    throw new Error(messages[request.locale].modelFailed);
+  }
+  const productNames = parsed.products.map((product) => product.name);
+  if (new Set(productNames).size !== productNames.length) {
+    throw new Error(messages[request.locale].modelFailed);
+  }
   const returnedDimensions = new Map(
     parsed.dimensions.map((dimension) => [dimension.key, dimension]),
   );
@@ -145,14 +209,72 @@ export async function analyzeWithModel(
     label: criterion.label,
     weight: criterion.weight,
   }));
+  if (
+    dimensions.some((dimension) => {
+      const scoreNames = Object.keys(dimension.productScores);
+      return (
+        scoreNames.length !== productNames.length ||
+        productNames.some((name) => !scoreNames.includes(name)) ||
+        (dimension.winner !== "tie" && !productNames.includes(dimension.winner))
+      );
+    }) ||
+    !productNames.includes(parsed.recommendation.winner)
+  ) {
+    throw new Error(messages[request.locale].modelFailed);
+  }
   const products = parsed.products.map((product, index) => {
     const source = sources[index];
+    const allowedUrls = new Set(
+      [source.inputUrl, source.homepageUrl, source.repo?.url].filter(
+        (value): value is string => Boolean(value),
+      ),
+    );
     const safeEvidence = product.evidence.map((evidence) => ({
       ...evidence,
       sourceUrl: allowedUrls.has(evidence.sourceUrl)
         ? evidence.sourceUrl
         : source.repo?.url || source.homepageUrl,
     }));
+    const safePricing = {
+      ...product.pricing,
+      plans: product.pricing.plans.map((plan) => ({
+        ...plan,
+        sourceUrl: allowedUrls.has(plan.sourceUrl)
+          ? plan.sourceUrl
+          : source.homepageUrl,
+      })),
+    };
+    const findingsByCategory = new Map(
+      product.privacy.findings.map((finding) => [finding.category, finding]),
+    );
+    const privacyCategories = [
+      "telemetry",
+      "account",
+      "retention",
+      "permissions",
+      "encryption",
+      "selfHosting",
+    ] as const;
+    if (
+      findingsByCategory.size !== privacyCategories.length ||
+      privacyCategories.some((category) => !findingsByCategory.has(category))
+    ) {
+      throw new Error(messages[request.locale].modelFailed);
+    }
+    const safePrivacy = {
+      ...product.privacy,
+      findings: privacyCategories.map((category) => {
+        const finding = findingsByCategory.get(category)!;
+        return {
+          ...finding,
+          category,
+          sourceUrl: allowedUrls.has(finding.sourceUrl)
+            ? finding.sourceUrl
+            : source.homepageUrl,
+        };
+      }),
+    };
+    safePrivacy.riskLevel = calibratePrivacyRisk(safePrivacy.findings);
     return {
       ...product,
       url: source.homepageUrl,
@@ -163,6 +285,8 @@ export async function analyzeWithModel(
         origin: "collected" as const,
         capturedAt: new Date().toISOString(),
       })),
+      pricing: safePricing,
+      privacy: safePrivacy,
     };
   });
 

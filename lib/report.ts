@@ -7,6 +7,11 @@ import type {
   ProductResult,
   TrialResult,
 } from "@/lib/types";
+import { detectEvidenceConflicts, type EvidenceConflict } from "./conflicts.ts";
+import {
+  calibrateComparisonConfidence,
+  type ConfidenceCalibration,
+} from "./confidence.ts";
 
 const httpUrlSchema = z
   .string()
@@ -38,6 +43,104 @@ const evidenceSchema = z
   })
   .passthrough();
 
+const pricingPlanSchema = z
+  .object({
+    name: z.string(),
+    price: z.string(),
+    cadence: z.enum([
+      "free",
+      "monthly",
+      "yearly",
+      "one-time",
+      "usage-based",
+      "custom",
+      "unknown",
+    ]),
+    audience: z.string(),
+    limits: z.array(z.string()),
+    sourceUrl: httpUrlSchema,
+    evidenceLevel: z.enum(["verified", "vendor", "inferred"]),
+  })
+  .passthrough();
+
+const pricingSchema = z
+  .object({
+    hasFreeOption: z.boolean().nullable(),
+    summary: z.string(),
+    plans: z.array(pricingPlanSchema),
+    uncertainty: z.string(),
+  })
+  .passthrough();
+
+const privacySchema = z
+  .object({
+    summary: z.string(),
+    riskLevel: z.enum(["low", "medium", "high", "unknown"]),
+    findings: z
+      .array(
+        z.object({
+          category: z.enum([
+            "telemetry",
+            "account",
+            "retention",
+            "permissions",
+            "encryption",
+            "selfHosting",
+          ]),
+          status: z.enum(["positive", "caution", "unknown"]),
+          finding: z.string(),
+          evidenceLevel: z.enum(["verified", "vendor", "inferred"]),
+          sourceUrl: httpUrlSchema,
+          uncertainty: z.string(),
+        }).passthrough(),
+      )
+      .length(6)
+      .refine(
+        (findings) =>
+          new Set(findings.map((finding) => finding.category)).size === 6,
+        "Privacy review categories must be unique",
+      ),
+  })
+  .passthrough();
+
+const evidenceConflictSchema = z
+  .object({
+    id: z.string(),
+    product: z.string(),
+    topic: z.string(),
+    severity: z.enum(["high", "medium"]),
+    first: evidenceSchema,
+    second: evidenceSchema,
+  })
+  .passthrough();
+
+const confidenceCalibrationSchema = z
+  .object({
+    product: z.string(),
+    score: z.number().min(0).max(100),
+    band: z.enum(["strong", "moderate", "limited"]),
+    verified: z.number().int().min(0),
+    vendor: z.number().int().min(0),
+    inferred: z.number().int().min(0),
+    sourceCount: z.number().int().min(0),
+    factors: z.array(
+      z.object({
+        key: z.enum([
+          "directVerification",
+          "sourceDiversity",
+          "freshness",
+          "transparency",
+          "limitedSources",
+          "inferenceHeavy",
+          "conflicts",
+        ]),
+        effect: z.enum(["supporting", "limiting"]),
+        value: z.number(),
+      }),
+    ),
+  })
+  .passthrough();
+
 const productSchema = z
   .object({
     name: z.string(),
@@ -51,6 +154,8 @@ const productSchema = z
     strengths: z.array(z.string()),
     tradeoffs: z.array(z.string()),
     evidence: z.array(evidenceSchema),
+    pricing: pricingSchema.optional(),
+    privacy: privacySchema.optional(),
   })
   .passthrough();
 
@@ -66,7 +171,7 @@ const resultSchema = z
         switchWhen: z.string(),
       })
       .passthrough(),
-    products: z.array(productSchema).length(2),
+    products: z.array(productSchema).min(2).max(8),
     dimensions: z.array(
       z
         .object({
@@ -89,14 +194,44 @@ const resultSchema = z
         .passthrough(),
     ),
   })
-  .passthrough();
+  .passthrough()
+  .superRefine((result, context) => {
+    const productNames = result.products.map((product) => product.name);
+    if (new Set(productNames).size !== productNames.length) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Product names must be unique",
+        path: ["products"],
+      });
+    }
+    if (!productNames.includes(result.recommendation.winner)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Recommendation winner must be in the shortlist",
+        path: ["recommendation", "winner"],
+      });
+    }
+    result.dimensions.forEach((dimension, index) => {
+      const scoreNames = Object.keys(dimension.productScores);
+      if (
+        scoreNames.length !== productNames.length ||
+        productNames.some((name) => !scoreNames.includes(name))
+      ) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Dimension scores must cover the complete shortlist",
+          path: ["dimensions", index, "productScores"],
+        });
+      }
+    });
+  });
 
 const savedReportSchema = z
   .object({
     id: z.string(),
     title: z.string(),
     savedAt: z.string(),
-    urls: z.tuple([httpUrlSchema, httpUrlSchema]),
+    urls: z.array(httpUrlSchema).min(2).max(8),
     context: z.string(),
     priorities: prioritySchema,
     result: resultSchema,
@@ -117,12 +252,15 @@ const savedReportSchema = z
       )
       .optional()
       .default([]),
+    conflicts: z.array(evidenceConflictSchema).optional(),
+    confidenceCalibrations: z.array(confidenceCalibrationSchema).optional(),
+    redactedAt: z.string().optional(),
   })
   .passthrough();
 
 const portableReportSchema = z
   .object({
-    schemaVersion: z.union([z.literal(1), z.literal(2)]),
+    schemaVersion: z.union([z.literal(1), z.literal(2), z.literal(3)]),
     exportedAt: z.string(),
     report: savedReportSchema,
   })
@@ -132,7 +270,7 @@ export interface SavedReport {
   id: string;
   title: string;
   savedAt: string;
-  urls: [string, string];
+  urls: string[];
   context: string;
   priorities: PriorityWeights;
   criteria: ComparisonCriterion[];
@@ -141,6 +279,9 @@ export interface SavedReport {
   locale: Locale;
   revisions: ComparisonResult[];
   trialResults: TrialResult[];
+  conflicts: EvidenceConflict[];
+  confidenceCalibrations: ConfidenceCalibration[];
+  redactedAt?: string;
 }
 
 export interface EvidenceCoverage {
@@ -190,7 +331,7 @@ export function calculateEvidenceCoverage(
 export function serializeReport(report: SavedReport) {
   return JSON.stringify(
     {
-      schemaVersion: 2,
+      schemaVersion: 3,
       exportedAt: new Date().toISOString(),
       report,
     },
@@ -201,6 +342,7 @@ export function serializeReport(report: SavedReport) {
 
 export function normalizeSavedReport(input: unknown): SavedReport {
   const report = savedReportSchema.parse(input);
+  const conflicts = report.conflicts ?? detectEvidenceConflicts(report.result);
   return {
     ...report,
     criteria:
@@ -220,6 +362,10 @@ export function normalizeSavedReport(input: unknown): SavedReport {
             status: "untested" as const,
             note: "",
           })),
+    conflicts,
+    confidenceCalibrations:
+      report.confidenceCalibrations ??
+      calibrateComparisonConfidence(report.result.products, conflicts),
   } as SavedReport;
 }
 

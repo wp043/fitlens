@@ -8,6 +8,7 @@ export function calculateWeightedWinner(
   priorities: PriorityWeights,
 ) {
   const totals: Record<string, number> = {};
+  const productNames = new Set(result.products.map((product) => product.name));
   let totalWeight = 0;
   for (const product of result.products) totals[product.name] = 0;
 
@@ -17,6 +18,7 @@ export function calculateWeightedWinner(
     const weight = requestedWeight / 100;
     totalWeight += weight;
     for (const [product, score] of Object.entries(dimension.productScores)) {
+      if (!productNames.has(product)) continue;
       totals[product] = (totals[product] ?? 0) + score * weight;
     }
   }
