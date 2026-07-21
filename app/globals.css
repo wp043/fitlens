@@ -1584,6 +1584,129 @@ body {
   line-height: 1.65;
 }
 
+.conflict-card {
+  margin-top: 18px;
+  overflow: hidden;
+  border: 1px solid rgba(243, 139, 168, 0.34);
+  border-radius: 22px;
+  background: rgba(49, 50, 68, 0.72);
+}
+
+.conflict-card > header {
+  padding: 22px 24px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  border-bottom: 1px solid var(--line);
+  background: linear-gradient(110deg, rgba(243, 139, 168, 0.1), transparent 65%);
+}
+
+.conflict-card > header .eyebrow {
+  margin-bottom: 7px;
+  color: var(--red);
+}
+
+.conflict-card > header h2 {
+  margin: 0;
+  color: var(--cream);
+  font-size: 20px;
+}
+
+.conflict-card > header p:last-child {
+  max-width: 620px;
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.6;
+}
+
+.conflict-card > header > strong {
+  min-width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(243, 139, 168, 0.4);
+  border-radius: 50%;
+  color: var(--red);
+  font-family: "DM Mono", monospace;
+}
+
+.conflict-list > article {
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--line);
+}
+
+.conflict-list > article:last-child {
+  border-bottom: 0;
+}
+
+.conflict-heading {
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.conflict-heading strong {
+  color: var(--ink);
+  font-size: 11px;
+}
+
+.conflict-heading small {
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.conflict-severity {
+  padding: 4px 7px;
+  border: 1px solid rgba(250, 179, 135, 0.28);
+  border-radius: 999px;
+  color: var(--peach);
+  font-family: "DM Mono", monospace;
+  font-size: 7px;
+  text-transform: uppercase;
+}
+
+.conflict-severity.high {
+  border-color: rgba(243, 139, 168, 0.34);
+  background: rgba(243, 139, 168, 0.1);
+  color: var(--red);
+}
+
+.conflict-claims {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.conflict-claims a {
+  min-width: 0;
+  padding: 13px 14px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.conflict-claims a:hover {
+  border-color: rgba(243, 139, 168, 0.34);
+  background: rgba(243, 139, 168, 0.05);
+}
+
+.conflict-claims p {
+  margin: 8px 0;
+  color: #d9d1e4;
+  font-size: 10px;
+  line-height: 1.55;
+}
+
+.conflict-claims small {
+  color: var(--muted);
+  font-family: "DM Mono", monospace;
+  font-size: 7px;
+}
+
 .verdict-card {
   border: 1px solid rgba(203, 166, 247, 0.34);
   border-radius: 28px;
@@ -2661,6 +2784,18 @@ footer {
   .diff-card > header {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .conflict-claims {
+    grid-template-columns: 1fr;
+  }
+
+  .conflict-card > header {
+    padding: 19px;
+  }
+
+  .conflict-list > article {
+    padding: 18px 19px;
   }
 
   .manual-evidence-form {
