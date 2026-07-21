@@ -4,6 +4,7 @@ import { z } from "zod";
 import { messages } from "@/lib/i18n";
 import type { AnalyzeRequest, ComparisonResult } from "@/lib/types";
 import type { CollectedSource } from "@/lib/source";
+import { calibratePrivacyRisk } from "@/lib/privacy";
 
 const evidenceSchema = z
   .object({
@@ -43,6 +44,32 @@ const pricingSchema = z
   })
   .strict();
 
+const privacyFindingSchema = z
+  .object({
+    category: z.enum([
+      "telemetry",
+      "account",
+      "retention",
+      "permissions",
+      "encryption",
+      "selfHosting",
+    ]),
+    status: z.enum(["positive", "caution", "unknown"]),
+    finding: z.string(),
+    evidenceLevel: z.enum(["verified", "vendor", "inferred"]),
+    sourceUrl: z.string(),
+    uncertainty: z.string(),
+  })
+  .strict();
+
+const privacySchema = z
+  .object({
+    summary: z.string(),
+    riskLevel: z.enum(["low", "medium", "high", "unknown"]),
+    findings: z.array(privacyFindingSchema).length(6),
+  })
+  .strict();
+
 const productSchema = z
   .object({
     name: z.string(),
@@ -57,6 +84,7 @@ const productSchema = z
     tradeoffs: z.array(z.string()).min(2).max(5),
     evidence: z.array(evidenceSchema).min(2).max(6),
     pricing: pricingSchema,
+    privacy: privacySchema,
   })
   .strict();
 
@@ -144,6 +172,9 @@ export async function analyzeWithModel(
       request.locale === "zh-CN"
         ? "为每个产品提取结构化 pricing：免费可用性、套餐名称、页面原文价格、计费周期、适用对象、限制和来源。没有公开价格时保留空 plans，并在 uncertainty 中明确未知；不要猜测数字。"
         : "Extract structured pricing for every product: free availability, plan names, prices exactly as published, billing cadence, audience, limits, and source. When pricing is not public, return no plans and explain the unknown in uncertainty; never invent numbers.",
+      request.locale === "zh-CN"
+        ? "为每个产品完成结构化隐私与安全审查，findings 必须按 telemetry、account、retention、permissions、encryption、selfHosting 各返回一次。每项都要区分 positive、caution 或 unknown，附证据等级、来源和明确的不确定性；没有证据时必须是 unknown，不得把未披露当作安全或不安全。"
+        : "For every product, return exactly one privacy/security finding for each category: telemetry, account, retention, permissions, encryption, and selfHosting. Classify each as positive, caution, or unknown and include evidence level, source, and explicit uncertainty. Missing disclosure must be unknown, never assumed safe or unsafe.",
       "trialPlan 必须是可在 30 分钟内比较两款产品的具体任务。",
     ].join("\n"),
     input: JSON.stringify({
@@ -195,6 +226,37 @@ export async function analyzeWithModel(
           : source.homepageUrl,
       })),
     };
+    const findingsByCategory = new Map(
+      product.privacy.findings.map((finding) => [finding.category, finding]),
+    );
+    const privacyCategories = [
+      "telemetry",
+      "account",
+      "retention",
+      "permissions",
+      "encryption",
+      "selfHosting",
+    ] as const;
+    if (
+      findingsByCategory.size !== privacyCategories.length ||
+      privacyCategories.some((category) => !findingsByCategory.has(category))
+    ) {
+      throw new Error(messages[request.locale].modelFailed);
+    }
+    const safePrivacy = {
+      ...product.privacy,
+      findings: privacyCategories.map((category) => {
+        const finding = findingsByCategory.get(category)!;
+        return {
+          ...finding,
+          category,
+          sourceUrl: allowedUrls.has(finding.sourceUrl)
+            ? finding.sourceUrl
+            : source.homepageUrl,
+        };
+      }),
+    };
+    safePrivacy.riskLevel = calibratePrivacyRisk(safePrivacy.findings);
     return {
       ...product,
       url: source.homepageUrl,
@@ -206,6 +268,7 @@ export async function analyzeWithModel(
         capturedAt: new Date().toISOString(),
       })),
       pricing: safePricing,
+      privacy: safePrivacy,
     };
   });
 

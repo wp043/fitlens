@@ -3002,6 +3002,132 @@ footer {
   text-transform: uppercase;
 }
 
+.privacy-card {
+  margin-bottom: 24px;
+  padding: 18px;
+  border: 1px solid rgba(137, 180, 250, 0.2);
+  border-radius: 16px;
+  background: linear-gradient(145deg, rgba(137, 180, 250, 0.08), rgba(17, 17, 27, 0.2));
+}
+
+.privacy-card > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.privacy-card h4 {
+  margin: 0;
+  color: var(--cream);
+  font-size: 13px;
+}
+
+.privacy-card > header p,
+.privacy-summary {
+  margin: 5px 0 0;
+  color: var(--muted);
+  font-size: 8px;
+  line-height: 1.55;
+}
+
+.privacy-risk {
+  flex: 0 0 auto;
+  padding: 7px 9px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  color: var(--yellow);
+  font-family: "DM Mono", monospace;
+  font-size: 8px;
+  text-align: right;
+}
+
+.privacy-risk.low { color: var(--green); }
+.privacy-risk.high { color: var(--red); }
+.privacy-risk.unknown { color: var(--mauve); }
+
+.privacy-risk small {
+  display: block;
+  margin-bottom: 2px;
+  color: var(--subtle);
+  font-size: 6px;
+  text-transform: uppercase;
+}
+
+.privacy-summary {
+  margin: 12px 0;
+  padding: 10px 11px;
+  border-left: 2px solid rgba(137, 180, 250, 0.55);
+  background: rgba(17, 17, 27, 0.22);
+}
+
+.privacy-findings {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.privacy-findings > a {
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(17, 17, 27, 0.22);
+  color: inherit;
+  text-decoration: none;
+  transition: border-color 0.18s ease, transform 0.18s ease;
+}
+
+.privacy-findings > a:hover {
+  border-color: rgba(137, 180, 250, 0.55);
+  transform: translateY(-1px);
+}
+
+.privacy-findings > a.positive { border-top-color: rgba(166, 227, 161, 0.45); }
+.privacy-findings > a.caution { border-top-color: rgba(249, 226, 175, 0.45); }
+.privacy-findings > a.unknown { border-top-color: rgba(203, 166, 247, 0.45); }
+
+.privacy-findings > a > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.privacy-findings strong {
+  color: var(--cream);
+  font-size: 9px;
+}
+
+.privacy-findings > a > div span {
+  color: var(--subtle);
+  font-family: "DM Mono", monospace;
+  font-size: 6px;
+  text-transform: uppercase;
+}
+
+.privacy-findings p {
+  min-height: 31px;
+  margin: 7px 0;
+  color: var(--ink);
+  font-size: 8px;
+  line-height: 1.45;
+}
+
+.privacy-findings small {
+  display: flex;
+  align-items: flex-start;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 7px;
+  line-height: 1.4;
+}
+
+.privacy-findings small .evidence-badge {
+  flex: 0 0 auto;
+  padding: 2px 4px;
+  font-size: 5px;
+}
+
 .research-notes-card {
   margin-top: 24px;
   padding: 30px;
@@ -3149,5 +3275,9 @@ footer {
 
   .research-notes-card {
     padding: 22px;
+  }
+
+  .privacy-findings {
+    grid-template-columns: 1fr;
   }
 }
