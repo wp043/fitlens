@@ -583,6 +583,123 @@ a {
   font-family: "DM Mono", monospace;
 }
 
+.confidence-calibration {
+  margin: -12px 0 24px;
+  overflow: hidden;
+  border: 1px solid #d8d1c4;
+  border-radius: 12px;
+  background: rgba(239, 235, 224, 0.68);
+}
+
+.confidence-calibration > header {
+  display: block;
+  padding: 15px 16px;
+  border-bottom: 1px solid #ded8cc;
+}
+
+.confidence-calibration > header > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.confidence-calibration > header strong,
+.confidence-calibration > header span,
+.confidence-calibration li b {
+  font-family: "DM Mono", monospace;
+}
+
+.confidence-calibration > header strong {
+  color: var(--green);
+  font-size: 11px;
+}
+
+.confidence-calibration.moderate > header strong {
+  color: var(--accent);
+}
+
+.confidence-calibration.limited > header strong {
+  color: #a45151;
+}
+
+.confidence-calibration > header span,
+.confidence-calibration li b {
+  color: var(--muted);
+  font-size: 8px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.confidence-calibration > header p {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.55;
+}
+
+.confidence-evidence-mix {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  border-bottom: 1px solid #ded8cc;
+}
+
+.confidence-evidence-mix span {
+  padding: 10px 6px;
+  border-right: 1px solid #ded8cc;
+  color: var(--muted);
+  font-size: 8px;
+  text-align: center;
+}
+
+.confidence-evidence-mix span:last-child {
+  border-right: 0;
+}
+
+.confidence-evidence-mix b {
+  color: var(--ink);
+  font-family: "DM Mono", monospace;
+  font-size: 11px;
+}
+
+.confidence-calibration ul {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 12px 14px 14px;
+  list-style: none;
+}
+
+.confidence-calibration li {
+  display: grid;
+  grid-template-columns: 18px 1fr;
+  gap: 8px;
+  align-items: start;
+}
+
+.confidence-calibration li > span {
+  display: grid;
+  width: 17px;
+  height: 17px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--soft-green);
+  color: var(--green);
+  font-family: "DM Mono", monospace;
+  font-size: 10px;
+}
+
+.confidence-calibration li.limiting > span {
+  background: #f4dddd;
+  color: #934747;
+}
+
+.confidence-calibration li p {
+  margin: 2px 0 0;
+  font-size: 10px;
+  line-height: 1.45;
+}
+
 .product-verdict {
   min-height: 52px;
   margin: 0 0 26px;

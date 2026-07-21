@@ -31,8 +31,9 @@ priorities change the outcome, and important unknowns should remain visible.
 - Extracts structured pricing tiers, billing cadence, free availability,
   audience, limits, source strength, and unresolved pricing uncertainty.
 - Keeps the five most recent source-report revisions with each report.
-- Shows confidence, evidence coverage, unknowns, and a short hands-on trial
-  plan.
+- Calibrates confidence from direct verification, source diversity, freshness,
+  transparency, and conflicts, and explains every supporting and limiting factor.
+- Shows evidence coverage, unknowns, and a short hands-on trial plan.
 - Supports Simplified Chinese and English across the interface, analysis,
   validation, dates, and exports.
 - Keeps recent reports, research notes, and comparison templates in the local
@@ -147,6 +148,21 @@ combines:
 A closed-source product can still be the best fit, but the report should make
 its lower observability visible.
 
+### Confidence calibration
+
+Confidence is calculated independently from product fit and does not use the
+model's self-reported certainty. The deterministic calibration rewards directly
+verified evidence, corroboration across distinct URLs, fresh sources, and
+inspectable public implementation. It applies explicit penalties when a product
+has only one source, no directly verified evidence, inference-heavy evidence, or
+contradictory claims.
+
+Each product shows the calibrated score and band alongside the exact evidence
+mix and the factors that raised or limited confidence. The same breakdown is
+retained in browser history and portable JSON, and rendered in Markdown exports.
+This makes a high-fit, low-confidence recommendation visibly different from a
+well-verified recommendation.
+
 FitLens also runs a deterministic consistency check across evidence for each
 product. Contradictory claims are paired in the report, assigned a review
 priority based on their evidence levels, and retained in local history and
@@ -250,8 +266,9 @@ stateDiagram-v2
 ```
 
 Portable reports include a schema version, original locale, input URLs,
-workflow context, criteria, structured result, revision history, notes, and
-timestamps. Import validation only accepts HTTP and HTTPS evidence links.
+workflow context, criteria, structured result, confidence calibration,
+revision history, notes, and timestamps. Import validation only accepts HTTP
+and HTTPS evidence links.
 Version 1 files and browser history are migrated to the dynamic criteria model
 when loaded.
 
@@ -275,6 +292,7 @@ components/
 lib/
   analyzer.ts            Structured model analysis
   criteria.ts            Localized built-in templates and criteria migration
+  confidence.ts          Deterministic confidence calibration and factor breakdown
   conflicts.ts           Deterministic evidence-conflict detection
   diff.ts                Deterministic report-to-report comparison
   evidence.ts            Manual evidence merge and refresh preservation
@@ -306,7 +324,7 @@ The current foundation includes editable comparison criteria, reusable
 templates, report refresh, local revision history, deterministic change
 summaries, manual evidence capture, trial scoring, and source freshness.
 It also includes evidence conflict detection, structured pricing comparison,
-and bilingual report output.
+deterministic confidence calibration, and bilingual report output.
 
 The most valuable next changes, ordered by product impact:
 

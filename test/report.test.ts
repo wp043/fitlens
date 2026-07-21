@@ -8,6 +8,7 @@ import {
 } from "../lib/report.ts";
 import { inferCriteria } from "../lib/criteria.ts";
 import { detectEvidenceConflicts } from "../lib/conflicts.ts";
+import { calibrateComparisonConfidence } from "../lib/confidence.ts";
 import { defaultPriorities, sampleComparison } from "../lib/sample.ts";
 
 const criteria = inferCriteria(sampleComparison.dimensions, defaultPriorities);
@@ -42,6 +43,7 @@ test("portable reports preserve notes and preference weights", () => {
       },
     ],
     conflicts: [],
+    confidenceCalibrations: calibrateComparisonConfidence(sampleComparison.products),
   };
 
   const restored = parseReport(serializeReport(report));
@@ -105,6 +107,7 @@ test("portable reports reject non-HTTP evidence links", () => {
     revisions: [],
     trialResults: [],
     conflicts: [],
+    confidenceCalibrations: calibrateComparisonConfidence(sampleComparison.products),
   };
   report.result.products[0].evidence[0].sourceUrl =
     "javascript:alert(document.domain)";
@@ -127,6 +130,7 @@ test("portable reports reject unsafe pricing source links", () => {
     revisions: [],
     trialResults: [],
     conflicts: [],
+    confidenceCalibrations: calibrateComparisonConfidence(sampleComparison.products),
   };
   report.result.products[0].pricing!.plans[0].sourceUrl =
     "javascript:alert(document.domain)";
@@ -157,6 +161,7 @@ test("portable reports preserve detected evidence conflicts", () => {
     revisions: [],
     trialResults: [],
     conflicts,
+    confidenceCalibrations: calibrateComparisonConfidence(result.products, conflicts),
   };
 
   const restored = parseReport(serializeReport(report));
@@ -164,4 +169,5 @@ test("portable reports preserve detected evidence conflicts", () => {
   assert.equal(restored.conflicts.length, 1);
   assert.equal(restored.conflicts[0].topic, "openSource");
   assert.equal(restored.conflicts[0].second.sourceUrl, "https://cmux.com/policy");
+  assert.equal(restored.confidenceCalibrations.length, 2);
 });

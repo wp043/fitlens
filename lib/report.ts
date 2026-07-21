@@ -8,6 +8,10 @@ import type {
   TrialResult,
 } from "@/lib/types";
 import { detectEvidenceConflicts, type EvidenceConflict } from "./conflicts.ts";
+import {
+  calibrateComparisonConfidence,
+  type ConfidenceCalibration,
+} from "./confidence.ts";
 
 const httpUrlSchema = z
   .string()
@@ -76,6 +80,33 @@ const evidenceConflictSchema = z
     severity: z.enum(["high", "medium"]),
     first: evidenceSchema,
     second: evidenceSchema,
+  })
+  .passthrough();
+
+const confidenceCalibrationSchema = z
+  .object({
+    product: z.string(),
+    score: z.number().min(0).max(100),
+    band: z.enum(["strong", "moderate", "limited"]),
+    verified: z.number().int().min(0),
+    vendor: z.number().int().min(0),
+    inferred: z.number().int().min(0),
+    sourceCount: z.number().int().min(0),
+    factors: z.array(
+      z.object({
+        key: z.enum([
+          "directVerification",
+          "sourceDiversity",
+          "freshness",
+          "transparency",
+          "limitedSources",
+          "inferenceHeavy",
+          "conflicts",
+        ]),
+        effect: z.enum(["supporting", "limiting"]),
+        value: z.number(),
+      }),
+    ),
   })
   .passthrough();
 
@@ -160,6 +191,7 @@ const savedReportSchema = z
       .optional()
       .default([]),
     conflicts: z.array(evidenceConflictSchema).optional(),
+    confidenceCalibrations: z.array(confidenceCalibrationSchema).optional(),
   })
   .passthrough();
 
@@ -185,6 +217,7 @@ export interface SavedReport {
   revisions: ComparisonResult[];
   trialResults: TrialResult[];
   conflicts: EvidenceConflict[];
+  confidenceCalibrations: ConfidenceCalibration[];
 }
 
 export interface EvidenceCoverage {
@@ -245,6 +278,7 @@ export function serializeReport(report: SavedReport) {
 
 export function normalizeSavedReport(input: unknown): SavedReport {
   const report = savedReportSchema.parse(input);
+  const conflicts = report.conflicts ?? detectEvidenceConflicts(report.result);
   return {
     ...report,
     criteria:
@@ -264,7 +298,10 @@ export function normalizeSavedReport(input: unknown): SavedReport {
             status: "untested" as const,
             note: "",
           })),
-    conflicts: report.conflicts ?? detectEvidenceConflicts(report.result),
+    conflicts,
+    confidenceCalibrations:
+      report.confidenceCalibrations ??
+      calibrateComparisonConfidence(report.result.products, conflicts),
   } as SavedReport;
 }
 
