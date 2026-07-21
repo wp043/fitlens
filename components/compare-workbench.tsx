@@ -25,6 +25,11 @@ import {
 import { compareResults, type ComparisonDiff } from "@/lib/diff";
 import { mergeManualEvidence } from "@/lib/evidence";
 import { calculateEvidenceFreshness } from "@/lib/freshness";
+import {
+  calibrateComparisonConfidence,
+  type ConfidenceCalibration,
+  type ConfidenceFactor,
+} from "@/lib/confidence";
 import { calculateWeightedWinner } from "@/lib/scoring";
 import {
   detectEvidenceConflicts,
@@ -97,6 +102,33 @@ function cadenceLabel(cadence: BillingCadence, t: Messages) {
   }[cadence];
 }
 
+function confidenceBandLabel(calibration: ConfidenceCalibration, t: Messages) {
+  return {
+    strong: t.confidenceStrong,
+    moderate: t.confidenceModerate,
+    limited: t.confidenceLimited,
+  }[calibration.band];
+}
+
+function confidenceFactorLabel(factor: ConfidenceFactor, t: Messages) {
+  switch (factor.key) {
+    case "directVerification":
+      return `${t.confidenceDirect}: ${factor.value}%`;
+    case "sourceDiversity":
+      return `${t.confidenceDiversity}: ${factor.value}`;
+    case "freshness":
+      return `${t.confidenceFreshness}: ${factor.value}%`;
+    case "transparency":
+      return t.confidenceTransparency;
+    case "limitedSources":
+      return t.confidenceLimitedSources;
+    case "inferenceHeavy":
+      return t.confidenceInferenceHeavy;
+    case "conflicts":
+      return `${t.confidenceConflicts}: ${factor.value}`;
+  }
+}
+
 function comparisonAsMarkdown(
   result: ComparisonResult,
   notes: string,
@@ -116,6 +148,11 @@ function comparisonAsMarkdown(
     failed: t.trialFailed,
     skipped: t.trialSkipped,
   };
+  const calibrations = calibrateComparisonConfidence(
+    result.products,
+    conflicts,
+    new Date(result.generatedAt),
+  );
   const productSections = result.products
     .map((product) => {
       const pricing = product.pricing;
@@ -136,9 +173,16 @@ ${pricing.plans.length > 0
 
 `
         : "";
+      const calibration = calibrations.find((item) => item.product === product.name)!;
       return `## ${product.name} — ${product.score}/100
 
 ${product.verdict}
+
+### ${t.markdownConfidence}: ${calibration.score}/100 · ${confidenceBandLabel(calibration, t)}
+${t.confidenceMethod}
+
+- ${t.verified}: ${calibration.verified}; ${t.vendor}: ${calibration.vendor}; ${t.inferred}: ${calibration.inferred}; ${t.sources}: ${calibration.sourceCount}
+${calibration.factors.map((factor) => `- **${factor.effect === "supporting" ? t.confidenceSupporting : t.confidenceLimiting}:** ${confidenceFactorLabel(factor, t)}`).join("\n")}
 
 ### ${t.markdownStrengths}
 ${product.strengths.map((item) => `- ${item}`).join("\n")}
@@ -428,6 +472,13 @@ export function CompareWorkbench({
       : { winner: undefined, totals: {}, normalized: {} };
   }, [priorities, result]);
   const weightedWinner = weightedDecision.winner;
+  const confidenceCalibrations = useMemo(
+    () =>
+      result
+        ? calibrateComparisonConfidence(result.products, conflicts)
+        : [],
+    [conflicts, result],
+  );
   const currentWinner = result?.products.find(
     (product) => product.name === weightedWinner,
   );
@@ -494,6 +545,10 @@ export function CompareWorkbench({
           note: "",
         })),
         conflicts: detectedConflicts,
+        confidenceCalibrations: calibrateComparisonConfidence(
+          payload.products,
+          detectedConflicts,
+        ),
       };
       const nextHistory = [saved, ...history].slice(0, maxSavedReports);
       setHistory(nextHistory);
@@ -541,6 +596,10 @@ export function CompareWorkbench({
         ),
         trialResults: stored?.trialResults ?? trialResults,
         conflicts: detectedConflicts,
+        confidenceCalibrations: calibrateComparisonConfidence(
+          payload.products,
+          detectedConflicts,
+        ),
       };
       const nextHistory = stored
         ? history.map((report) => (report.id === reportId ? saved : report))
@@ -640,6 +699,7 @@ export function CompareWorkbench({
       revisions: stored?.revisions ?? [],
       trialResults,
       conflicts,
+      confidenceCalibrations,
     };
   }
 
@@ -771,7 +831,15 @@ export function CompareWorkbench({
     }
     const nextHistory = history.map((report) =>
       report.id === currentReportId
-        ? { ...report, result: nextResult, conflicts: nextConflicts }
+        ? {
+            ...report,
+            result: nextResult,
+            conflicts: nextConflicts,
+            confidenceCalibrations: calibrateComparisonConfidence(
+              nextResult.products,
+              nextConflicts,
+            ),
+          }
         : report,
     );
     setHistory(nextHistory);
@@ -1467,6 +1535,9 @@ export function CompareWorkbench({
           {result.products.map((product, index) => {
             const coverage = calculateEvidenceCoverage(product);
             const freshness = calculateEvidenceFreshness(product);
+            const calibration = confidenceCalibrations.find(
+              (item) => item.product === product.name,
+            )!;
             return (
               <article
                 className={`product-card ${index === 0 ? "featured" : ""}`}
@@ -1486,12 +1557,38 @@ export function CompareWorkbench({
               </header>
 
               <div className="confidence">
-                <span>{t.confidence}</span>
+                <span>{t.confidenceCalibrated}</span>
                 <div>
-                  <i style={{ width: `${product.confidence}%` }} />
+                  <i style={{ width: `${calibration.score}%` }} />
                 </div>
-                <b>{product.confidence}%</b>
+                <b>{calibration.score}%</b>
               </div>
+
+              <section className={`confidence-calibration ${calibration.band}`}>
+                <header>
+                  <div>
+                    <strong>{confidenceBandLabel(calibration, t)}</strong>
+                    <span>{t.confidenceWhy}</span>
+                  </div>
+                  <p>{t.confidenceMethod}</p>
+                </header>
+                <div className="confidence-evidence-mix">
+                  <span><b>{calibration.verified}</b> {t.verified}</span>
+                  <span><b>{calibration.vendor}</b> {t.vendor}</span>
+                  <span><b>{calibration.inferred}</b> {t.inferred}</span>
+                </div>
+                <ul>
+                  {calibration.factors.map((factor) => (
+                    <li className={factor.effect} key={factor.key}>
+                      <span>{factor.effect === "supporting" ? "+" : "!"}</span>
+                      <div>
+                        <b>{factor.effect === "supporting" ? t.confidenceSupporting : t.confidenceLimiting}</b>
+                        <p>{confidenceFactorLabel(factor, t)}</p>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </section>
 
               <div className="coverage-card">
                 <div>
