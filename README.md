@@ -36,8 +36,10 @@ priorities change the outcome, and important unknowns should remain visible.
 - Shows evidence coverage, unknowns, and a short hands-on trial plan.
 - Supports Simplified Chinese and English across the interface, analysis,
   validation, dates, and exports.
-- Keeps recent reports, research notes, and comparison templates in the local
-  browser.
+- Keeps up to 50 reports in a searchable local research library with product,
+  source-type, evidence-level, and review-status filters.
+- Reopens a prior decision or reuses its URLs, workflow, and criteria as the
+  starting point for a new comparison.
 - Imports and exports portable JSON reports and exports readable Markdown.
 - Creates share-safe Markdown and JSON copies that retain conclusions and
   public evidence while removing private context, notes, trials, revisions,
@@ -84,10 +86,12 @@ flowchart LR
     E --> M[OpenAI Responses API]
     M --> R[Structured comparison]
     R --> U
-    U --> H[(Local report history)]
+    U --> H[(Local research library)]
     U --> P[(Local templates and notes)]
     U --> D[Deterministic report diff]
     H --> D
+    H --> I[Search and facet index]
+    I --> U
     U --> X[Markdown and JSON files]
 ```
 
@@ -236,7 +240,7 @@ flowchart TB
 
 | Data | Location | Persistence |
 | --- | --- | --- |
-| Reports, revisions, notes, custom templates | `localStorage` | Until cleared by the user |
+| Research library, revisions, notes, custom templates | `localStorage` | Until cleared by the user |
 | Key entered in the interface | `sessionStorage` | Current browser session |
 | Key configured in `.env.local` | Local server environment | Until the file changes |
 | Product source material | Sent to the configured OpenAI model | Governed by the API account |
@@ -269,6 +273,10 @@ stateDiagram-v2
     Analyzed --> Annotated: Add hands-on notes
     Reweighted --> Annotated: Add hands-on notes
     Diffed --> Annotated: Add hands-on notes
+    Analyzed --> Library: Save locally
+    Diffed --> Library: Update saved research
+    Library --> Analyzed: Reopen full report
+    Library --> Draft: Reuse inputs
     Annotated --> Exported: Export Markdown or JSON
     Analyzed --> Exported: Export Markdown or JSON
     Diffed --> Exported: Export Markdown or JSON
@@ -282,6 +290,21 @@ revision history, notes, and timestamps. Import validation only accepts HTTP
 and HTTPS evidence links.
 Version 1 files and browser history are migrated to the dynamic criteria model
 when loaded.
+
+## Local research library
+
+The browser derives a lightweight search index directly from saved reports, so
+searching never sends research data to a server. Search covers workflow context,
+product names, source URLs, evidence claims, recommendation reasons, unknowns,
+hands-on notes, and the current decision. Facets can narrow the library by a
+specific recurring product, open-source or website-only evidence, evidence
+level, and whether conflicts or unknowns still need review.
+
+The library reuses the existing `fitlens-report-history-v1` storage key. Older
+local history therefore loads without a manual migration, while new history can
+retain up to 50 reports instead of six. Opening restores the complete report;
+reusing inputs restores only the URLs, workflow, locale, and criteria so the
+same research question can be run again with fresh evidence.
 
 ## Internationalization
 
@@ -309,6 +332,7 @@ lib/
   evidence.ts            Manual evidence merge and refresh preservation
   freshness.ts           Evidence age classification and summaries
   i18n.ts                Typed Chinese and English dictionaries
+  research-library.ts    Local report indexing, search, facets, and summaries
   report.ts              Versioned reports, migration, and evidence coverage
   scoring.ts             Preference-weighted scoring
   source.ts              Website and GitHub evidence collection
@@ -337,7 +361,8 @@ summaries, manual evidence capture, trial scoring, and source freshness.
 It also includes evidence conflict detection, structured pricing comparison,
 deterministic confidence calibration, and bilingual report output.
 Reports can also be exported as bilingual share-safe copies without private
-research details.
+research details. A searchable local research library makes saved products,
+evidence, decisions, and comparison inputs reusable.
 
 The most valuable next changes, ordered by product impact:
 
@@ -345,18 +370,16 @@ The most valuable next changes, ordered by product impact:
 | --- | --- | --- | --- |
 | P1 | Multi-product shortlist | Supports discovery workflows where the user begins with more than two candidates | High |
 | P1 | Dedicated source adapters | Collects richer pricing, changelog, release, privacy, and documentation evidence | Medium |
-| P2 | Searchable local research library | Makes prior decisions and recurring products reusable instead of isolated reports | Medium |
 | P2 | Model-provider abstraction | Lets local users choose another structured-output provider without changing the evidence pipeline | High |
 
 ### Recommended implementation order
 
 ```mermaid
 flowchart LR
-    T[Trial-based rescoring] --> L[Local research library]
-    E --> A[Dedicated source adapters]
+    E[Evidence foundations] --> A[Dedicated source adapters]
     A --> D[Deeper report diffs]
-    D --> L[Local research library]
-    E --> N[Multi-product shortlist]
+    L[Local research library] --> N[Multi-product shortlist]
+    D --> N
     N --> P[Model-provider abstraction]
 ```
 
@@ -373,7 +396,7 @@ privacy policies, and release history.
 - Dimension scores are model-generated and should be treated as explainable
   judgments, not measurements.
 - A report retains at most five prior revisions in local history and exports.
-- Reports are local to one browser unless exported.
+- The 50-report research library is local to one browser unless exported.
 - Live analysis requires the user's own API credentials.
 
 ## License
