@@ -48,7 +48,8 @@ priorities change the outcome, and important unknowns should remain visible.
   criterion hints, and manually entered evidence.
 - Accepts an OpenAI API key from `.env.local` or only for the current browser
   session.
-- Rejects local, private-network, credential-bearing, and non-HTTP URLs.
+- Rejects local, private-network, credential-bearing, and non-HTTP URLs, checks
+  every redirect, and caps the bytes read from each remote response.
 
 ## Quick start
 
@@ -258,6 +259,23 @@ and weights, unknowns, and collected public evidence. They omit the original
 workflow context, research notes, trial plans and results, revision history,
 criterion hints, and all manually entered evidence. Regular exports remain
 complete local backups and should be treated as private.
+
+### Remote source security boundary
+
+Before each website, GitHub API, or redirect request, FitLens resolves the
+hostname and rejects the request if any returned IPv4 or IPv6 address is
+private, loopback, link-local, reserved, multicast, or unspecified. Redirects
+are followed manually, limited to five hops, and checked using the same policy.
+Responses must use an expected HTML, JSON, or text content type, and FitLens
+stops streaming a response once its route-specific byte limit is exceeded.
+
+This is application-layer SSRF hardening, not a network sandbox. Node's built-in
+`fetch` performs its own connection lookup after the policy lookup, so a hostile
+DNS service could theoretically change its answer between those two operations
+(DNS rebinding). Run FitLens as an unprivileged local process without access to
+sensitive network services. Deployments with stronger isolation requirements
+should also enforce outbound firewall or proxy rules; the app is intended for
+local use, not as a publicly exposed URL-fetching service.
 
 ## Local report lifecycle
 
