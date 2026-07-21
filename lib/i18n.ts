@@ -25,9 +25,9 @@ const zh = {
   moveProductDown: "向后移动",
   localApiTitle: "本地 API 设置",
   sessionKeyActive: "正在使用仅限当前 session 的 key",
-  envKeyFallback: "留空时使用 .env.local 中的 OPENAI_API_KEY",
-  apiKeyPlaceholder: "sk-… 可选的 session key",
-  apiKeyAria: "仅用于当前浏览器 session 的 OpenAI API key",
+  envKeyFallback: "留空时使用 .env.local 中配置的模型凭证",
+  apiKeyPlaceholder: "可选的 session API key",
+  apiKeyAria: "仅用于当前浏览器 session 的模型 API key",
   show: "显示",
   hide: "隐藏",
   clear: "清除",
@@ -257,9 +257,19 @@ const zh = {
     "这是适合分享的安全副本。私人场景、备注、试用详情和手动证据已被移除。",
   invalidImport: "无法导入：这不是有效的 FitLens JSON 报告。",
   analyzeFailed: "分析失败，请稍后再试。",
-  invalidKey: "OpenAI API key 格式不正确。",
+  invalidKey: "模型 API key 格式不正确。",
   missingKey:
-    "请在本地 API 设置中临时输入自己的 OpenAI API key，或在 .env.local 配置 OPENAI_API_KEY。",
+    "请在本地 API 设置中临时输入自己的 API key，或在 .env.local 配置模型 provider 凭证。",
+  providerUnsupported: "FITLENS_MODEL_PROVIDER 配置无效。",
+  providerModelInvalid: "模型名称缺失或格式无效。",
+  providerBaseUrlInvalid:
+    "模型 base URL 无效。远程地址必须使用 HTTPS；HTTP 仅允许 localhost、127.0.0.1 或 ::1，且 URL 不得包含凭证、查询参数或片段。",
+  providerBaseUrlRequired: "compatible provider 需要配置 FITLENS_MODEL_BASE_URL。",
+  providerAuthenticationFailed: "模型 provider 拒绝了凭证，请检查 API key。",
+  providerRateLimited: "模型 provider 暂时限流，请稍后重试。",
+  providerConnectionFailed: "无法连接模型 provider，请检查它是否正在运行以及 base URL 是否正确。",
+  providerRequestRejected: "模型 provider 拒绝了结构化分析请求，请检查模型是否支持 Responses API 与结构化输出。",
+  providerRequestFailed: "模型 provider 请求失败，请检查本地配置后重试。",
   invalidInput: "输入格式不正确，请检查 URL、场景描述和比较维度。",
   modelFailed: "模型未返回可用的结构化结果。",
   genericFailure: "分析失败，请稍后再试。",
@@ -301,9 +311,9 @@ const en: Record<MessageKey, string> = {
   moveProductDown: "Move later",
   localApiTitle: "Local API setup",
   sessionKeyActive: "Using a session-only key",
-  envKeyFallback: "Uses OPENAI_API_KEY from .env.local when left blank",
-  apiKeyPlaceholder: "sk-… optional session key",
-  apiKeyAria: "OpenAI API key for this browser session",
+  envKeyFallback: "Uses the model credentials configured in .env.local when left blank",
+  apiKeyPlaceholder: "Optional session API key",
+  apiKeyAria: "Model API key for this browser session",
   show: "Show",
   hide: "Hide",
   clear: "Clear",
@@ -541,9 +551,25 @@ const en: Record<MessageKey, string> = {
     "This is a share-safe copy. Private context, notes, trial details, and manual evidence were removed.",
   invalidImport: "Unable to import: this is not a valid FitLens JSON report.",
   analyzeFailed: "Analysis failed. Please try again.",
-  invalidKey: "The OpenAI API key format is invalid.",
+  invalidKey: "The model API key format is invalid.",
   missingKey:
-    "Enter your OpenAI API key in Local API setup, or configure OPENAI_API_KEY in .env.local.",
+    "Enter an API key in Local API setup, or configure the model provider credentials in .env.local.",
+  providerUnsupported: "FITLENS_MODEL_PROVIDER is not supported.",
+  providerModelInvalid: "The configured model name is missing or invalid.",
+  providerBaseUrlInvalid:
+    "The model base URL is invalid. Remote endpoints must use HTTPS; HTTP is allowed only for localhost, 127.0.0.1, or ::1. Credentials, query strings, and fragments are not allowed in the URL.",
+  providerBaseUrlRequired:
+    "The compatible provider requires FITLENS_MODEL_BASE_URL.",
+  providerAuthenticationFailed:
+    "The model provider rejected the credentials. Check the API key.",
+  providerRateLimited:
+    "The model provider is rate limiting requests. Try again shortly.",
+  providerConnectionFailed:
+    "FitLens could not reach the model provider. Check that it is running and that the base URL is correct.",
+  providerRequestRejected:
+    "The model provider rejected the structured analysis request. Check that the model supports the Responses API and structured outputs.",
+  providerRequestFailed:
+    "The model provider request failed. Check the local configuration and try again.",
   invalidInput:
     "Invalid input. Check the URLs, use-case description, and comparison criteria.",
   modelFailed: "The model did not return a usable structured result.",
