@@ -2661,6 +2661,160 @@ footer {
   font-size: 8px;
 }
 
+.pricing-card {
+  margin: 0 0 24px;
+  padding: 16px;
+  border: 1px solid rgba(250, 179, 135, 0.22);
+  border-radius: 16px;
+  background: linear-gradient(145deg, rgba(250, 179, 135, 0.07), rgba(17, 17, 27, 0.16));
+}
+
+.pricing-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.pricing-heading h4 {
+  margin: 0 0 5px;
+  color: var(--cream);
+  font-size: 12px;
+}
+
+.pricing-heading p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.55;
+}
+
+.pricing-heading > span {
+  padding: 5px 8px;
+  flex: 0 0 auto;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  font-family: "DM Mono", monospace;
+  font-size: 7px;
+  text-transform: uppercase;
+}
+
+.pricing-heading > span.free {
+  border-color: rgba(166, 227, 161, 0.28);
+  background: rgba(166, 227, 161, 0.08);
+  color: var(--green);
+}
+
+.pricing-heading > span.paid {
+  border-color: rgba(250, 179, 135, 0.3);
+  color: var(--peach);
+}
+
+.pricing-plans {
+  margin-top: 13px;
+  display: grid;
+  gap: 8px;
+}
+
+.pricing-plans > a {
+  padding: 11px 12px;
+  display: block;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: rgba(17, 17, 27, 0.24);
+  color: inherit;
+  text-decoration: none;
+  transition: border-color 160ms ease, transform 160ms ease;
+}
+
+.pricing-plans > a:hover {
+  border-color: rgba(250, 179, 135, 0.35);
+  transform: translateY(-1px);
+}
+
+.pricing-plans > a > div:first-child,
+.pricing-plans > a > p {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.pricing-plans > a > div:first-child strong {
+  color: var(--cream);
+  font-size: 10px;
+}
+
+.pricing-plans > a > p {
+  margin: 8px 0;
+}
+
+.pricing-plans > a > p b {
+  color: var(--peach);
+  font-family: "DM Mono", monospace;
+  font-size: 16px;
+}
+
+.pricing-plans > a > p small {
+  color: var(--muted);
+  font-family: "DM Mono", monospace;
+  font-size: 8px;
+}
+
+.pricing-plans dl,
+.pricing-plans dl div {
+  margin: 0;
+}
+
+.pricing-plans dl div {
+  display: grid;
+  grid-template-columns: 48px 1fr;
+  gap: 8px;
+  padding-top: 5px;
+}
+
+.pricing-plans dt,
+.pricing-plans dd {
+  margin: 0;
+  color: var(--muted);
+  font-size: 8px;
+  line-height: 1.45;
+}
+
+.pricing-plans dt {
+  color: var(--subtle);
+  font-family: "DM Mono", monospace;
+  text-transform: uppercase;
+}
+
+.pricing-empty {
+  margin: 0;
+  padding: 12px;
+  border: 1px dashed var(--line);
+  border-radius: 10px;
+  color: var(--muted);
+  font-size: 9px;
+  text-align: center;
+}
+
+.pricing-uncertainty {
+  margin: 12px 0 0;
+  padding-top: 11px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 8px;
+  line-height: 1.5;
+}
+
+.pricing-uncertainty strong {
+  margin-right: 7px;
+  color: var(--peach);
+  font-family: "DM Mono", monospace;
+  font-size: 7px;
+  text-transform: uppercase;
+}
+
 .research-notes-card {
   margin-top: 24px;
   padding: 30px;

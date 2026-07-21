@@ -33,6 +33,7 @@ import {
 import type {
   ComparisonCriterion,
   ComparisonResult,
+  BillingCadence,
   Evidence,
   EvidenceLevel,
   TrialResult,
@@ -84,6 +85,18 @@ function conflictTopicLabel(topic: string, t: Messages) {
   }[topic] ?? t.conflictTopicOther;
 }
 
+function cadenceLabel(cadence: BillingCadence, t: Messages) {
+  return {
+    free: t.cadenceFree,
+    monthly: t.cadenceMonthly,
+    yearly: t.cadenceYearly,
+    "one-time": t.cadenceOneTime,
+    "usage-based": t.cadenceUsageBased,
+    custom: t.cadenceCustom,
+    unknown: t.cadenceUnknown,
+  }[cadence];
+}
+
 function comparisonAsMarkdown(
   result: ComparisonResult,
   notes: string,
@@ -104,8 +117,26 @@ function comparisonAsMarkdown(
     skipped: t.trialSkipped,
   };
   const productSections = result.products
-    .map(
-      (product) => `## ${product.name} — ${product.score}/100
+    .map((product) => {
+      const pricing = product.pricing;
+      const pricingSection = pricing
+        ? `### ${t.markdownPricing}
+${pricing.summary}
+
+${pricing.plans.length > 0
+  ? pricing.plans
+      .map(
+        (plan) =>
+          `- **${plan.name}: ${plan.price} · ${cadenceLabel(plan.cadence, t)}** — ${t.pricingAudience}: ${plan.audience}${plan.limits.length ? `; ${t.pricingLimits}: ${plan.limits.join("; ")}` : ""} ([${evidenceLabels[plan.evidenceLevel]}](${plan.sourceUrl}))`,
+      )
+      .join("\n")
+  : `- ${t.pricingNoPlans}`}
+
+**${t.pricingUncertainty}:** ${pricing.uncertainty}
+
+`
+        : "";
+      return `## ${product.name} — ${product.score}/100
 
 ${product.verdict}
 
@@ -115,14 +146,14 @@ ${product.strengths.map((item) => `- ${item}`).join("\n")}
 ### ${t.markdownTradeoffs}
 ${product.tradeoffs.map((item) => `- ${item}`).join("\n")}
 
-### ${t.markdownEvidence}
+${pricingSection}### ${t.markdownEvidence}
 ${product.evidence
   .map(
     (item) =>
       `- **${evidenceLabels[item.level]}:** ${item.claim} ([${item.sourceLabel}](${item.sourceUrl}))`,
   )
-  .join("\n")}`,
-    )
+  .join("\n")}`;
+    })
     .join("\n\n");
   const conflictSection = conflicts.length
     ? `## ${t.markdownConflicts}\n${conflicts
@@ -1491,6 +1522,73 @@ export function CompareWorkbench({
               </div>
 
               <p className="product-verdict">{product.verdict}</p>
+
+              {product.pricing && (
+                <section className="pricing-card" aria-label={t.pricingTitle}>
+                  <div className="pricing-heading">
+                    <div>
+                      <h4>{t.pricingTitle}</h4>
+                      <p>{product.pricing.summary}</p>
+                    </div>
+                    <span
+                      className={
+                        product.pricing.hasFreeOption === true
+                          ? "free"
+                          : product.pricing.hasFreeOption === false
+                            ? "paid"
+                            : "unknown"
+                      }
+                    >
+                      {product.pricing.hasFreeOption === true
+                        ? t.pricingFree
+                        : product.pricing.hasFreeOption === false
+                          ? t.pricingNoFree
+                          : t.pricingFreeUnknown}
+                    </span>
+                  </div>
+                  <div className="pricing-plans">
+                    {product.pricing.plans.length > 0 ? (
+                      product.pricing.plans.map((plan) => (
+                        <a
+                          href={plan.sourceUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          key={`${plan.name}-${plan.price}-${plan.sourceUrl}`}
+                        >
+                          <div>
+                            <strong>{plan.name}</strong>
+                            <span className={`evidence-badge ${plan.evidenceLevel}`}>
+                              {evidenceLabels[plan.evidenceLevel]}
+                            </span>
+                          </div>
+                          <p>
+                            <b>{plan.price}</b>
+                            <small>{cadenceLabel(plan.cadence, t)}</small>
+                          </p>
+                          <dl>
+                            <div>
+                              <dt>{t.pricingAudience}</dt>
+                              <dd>{plan.audience}</dd>
+                            </div>
+                            {plan.limits.length > 0 && (
+                              <div>
+                                <dt>{t.pricingLimits}</dt>
+                                <dd>{plan.limits.join(" · ")}</dd>
+                              </div>
+                            )}
+                          </dl>
+                        </a>
+                      ))
+                    ) : (
+                      <p className="pricing-empty">{t.pricingNoPlans}</p>
+                    )}
+                  </div>
+                  <p className="pricing-uncertainty">
+                    <strong>{t.pricingUncertainty}</strong>
+                    {product.pricing.uncertainty}
+                  </p>
+                </section>
+              )}
 
               <div className="pros-cons">
                 <div>

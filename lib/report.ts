@@ -39,6 +39,35 @@ const evidenceSchema = z
   })
   .passthrough();
 
+const pricingPlanSchema = z
+  .object({
+    name: z.string(),
+    price: z.string(),
+    cadence: z.enum([
+      "free",
+      "monthly",
+      "yearly",
+      "one-time",
+      "usage-based",
+      "custom",
+      "unknown",
+    ]),
+    audience: z.string(),
+    limits: z.array(z.string()),
+    sourceUrl: httpUrlSchema,
+    evidenceLevel: z.enum(["verified", "vendor", "inferred"]),
+  })
+  .passthrough();
+
+const pricingSchema = z
+  .object({
+    hasFreeOption: z.boolean().nullable(),
+    summary: z.string(),
+    plans: z.array(pricingPlanSchema),
+    uncertainty: z.string(),
+  })
+  .passthrough();
+
 const evidenceConflictSchema = z
   .object({
     id: z.string(),
@@ -63,6 +92,7 @@ const productSchema = z
     strengths: z.array(z.string()),
     tradeoffs: z.array(z.string()),
     evidence: z.array(evidenceSchema),
+    pricing: pricingSchema.optional(),
   })
   .passthrough();
 

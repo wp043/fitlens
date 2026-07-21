@@ -73,6 +73,22 @@ export const sampleComparison: ComparisonResult = {
           sourceUrl: "https://github.com/manaflow-ai/cmux",
         },
       ],
+      pricing: {
+        hasFreeOption: true,
+        summary: "公开材料显示产品可免费使用；未发现付费套餐表。",
+        plans: [
+          {
+            name: "Free",
+            price: "$0",
+            cadence: "free",
+            audience: "macOS 用户",
+            limits: ["公开页面未说明未来付费功能边界"],
+            sourceUrl: "https://cmux.com/",
+            evidenceLevel: "vendor",
+          },
+        ],
+        uncertainty: "没有公开的长期定价承诺或未来套餐信息。",
+      },
     },
     {
       name: "Otty",
@@ -113,6 +129,22 @@ export const sampleComparison: ComparisonResult = {
           sourceUrl: "https://otty.sh/",
         },
       ],
+      pricing: {
+        hasFreeOption: true,
+        summary: "macOS 版本目前标为免费且无需账号。",
+        plans: [
+          {
+            name: "macOS",
+            price: "$0",
+            cadence: "free",
+            audience: "macOS 用户",
+            limits: ["Windows 与 Linux 尚未正式提供"],
+            sourceUrl: "https://otty.sh/",
+            evidenceLevel: "vendor",
+          },
+        ],
+        uncertainty: "未来商业模式和高级功能边界未公开。",
+      },
     },
   ],
   dimensions: [
@@ -228,6 +260,22 @@ export const sampleComparisonEn: ComparisonResult = {
           sourceLabel: "README",
         },
       ],
+      pricing: {
+        hasFreeOption: true,
+        summary: "Public materials currently describe the product as free; no paid tier table was found.",
+        plans: [
+          {
+            name: "Free",
+            price: "$0",
+            cadence: "free",
+            audience: "macOS users",
+            limits: ["Future paid feature boundaries are not documented"],
+            sourceUrl: "https://cmux.com/",
+            evidenceLevel: "vendor",
+          },
+        ],
+        uncertainty: "There is no published long-term pricing commitment or future tier information.",
+      },
     },
     {
       ...sampleComparison.products[1],
@@ -264,6 +312,22 @@ export const sampleComparisonEn: ComparisonResult = {
           sourceLabel: "Homepage inspection",
         },
       ],
+      pricing: {
+        hasFreeOption: true,
+        summary: "The macOS version is currently described as free and account-free.",
+        plans: [
+          {
+            name: "macOS",
+            price: "$0",
+            cadence: "free",
+            audience: "macOS users",
+            limits: ["Windows and Linux are not generally available"],
+            sourceUrl: "https://otty.sh/",
+            evidenceLevel: "vendor",
+          },
+        ],
+        uncertainty: "The future business model and paid feature boundaries are not public.",
+      },
     },
   ],
   dimensions: [

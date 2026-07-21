@@ -20,6 +20,32 @@ export interface Evidence {
   capturedAt?: string;
 }
 
+export type BillingCadence =
+  | "free"
+  | "monthly"
+  | "yearly"
+  | "one-time"
+  | "usage-based"
+  | "custom"
+  | "unknown";
+
+export interface PricingPlan {
+  name: string;
+  price: string;
+  cadence: BillingCadence;
+  audience: string;
+  limits: string[];
+  sourceUrl: string;
+  evidenceLevel: EvidenceLevel;
+}
+
+export interface ProductPricing {
+  hasFreeOption: boolean | null;
+  summary: string;
+  plans: PricingPlan[];
+  uncertainty: string;
+}
+
 export interface ProductResult {
   name: string;
   tagline: string;
@@ -32,6 +58,7 @@ export interface ProductResult {
   strengths: string[];
   tradeoffs: string[];
   evidence: Evidence[];
+  pricing?: ProductPricing;
 }
 
 export interface DimensionResult {
