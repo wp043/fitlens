@@ -39,6 +39,9 @@ priorities change the outcome, and important unknowns should remain visible.
 - Keeps recent reports, research notes, and comparison templates in the local
   browser.
 - Imports and exports portable JSON reports and exports readable Markdown.
+- Creates share-safe Markdown and JSON copies that retain conclusions and
+  public evidence while removing private context, notes, trials, revisions,
+  criterion hints, and manually entered evidence.
 - Accepts an OpenAI API key from `.env.local` or only for the current browser
   session.
 - Rejects local, private-network, credential-bearing, and non-HTTP URLs.
@@ -238,10 +241,18 @@ flowchart TB
 | Key configured in `.env.local` | Local server environment | Until the file changes |
 | Product source material | Sent to the configured OpenAI model | Governed by the API account |
 | JSON and Markdown exports | User-selected local files | Controlled by the user |
+| Share-safe exports | User-selected local files | Private research is removed before download |
 | Locale | `localStorage` and optional `?lang=` query | Until changed |
 
 API keys are excluded from report history, notes, JSON, Markdown, and source
 files.
+
+Share-safe exports provide an additional privacy boundary for reports sent to
+other people. They keep the recommendation, scores, pricing, criteria labels
+and weights, unknowns, and collected public evidence. They omit the original
+workflow context, research notes, trial plans and results, revision history,
+criterion hints, and all manually entered evidence. Regular exports remain
+complete local backups and should be treated as private.
 
 ## Local report lifecycle
 
@@ -325,6 +336,8 @@ templates, report refresh, local revision history, deterministic change
 summaries, manual evidence capture, trial scoring, and source freshness.
 It also includes evidence conflict detection, structured pricing comparison,
 deterministic confidence calibration, and bilingual report output.
+Reports can also be exported as bilingual share-safe copies without private
+research details.
 
 The most valuable next changes, ordered by product impact:
 

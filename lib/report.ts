@@ -192,6 +192,7 @@ const savedReportSchema = z
       .default([]),
     conflicts: z.array(evidenceConflictSchema).optional(),
     confidenceCalibrations: z.array(confidenceCalibrationSchema).optional(),
+    redactedAt: z.string().optional(),
   })
   .passthrough();
 
@@ -218,6 +219,7 @@ export interface SavedReport {
   trialResults: TrialResult[];
   conflicts: EvidenceConflict[];
   confidenceCalibrations: ConfidenceCalibration[];
+  redactedAt?: string;
 }
 
 export interface EvidenceCoverage {
