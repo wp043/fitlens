@@ -1,4 +1,6 @@
 import * as cheerio from "cheerio";
+import { lookup } from "node:dns/promises";
+import { isIP } from "node:net";
 
 export type SourceErrorCode =
   | "invalidUrl"
@@ -6,6 +8,7 @@ export type SourceErrorCode =
   | "credentialsNotAllowed"
   | "privateNetwork"
   | "fetchFailed"
+  | "unsupportedContentType"
   | "pageTooLarge"
   | "githubFailed";
 
@@ -49,16 +52,123 @@ const PRIVATE_HOST_PATTERNS = [
   /\.localhost$/i,
   /\.local$/i,
   /\.internal$/i,
-  /^0(?:\.|$)/,
-  /^10(?:\.|$)/,
-  /^127(?:\.|$)/,
-  /^169\.254(?:\.|$)/,
-  /^172\.(?:1[6-9]|2\d|3[01])(?:\.|$)/,
-  /^192\.168(?:\.|$)/,
-  /^\[?::1\]?$/,
-  /^\[?f[cd][0-9a-f]{2}:/i,
-  /^\[?fe80:/i,
 ];
+
+export interface SourceNetworkDependencies {
+  fetch: typeof globalThis.fetch;
+  resolveHostname: (hostname: string) => Promise<string[]>;
+}
+
+const defaultNetworkDependencies: SourceNetworkDependencies = {
+  fetch: globalThis.fetch,
+  async resolveHostname(hostname) {
+    const results = await lookup(hostname, { all: true, verbatim: true });
+    return results.map(({ address }) => address);
+  },
+};
+
+function ipv4Number(address: string): number | undefined {
+  if (isIP(address) !== 4) return undefined;
+  const octets = address.split(".").map(Number);
+  return (
+    ((octets[0] << 24) | (octets[1] << 16) | (octets[2] << 8) | octets[3]) >>>
+    0
+  );
+}
+
+function inV4Range(value: number, base: number, prefix: number): boolean {
+  const mask = prefix === 0 ? 0 : (0xffffffff << (32 - prefix)) >>> 0;
+  return (value & mask) === (base & mask);
+}
+
+function isForbiddenIpv4(address: string): boolean {
+  const value = ipv4Number(address);
+  if (value === undefined) return true;
+  return [
+    ["0.0.0.0", 8],
+    ["10.0.0.0", 8],
+    ["100.64.0.0", 10],
+    ["127.0.0.0", 8],
+    ["169.254.0.0", 16],
+    ["172.16.0.0", 12],
+    ["192.0.0.0", 24],
+    ["192.0.2.0", 24],
+    ["192.88.99.0", 24],
+    ["192.168.0.0", 16],
+    ["198.18.0.0", 15],
+    ["198.51.100.0", 24],
+    ["203.0.113.0", 24],
+    ["224.0.0.0", 4],
+    ["240.0.0.0", 4],
+  ].some(([base, prefix]) =>
+    inV4Range(value, ipv4Number(base as string)!, prefix as number),
+  );
+}
+
+function expandIpv6(address: string): number[] | undefined {
+  const normalized = address.toLowerCase().split("%")[0];
+  if (isIP(normalized) !== 6) return undefined;
+  const [leftRaw, rightRaw] = normalized.split("::");
+  if (normalized.split("::").length > 2) return undefined;
+
+  const expandSide = (side: string): number[] => {
+    if (!side) return [];
+    return side.split(":").flatMap((part) => {
+      const embedded = ipv4Number(part);
+      return embedded === undefined
+        ? [Number.parseInt(part, 16)]
+        : [embedded >>> 16, embedded & 0xffff];
+    });
+  };
+  const left = expandSide(leftRaw);
+  const right = expandSide(rightRaw ?? "");
+  const missing = 8 - left.length - right.length;
+  if ((rightRaw === undefined && missing !== 0) || missing < 0) return undefined;
+  return [...left, ...Array(missing).fill(0), ...right];
+}
+
+function ipv6Prefix(parts: number[], base: number[], bits: number): boolean {
+  const full = Math.floor(bits / 16);
+  const remaining = bits % 16;
+  for (let index = 0; index < full; index += 1) {
+    if (parts[index] !== base[index]) return false;
+  }
+  if (!remaining) return true;
+  const mask = (0xffff << (16 - remaining)) & 0xffff;
+  return (parts[full] & mask) === (base[full] & mask);
+}
+
+function isForbiddenIpv6(address: string): boolean {
+  const parts = expandIpv6(address);
+  if (!parts) return true;
+
+  // IPv4-mapped addresses inherit the embedded IPv4 address's classification.
+  if (parts.slice(0, 5).every((part) => part === 0) && parts[5] === 0xffff) {
+    const embedded = `${parts[6] >>> 8}.${parts[6] & 255}.${parts[7] >>> 8}.${parts[7] & 255}`;
+    return isForbiddenIpv4(embedded);
+  }
+
+  // Only globally routable unicast space is eligible. This also excludes
+  // deprecated IPv4-compatible addresses and future/reserved allocations.
+  if (!ipv6Prefix(parts, expandIpv6("2000::")!, 3)) return true;
+
+  const ranges: Array<[string, number]> = [
+    ["2001::", 23],
+    ["2001:db8::", 32],
+    ["2002::", 16],
+    ["3fff::", 20],
+  ];
+  return ranges.some(([base, bits]) =>
+    ipv6Prefix(parts, expandIpv6(base)!, bits),
+  );
+}
+
+export function isPublicIpAddress(address: string): boolean {
+  const version = isIP(address.split("%")[0]);
+  if (version === 4) return !isForbiddenIpv4(address);
+  if (version === 6) return !isForbiddenIpv6(address);
+  return false;
+}
 
 export function toPublicUrl(raw: string): URL {
   let parsed: URL;
@@ -74,14 +184,38 @@ export function toPublicUrl(raw: string): URL {
   if (parsed.username || parsed.password) {
     throw new SourceError("credentialsNotAllowed");
   }
+  const hostname = parsed.hostname.replace(/^\[|\]$/g, "");
   if (
-    PRIVATE_HOST_PATTERNS.some((pattern) => pattern.test(parsed.hostname))
+    PRIVATE_HOST_PATTERNS.some((pattern) => pattern.test(hostname)) ||
+    (isIP(hostname) !== 0 && !isPublicIpAddress(hostname))
   ) {
     throw new SourceError("privateNetwork");
   }
 
   parsed.hash = "";
   return parsed;
+}
+
+export async function assertPublicHost(
+  url: URL,
+  dependencies: SourceNetworkDependencies = defaultNetworkDependencies,
+): Promise<void> {
+  const validated = toPublicUrl(url.toString());
+  const hostname = validated.hostname.replace(/^\[|\]$/g, "");
+  if (isIP(hostname)) {
+    if (!isPublicIpAddress(hostname)) throw new SourceError("privateNetwork");
+    return;
+  }
+
+  let addresses: string[];
+  try {
+    addresses = await dependencies.resolveHostname(hostname);
+  } catch {
+    throw new SourceError("fetchFailed", hostname);
+  }
+  if (!addresses.length || addresses.some((address) => !isPublicIpAddress(address))) {
+    throw new SourceError("privateNetwork");
+  }
 }
 
 function githubRepoFromUrl(raw: string): string | undefined {
@@ -96,29 +230,128 @@ function githubRepoFromUrl(raw: string): string | undefined {
   }
 }
 
-async function fetchText(url: string, accept = "text/html"): Promise<string> {
-  const response = await fetch(url, {
-    headers: {
-      Accept: accept,
-      "User-Agent": "FitLens/0.2 (local product research tool)",
-    },
-    redirect: "follow",
-    signal: AbortSignal.timeout(12_000),
-  });
+interface RemoteTextOptions {
+  accept: string;
+  allowedContentTypes: string[];
+  maxBytes: number;
+  headers?: Record<string, string>;
+  maxRedirects?: number;
+  statusError?: "fetchFailed" | "githubFailed";
+}
 
-  if (!response.ok) {
-    throw new SourceError(
-      "fetchFailed",
-      `${new URL(url).hostname} (${response.status})`,
-    );
-  }
-
-  const contentLength = Number(response.headers.get("content-length") ?? 0);
-  if (contentLength > 2_000_000) {
+async function readLimitedText(response: Response, maxBytes: number) {
+  const declaredSize = Number(response.headers.get("content-length") ?? 0);
+  if (Number.isFinite(declaredSize) && declaredSize > maxBytes) {
     throw new SourceError("pageTooLarge");
   }
+  if (!response.body) return "";
 
-  return (await response.text()).slice(0, 1_000_000);
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let size = 0;
+  let text = "";
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > maxBytes) {
+      await reader.cancel();
+      throw new SourceError("pageTooLarge");
+    }
+    text += decoder.decode(value, { stream: true });
+  }
+  return text + decoder.decode();
+}
+
+export async function fetchRemoteText(
+  rawUrl: string,
+  options: RemoteTextOptions,
+  dependencies: SourceNetworkDependencies = defaultNetworkDependencies,
+): Promise<{ text: string; finalUrl: string }> {
+  let current = toPublicUrl(rawUrl);
+  const credentialOrigin = current.origin;
+  const maxRedirects = options.maxRedirects ?? 5;
+
+  for (let redirectCount = 0; redirectCount <= maxRedirects; redirectCount += 1) {
+    await assertPublicHost(current, dependencies);
+    let response: Response;
+    try {
+      const requestHeaders: Record<string, string> = {
+        Accept: options.accept,
+        "User-Agent": "FitLens/0.2 (local product research tool)",
+        ...options.headers,
+      };
+      if (current.origin !== credentialOrigin) {
+        for (const name of Object.keys(requestHeaders)) {
+          if (["authorization", "cookie"].includes(name.toLowerCase())) {
+            delete requestHeaders[name];
+          }
+        }
+      }
+      response = await dependencies.fetch(current, {
+        headers: requestHeaders,
+        redirect: "manual",
+        signal: AbortSignal.timeout(12_000),
+      });
+    } catch {
+      throw new SourceError("fetchFailed", current.hostname);
+    }
+
+    if ([301, 302, 303, 307, 308].includes(response.status)) {
+      const location = response.headers.get("location");
+      await response.body?.cancel();
+      if (!location || redirectCount === maxRedirects) {
+        throw new SourceError("fetchFailed", `${current.hostname} (redirect)`);
+      }
+      try {
+        current = toPublicUrl(new URL(location, current).toString());
+      } catch (error) {
+        if (error instanceof SourceError) throw error;
+        throw new SourceError("fetchFailed", `${current.hostname} (redirect)`);
+      }
+      continue;
+    }
+
+    if (!response.ok) {
+      await response.body?.cancel();
+      throw new SourceError(
+        options.statusError ?? "fetchFailed",
+        `${current.hostname} (${response.status})`,
+      );
+    }
+
+    const contentType = response.headers
+      .get("content-type")
+      ?.split(";", 1)[0]
+      .trim()
+      .toLowerCase();
+    if (!contentType || !options.allowedContentTypes.includes(contentType)) {
+      await response.body?.cancel();
+      throw new SourceError("unsupportedContentType");
+    }
+
+    return {
+      text: await readLimitedText(response, options.maxBytes),
+      finalUrl: current.toString(),
+    };
+  }
+
+  throw new SourceError("fetchFailed");
+}
+
+async function fetchText(
+  url: string,
+  dependencies: SourceNetworkDependencies,
+): Promise<{ text: string; finalUrl: string }> {
+  return fetchRemoteText(
+    url,
+    {
+      accept: "text/html,application/xhtml+xml",
+      allowedContentTypes: ["text/html", "application/xhtml+xml"],
+      maxBytes: 1_000_000,
+    },
+    dependencies,
+  );
 }
 
 function compactWhitespace(value: string): string {
@@ -158,7 +391,10 @@ function extractPage(html: string, pageUrl: string) {
   return { title, description, body, repoUrl };
 }
 
-async function collectGitHub(fullName: string) {
+async function collectGitHub(
+  fullName: string,
+  dependencies: SourceNetworkDependencies,
+) {
   const headers: Record<string, string> = {
     Accept: "application/vnd.github+json",
     "User-Agent": "FitLens/0.1",
@@ -168,15 +404,18 @@ async function collectGitHub(fullName: string) {
     headers.Authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
   }
 
-  const response = await fetch(`https://api.github.com/repos/${fullName}`, {
-    headers,
-    signal: AbortSignal.timeout(12_000),
-  });
-  if (!response.ok) {
-    throw new SourceError("githubFailed", String(response.status));
-  }
-
-  const repo = (await response.json()) as {
+  const metadata = await fetchRemoteText(
+    `https://api.github.com/repos/${fullName}`,
+    {
+      accept: headers.Accept,
+      allowedContentTypes: ["application/json", "application/vnd.github+json"],
+      maxBytes: 1_000_000,
+      headers,
+      statusError: "githubFailed",
+    },
+    dependencies,
+  );
+  let repo: {
     full_name: string;
     html_url: string;
     homepage?: string | null;
@@ -191,17 +430,42 @@ async function collectGitHub(fullName: string) {
     topics?: string[];
     name: string;
   };
+  try {
+    repo = JSON.parse(metadata.text) as typeof repo;
+  } catch {
+    throw new SourceError("githubFailed", "invalid response");
+  }
 
   let readme = "";
-  const readmeResponse = await fetch(
-    `https://api.github.com/repos/${fullName}/readme`,
-    {
-      headers: { ...headers, Accept: "application/vnd.github.raw+json" },
-      signal: AbortSignal.timeout(12_000),
-    },
-  );
-  if (readmeResponse.ok) {
-    readme = (await readmeResponse.text()).slice(0, 16_000);
+  try {
+    const readmeResponse = await fetchRemoteText(
+      `https://api.github.com/repos/${fullName}/readme`,
+      {
+        accept: "application/vnd.github.raw+json",
+        allowedContentTypes: [
+          "application/json",
+          "application/vnd.github.raw+json",
+          "text/plain",
+          "application/octet-stream",
+        ],
+        maxBytes: 16_000,
+        headers: { ...headers, Accept: "application/vnd.github.raw+json" },
+        statusError: "githubFailed",
+      },
+      dependencies,
+    );
+    readme = readmeResponse.text;
+  } catch (error) {
+    // Repository metadata remains useful when a README does not exist. Network
+    // policy errors are never suppressed because they describe an unsafe hop.
+    if (
+      error instanceof SourceError &&
+      ["privateNetwork", "credentialsNotAllowed", "httpOnly"].includes(
+        error.code,
+      )
+    ) {
+      throw error;
+    }
   }
 
   return {
@@ -226,12 +490,13 @@ async function collectGitHub(fullName: string) {
 
 export async function collectProductSource(
   rawUrl: string,
+  dependencies: SourceNetworkDependencies = defaultNetworkDependencies,
 ): Promise<CollectedSource> {
   const input = toPublicUrl(rawUrl);
   const directRepo = githubRepoFromUrl(input.toString());
 
   if (directRepo) {
-    const github = await collectGitHub(directRepo);
+    const github = await collectGitHub(directRepo, dependencies);
     return {
       inputUrl: input.toString(),
       homepageUrl: github.homepageUrl,
@@ -243,18 +508,18 @@ export async function collectProductSource(
     };
   }
 
-  const html = await fetchText(input.toString());
-  const page = extractPage(html, input.toString());
+  const html = await fetchText(input.toString(), dependencies);
+  const page = extractPage(html.text, html.finalUrl);
   const discoveredRepo = page.repoUrl
     ? githubRepoFromUrl(page.repoUrl)
     : undefined;
   const github = discoveredRepo
-    ? await collectGitHub(discoveredRepo).catch(() => undefined)
+    ? await collectGitHub(discoveredRepo, dependencies).catch(() => undefined)
     : undefined;
 
   return {
     inputUrl: input.toString(),
-    homepageUrl: input.toString(),
+    homepageUrl: html.finalUrl,
     name: page.title.split(/[—|·-]/)[0]?.trim() || input.hostname,
     description: page.description,
     sourceMode: github ? "open-source" : "website-only",

@@ -268,6 +268,7 @@ const zh = {
   credentialsNotAllowed: "URL 不能包含用户名或密码。",
   privateNetwork: "不能分析本地或私有网络地址。",
   fetchFailed: "抓取网页失败",
+  unsupportedContentType: "网页返回了不支持的内容类型。",
   pageTooLarge: "网页内容过大，暂时无法分析。",
   githubFailed: "读取 GitHub repository 失败。",
   exampleContext:
@@ -552,6 +553,7 @@ const en: Record<MessageKey, string> = {
   credentialsNotAllowed: "URLs cannot contain a username or password.",
   privateNetwork: "Local and private-network addresses cannot be analyzed.",
   fetchFailed: "Failed to fetch the webpage",
+  unsupportedContentType: "The webpage returned an unsupported content type.",
   pageTooLarge: "The webpage is too large to analyze.",
   githubFailed: "Failed to read the GitHub repository.",
   exampleContext:
