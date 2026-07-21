@@ -5,6 +5,7 @@ import type {
   ComparisonResult,
   PriorityWeights,
   ProductResult,
+  TrialResult,
 } from "@/lib/types";
 
 const httpUrlSchema = z
@@ -33,6 +34,7 @@ const evidenceSchema = z
     sourceLabel: z.string(),
     sourceUrl: httpUrlSchema,
     origin: z.enum(["collected", "manual"]).optional(),
+    capturedAt: z.string().optional(),
   })
   .passthrough();
 
@@ -102,6 +104,19 @@ const savedReportSchema = z
     locale: z.enum(["zh-CN", "en"]).optional().default("zh-CN"),
     criteria: z.array(criterionSchema).min(2).max(8).optional(),
     revisions: z.array(resultSchema).max(5).optional().default([]),
+    trialResults: z
+      .array(
+        z
+          .object({
+            task: z.string(),
+            status: z.enum(["untested", "passed", "failed", "skipped"]),
+            note: z.string(),
+            updatedAt: z.string().optional(),
+          })
+          .passthrough(),
+      )
+      .optional()
+      .default([]),
   })
   .passthrough();
 
@@ -125,6 +140,7 @@ export interface SavedReport {
   notes: string;
   locale: Locale;
   revisions: ComparisonResult[];
+  trialResults: TrialResult[];
 }
 
 export interface EvidenceCoverage {
@@ -196,6 +212,14 @@ export function normalizeSavedReport(input: unknown): SavedReport {
         weight: report.priorities[dimension.key] ?? dimension.weight ?? 60,
       })),
     revisions: report.revisions ?? [],
+    trialResults:
+      report.trialResults?.length
+        ? report.trialResults
+        : report.result.trialPlan.map((task) => ({
+            task: task.task,
+            status: "untested" as const,
+            note: "",
+          })),
   } as SavedReport;
 }
 

@@ -24,12 +24,15 @@ import {
 } from "@/lib/criteria";
 import { compareResults, type ComparisonDiff } from "@/lib/diff";
 import { mergeManualEvidence } from "@/lib/evidence";
+import { calculateEvidenceFreshness } from "@/lib/freshness";
 import { calculateWeightedWinner } from "@/lib/scoring";
 import type {
   ComparisonCriterion,
   ComparisonResult,
   Evidence,
   EvidenceLevel,
+  TrialResult,
+  TrialStatus,
   PriorityWeights,
 } from "@/lib/types";
 
@@ -70,11 +73,18 @@ function comparisonAsMarkdown(
   notes: string,
   locale: Locale,
   t: Messages,
+  trialResults: TrialResult[] = [],
 ) {
   const evidenceLabels: Record<EvidenceLevel, string> = {
     verified: t.verified,
     vendor: t.vendor,
     inferred: t.inferred,
+  };
+  const trialStatusLabels: Record<TrialStatus, string> = {
+    untested: t.trialUntested,
+    passed: t.trialPassed,
+    failed: t.trialFailed,
+    skipped: t.trialSkipped,
   };
   const productSections = result.products
     .map(
@@ -117,7 +127,12 @@ ${result.unknowns.map((item) => `- ${item}`).join("\n")}
 
 ## ${t.markdownTrial}
 ${result.trialPlan
-  .map((item, index) => `${index + 1}. **${item.task}** — ${item.reason}`)
+  .map((item, index) => {
+    const trial = trialResults[index];
+    const status = trial ? ` [${trialStatusLabels[trial.status]}]` : "";
+    const note = trial?.note.trim() ? ` — ${trial.note.trim()}` : "";
+    return `${index + 1}. **${item.task}**${status} — ${item.reason}${note}`;
+  })
   .join("\n")}
 
 ${notes.trim() ? `## ${t.markdownNotes}\n${notes.trim()}\n\n` : ""}---
@@ -216,6 +231,7 @@ export function CompareWorkbench({
   );
   const [templateName, setTemplateName] = useState("");
   const [comparisonDiff, setComparisonDiff] = useState<ComparisonDiff>();
+  const [trialResults, setTrialResults] = useState<TrialResult[]>([]);
   const [manualEvidenceProduct, setManualEvidenceProduct] = useState("");
   const [manualEvidenceClaim, setManualEvidenceClaim] = useState("");
   const [manualEvidenceSource, setManualEvidenceSource] = useState("");
@@ -389,6 +405,9 @@ export function CompareWorkbench({
     try {
       const payload = await requestAnalysis();
       setResult(payload);
+      setTrialResults(
+        payload.trialPlan.map((task) => ({ task: task.task, status: "untested", note: "" })),
+      );
       setComparisonDiff(undefined);
       const saved: SavedReport = {
         id: crypto.randomUUID(),
@@ -402,6 +421,11 @@ export function CompareWorkbench({
         notes: "",
         locale,
         revisions: [],
+        trialResults: payload.trialPlan.map((task) => ({
+          task: task.task,
+          status: "untested",
+          note: "",
+        })),
       };
       const nextHistory = [saved, ...history].slice(0, maxSavedReports);
       setHistory(nextHistory);
@@ -446,11 +470,20 @@ export function CompareWorkbench({
         revisions: [...(stored?.revisions ?? []), previous].slice(
           -maxRevisions,
         ),
+        trialResults: stored?.trialResults ?? trialResults,
       };
       const nextHistory = stored
         ? history.map((report) => (report.id === reportId ? saved : report))
         : [saved, ...history].slice(0, maxSavedReports);
       setResult(payload);
+      setTrialResults(
+        stored?.trialResults ??
+          payload.trialPlan.map((task) => ({
+            task: task.task,
+            status: "untested",
+            note: "",
+          })),
+      );
       setComparisonDiff(nextDiff);
       setHistory(nextHistory);
       setCurrentReportId(reportId);
@@ -469,6 +502,7 @@ export function CompareWorkbench({
     setCriteria(cloneCriteria(saved.criteria));
     setActiveTemplateId("");
     setResult(saved.result);
+    setTrialResults(saved.trialResults);
     setCurrentReportId(saved.id);
     setNotes(saved.notes ?? "");
     setManualEvidenceProduct(saved.result.products[0]?.name ?? "");
@@ -495,7 +529,7 @@ export function CompareWorkbench({
   async function copyBrief() {
     if (!result) return;
     await navigator.clipboard.writeText(
-      comparisonAsMarkdown(result, notes, locale, t),
+      comparisonAsMarkdown(result, notes, locale, t, trialResults),
     );
     setCopied(true);
     window.setTimeout(() => setCopied(false), 1_600);
@@ -504,7 +538,7 @@ export function CompareWorkbench({
   function exportMarkdown() {
     if (!result) return;
     const blob = new Blob(
-      [comparisonAsMarkdown(result, notes, locale, t)],
+      [comparisonAsMarkdown(result, notes, locale, t, trialResults)],
       {
       type: "text/markdown;charset=utf-8",
       },
@@ -532,6 +566,7 @@ export function CompareWorkbench({
       notes,
       locale: stored?.locale ?? locale,
       revisions: stored?.revisions ?? [],
+      trialResults,
     };
   }
 
@@ -589,6 +624,32 @@ export function CompareWorkbench({
     window.localStorage.setItem(historyKey, JSON.stringify(nextHistory));
   }
 
+  function updateTrialResult(
+    index: number,
+    update: Partial<Pick<TrialResult, "status" | "note">>,
+  ) {
+    if (!result) return;
+    const nextResults = result.trialPlan.map((task, taskIndex) => ({
+      ...(trialResults[taskIndex] ?? {
+        task: task.task,
+        status: "untested" as const,
+        note: "",
+      }),
+      ...(taskIndex === index ? update : {}),
+      ...(taskIndex === index ? { updatedAt: new Date().toISOString() } : {}),
+    }));
+    setTrialResults(nextResults);
+    if (currentReportId) {
+      const nextHistory = history.map((report) =>
+        report.id === currentReportId
+          ? { ...report, trialResults: nextResults }
+          : report,
+      );
+      setHistory(nextHistory);
+      window.localStorage.setItem(historyKey, JSON.stringify(nextHistory));
+    }
+  }
+
   function addManualEvidence() {
     const productName = manualEvidenceProduct || result?.products[0]?.name;
     if (!result || !productName) return;
@@ -608,6 +669,7 @@ export function CompareWorkbench({
       sourceLabel,
       sourceUrl,
       origin: "manual",
+      capturedAt: new Date().toISOString(),
     };
     const nextResult: ComparisonResult = {
       ...result,
@@ -1282,6 +1344,7 @@ export function CompareWorkbench({
         <div className="product-grid">
           {result.products.map((product, index) => {
             const coverage = calculateEvidenceCoverage(product);
+            const freshness = calculateEvidenceFreshness(product);
             return (
               <article
                 className={`product-card ${index === 0 ? "featured" : ""}`}
@@ -1330,7 +1393,9 @@ export function CompareWorkbench({
                 <p>
                   {coverage.verified} {t.verified} · {coverage.vendor} {t.vendor}{" "}
                   · {coverage.inferred} {t.inferred} · {coverage.sourceCount}{" "}
-                  {t.sources}
+                  {t.sources} · {t.sourceFreshness}: {freshness.fresh} {t.freshSources},{" "}
+                  {freshness.aging} {t.agingSources}, {freshness.stale} {t.staleSources},{" "}
+                  {freshness.unknown} {t.unknownFreshness}
                 </p>
               </div>
 
@@ -1374,7 +1439,11 @@ export function CompareWorkbench({
                       {evidenceLabels[item.level]}
                     </span>
                     <p>{item.claim}</p>
-                    <small>{item.sourceLabel} ↗</small>
+                    <small>
+                      {item.sourceLabel} · {item.capturedAt
+                        ? `${t.checked} ${new Date(item.capturedAt).toLocaleDateString(locale)}`
+                        : t.unknownFreshness} ↗
+                    </small>
                   </a>
                 ))}
               </div>
@@ -1517,6 +1586,28 @@ export function CompareWorkbench({
                 <p>
                   <strong>{item.task}</strong>
                   <small>{item.reason}</small>
+                  <select
+                    aria-label={`${t.trialStatus}: ${item.task}`}
+                    value={trialResults[index]?.status ?? "untested"}
+                    onChange={(event) =>
+                      updateTrialResult(index, {
+                        status: event.target.value as TrialStatus,
+                      })
+                    }
+                  >
+                    <option value="untested">{t.trialUntested}</option>
+                    <option value="passed">{t.trialPassed}</option>
+                    <option value="failed">{t.trialFailed}</option>
+                    <option value="skipped">{t.trialSkipped}</option>
+                  </select>
+                  <textarea
+                    rows={2}
+                    value={trialResults[index]?.note ?? ""}
+                    placeholder={t.trialNotePlaceholder}
+                    onChange={(event) =>
+                      updateTrialResult(index, { note: event.target.value })
+                    }
+                  />
                 </p>
               </div>
             ))}

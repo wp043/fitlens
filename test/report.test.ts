@@ -33,6 +33,13 @@ test("portable reports preserve notes and preference weights", () => {
     notes: "The hands-on test confirmed the notification difference.",
     locale: "en",
     revisions: [],
+    trialResults: [
+      {
+        task: sampleComparison.trialPlan[0].task,
+        status: "passed",
+        note: "Completed in 12 minutes.",
+      },
+    ],
   };
 
   const restored = parseReport(serializeReport(report));
@@ -42,6 +49,8 @@ test("portable reports preserve notes and preference weights", () => {
   assert.deepEqual(restored.priorities, defaultPriorities);
   assert.deepEqual(restored.criteria, criteria);
   assert.deepEqual(restored.revisions, []);
+  assert.equal(restored.trialResults[0].status, "passed");
+  assert.equal(restored.trialResults[0].note, "Completed in 12 minutes.");
   assert.equal(restored.result.products.length, 2);
 });
 
@@ -86,6 +95,7 @@ test("portable reports reject non-HTTP evidence links", () => {
     notes: "",
     locale: "en",
     revisions: [],
+    trialResults: [],
   };
   report.result.products[0].evidence[0].sourceUrl =
     "javascript:alert(document.domain)";

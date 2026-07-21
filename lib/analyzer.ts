@@ -158,7 +158,11 @@ export async function analyzeWithModel(
       url: source.homepageUrl,
       repoUrl: source.repo?.url,
       sourceMode: source.sourceMode,
-      evidence: safeEvidence,
+      evidence: safeEvidence.map((evidence) => ({
+        ...evidence,
+        origin: "collected" as const,
+        capturedAt: new Date().toISOString(),
+      })),
     };
   });
 

@@ -23,6 +23,8 @@ priorities change the outcome, and important unknowns should remain visible.
   dimension, and unknown-item changes.
 - Supports manual evidence capture for pricing, privacy, screenshots, and
   hands-on findings, with manual evidence preserved across refreshes.
+- Turns the suggested trial plan into a saved pass/fail checklist with notes.
+- Records evidence capture times and flags aging or stale sources.
 - Keeps the five most recent source-report revisions with each report.
 - Shows confidence, evidence coverage, unknowns, and a short hands-on trial
   plan.
@@ -250,6 +252,8 @@ lib/
   analyzer.ts            Structured model analysis
   criteria.ts            Localized built-in templates and criteria migration
   diff.ts                Deterministic report-to-report comparison
+  evidence.ts            Manual evidence merge and refresh preservation
+  freshness.ts           Evidence age classification and summaries
   i18n.ts                Typed Chinese and English dictionaries
   report.ts              Versioned reports, migration, and evidence coverage
   scoring.ts             Preference-weighted scoring
@@ -275,7 +279,7 @@ security settings and the PostCSS override live in `pnpm-workspace.yaml`.
 
 The current foundation includes editable comparison criteria, reusable
 templates, report refresh, local revision history, deterministic change
-summaries, and manual evidence capture.
+summaries, manual evidence capture, trial scoring, and source freshness.
 
 The most valuable next changes, ordered by product impact:
 
@@ -283,7 +287,6 @@ The most valuable next changes, ordered by product impact:
 | --- | --- | --- | --- |
 | P1 | Multi-product shortlist | Supports discovery workflows where the user begins with more than two candidates | High |
 | P1 | Dedicated source adapters | Collects richer pricing, changelog, release, privacy, and documentation evidence | Medium |
-| P1 | Trial checklist with post-trial rescoring | Turns suggested tests into recorded outcomes that can affect the final decision | Medium |
 | P2 | Searchable local research library | Makes prior decisions and recurring products reusable instead of isolated reports | Medium |
 | P2 | Model-provider abstraction | Lets local users choose another structured-output provider without changing the evidence pipeline | High |
 
@@ -291,7 +294,7 @@ The most valuable next changes, ordered by product impact:
 
 ```mermaid
 flowchart LR
-    E[Manual evidence] --> T[Trial-based rescoring]
+    T[Trial-based rescoring] --> L[Local research library]
     E --> A[Dedicated source adapters]
     A --> D[Deeper report diffs]
     D --> L[Local research library]
@@ -299,9 +302,9 @@ flowchart LR
     N --> P[Model-provider abstraction]
 ```
 
-Manual evidence capture is the strongest next step because it closes the
-largest information gap for products whose useful evidence is not available
-through a public repository or a server-rendered product page.
+Dedicated source adapters are the strongest next step because they can make
+freshness and evidence collection more reliable for pricing, changelogs,
+privacy policies, and release history.
 
 ## Current constraints
 

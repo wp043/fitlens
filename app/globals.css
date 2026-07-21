@@ -1775,6 +1775,38 @@ body {
   color: var(--pink);
 }
 
+.trial-card > div > p {
+  min-width: 0;
+}
+
+.trial-card select,
+.trial-card textarea {
+  width: 100%;
+  margin-top: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  outline: 0;
+  background: rgba(17, 17, 27, 0.32);
+  color: var(--ink);
+  font-size: 9px;
+}
+
+.trial-card select {
+  height: 29px;
+  padding: 0 8px;
+}
+
+.trial-card textarea {
+  padding: 8px;
+  resize: vertical;
+  line-height: 1.45;
+}
+
+.trial-card select:focus,
+.trial-card textarea:focus {
+  border-color: rgba(245, 194, 231, 0.52);
+}
+
 footer {
   border-color: var(--line);
 }

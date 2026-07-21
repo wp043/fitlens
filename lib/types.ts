@@ -17,6 +17,7 @@ export interface Evidence {
   sourceLabel: string;
   sourceUrl: string;
   origin?: "collected" | "manual";
+  capturedAt?: string;
 }
 
 export interface ProductResult {
@@ -45,6 +46,15 @@ export interface DimensionResult {
 export interface TrialTask {
   task: string;
   reason: string;
+}
+
+export type TrialStatus = "untested" | "passed" | "failed" | "skipped";
+
+export interface TrialResult {
+  task: string;
+  status: TrialStatus;
+  note: string;
+  updatedAt?: string;
 }
 
 export interface ComparisonResult {
