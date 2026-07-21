@@ -32,3 +32,26 @@ test("criteria not present in a report do not dilute its fit score", () => {
   assert.equal(result.normalized.cmux, 98);
   assert.equal(result.normalized.Otty, 35);
 });
+
+test("scores and selects across a shortlist of more than two products", () => {
+  const shortlist = structuredClone(sampleComparison);
+  shortlist.products.push({
+    ...structuredClone(shortlist.products[1]),
+    name: "Third",
+    url: "https://third.example/",
+    score: 0,
+  });
+  shortlist.dimensions = shortlist.dimensions.map((dimension, index) => ({
+    ...dimension,
+    productScores: {
+      ...dimension.productScores,
+      Third: index === 0 ? 100 : 96,
+    },
+  }));
+
+  const result = calculateWeightedWinner(shortlist, defaultPriorities);
+
+  assert.equal(result.winner, "Third");
+  assert.equal(Object.keys(result.normalized).length, 3);
+  assert.ok(result.normalized.Third > result.normalized.cmux);
+});

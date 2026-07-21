@@ -18,6 +18,8 @@ priorities change the outcome, and important unknowns should remain visible.
   availability, offline use, and self-hosting, with direct links to both
   sources.
 - Produces a structured recommendation for the user's stated workflow.
+- Compares a reorderable shortlist of 2–8 products in one report while keeping
+  every score, source, unknown, and trial attached to the right candidate.
 - Supports 2–8 editable comparison dimensions with reusable general,
   developer-tool, privacy-first, and everyday-software templates.
 - Saves custom comparison templates in the local browser.
@@ -95,10 +97,10 @@ flowchart LR
     U --> X[Markdown and JSON files]
 ```
 
-The model produces one shared report schema for both products. The browser
-owns the interactive weighting step, so changing a weight does not require
-another model request. Refreshing does collect the sources again, while the
-result-to-result diff is calculated deterministically in the browser.
+The model produces one shared report schema for every product in the shortlist.
+The browser owns the interactive weighting step, so changing a weight does not
+require another model request. Refreshing does collect the sources again, while
+the result-to-result diff is calculated deterministically in the browser.
 
 ## Analysis sequence
 
@@ -110,12 +112,10 @@ sequenceDiagram
     participant Sources as Product sources
     participant Model as OpenAI model
 
-    User->>UI: Add two URLs and describe the workflow
+    User->>UI: Add 2–8 URLs and describe the workflow
     UI->>API: Submit URLs, criteria, locale, and optional session key
     API->>API: Validate request and reject unsafe targets
-    par Product A
-        API->>Sources: Collect website and repository evidence
-    and Product B
+    loop For every shortlisted product
         API->>Sources: Collect website and repository evidence
     end
     Sources-->>API: Website and repository evidence
@@ -199,6 +199,7 @@ fit(p) = Σ(weight[d] × score[p,d]) / Σ(weight[d])
 
 - Each weight is between 0 and 100.
 - A comparison contains 2–8 dimensions.
+- A report contains a reorderable shortlist of 2–8 products.
 - Each product receives a 0–100 score for every selected dimension.
 - The model explains each dimension score.
 - The browser recomputes normalized totals whenever a slider changes.
@@ -368,7 +369,6 @@ The most valuable next changes, ordered by product impact:
 
 | Priority | Feature | Why it matters | Relative effort |
 | --- | --- | --- | --- |
-| P1 | Multi-product shortlist | Supports discovery workflows where the user begins with more than two candidates | High |
 | P1 | Dedicated source adapters | Collects richer pricing, changelog, release, privacy, and documentation evidence | Medium |
 | P2 | Model-provider abstraction | Lets local users choose another structured-output provider without changing the evidence pipeline | High |
 
@@ -378,9 +378,8 @@ The most valuable next changes, ordered by product impact:
 flowchart LR
     E[Evidence foundations] --> A[Dedicated source adapters]
     A --> D[Deeper report diffs]
-    L[Local research library] --> N[Multi-product shortlist]
-    D --> N
-    N --> P[Model-provider abstraction]
+    L[Local research library] --> D
+    D --> P[Model-provider abstraction]
 ```
 
 Dedicated source adapters are the strongest next step because they can make
@@ -389,7 +388,8 @@ privacy policies, and release history.
 
 ## Current constraints
 
-- A report compares exactly two products.
+- A report compares 2–8 products; larger discovery sets should be narrowed
+  before analysis to keep evidence review practical.
 - Source collection begins with one official page and at most one discovered
   GitHub repository per product.
 - JavaScript-heavy pages may expose less text to the current HTML collector.

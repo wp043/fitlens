@@ -92,6 +92,69 @@ test("version 1 reports migrate criteria and revision history", () => {
   assert.deepEqual(restored.revisions, []);
 });
 
+test("version 3 reports preserve a multi-product shortlist", () => {
+  const result = structuredClone(sampleComparison);
+  result.products.push({
+    ...structuredClone(result.products[1]),
+    name: "Third",
+    url: "https://third.example/",
+  });
+  result.dimensions = result.dimensions.map((dimension) => ({
+    ...dimension,
+    productScores: { ...dimension.productScores, Third: 72 },
+  }));
+  const report: SavedReport = {
+    id: "shortlist",
+    title: "Three-way shortlist",
+    savedAt: result.generatedAt,
+    urls: ["https://cmux.com/", "https://otty.sh/", "https://third.example/"],
+    context: "A sufficiently detailed local product comparison context.",
+    priorities: defaultPriorities,
+    criteria,
+    result,
+    notes: "",
+    locale: "en",
+    revisions: [structuredClone(result)],
+    trialResults: [],
+    conflicts: [],
+    confidenceCalibrations: calibrateComparisonConfidence(result.products),
+  };
+
+  const restored = parseReport(serializeReport(report));
+
+  assert.equal(restored.urls.length, 3);
+  assert.equal(restored.result.products.length, 3);
+  assert.equal(restored.revisions[0].products.length, 3);
+  assert.equal(restored.result.dimensions[0].productScores.Third, 72);
+});
+
+test("version 2 two-product reports remain importable", () => {
+  const portable = JSON.parse(
+    serializeReport({
+      id: "legacy-v2",
+      title: sampleComparison.title,
+      savedAt: sampleComparison.generatedAt,
+      urls: ["https://cmux.com/", "https://otty.sh/"],
+      context: "A sufficiently detailed local product comparison context.",
+      priorities: defaultPriorities,
+      criteria,
+      result: sampleComparison,
+      notes: "",
+      locale: "en",
+      revisions: [],
+      trialResults: [],
+      conflicts: [],
+      confidenceCalibrations: [],
+    }),
+  );
+  portable.schemaVersion = 2;
+
+  const restored = parseReport(JSON.stringify(portable));
+
+  assert.equal(restored.urls.length, 2);
+  assert.equal(restored.result.products.length, 2);
+});
+
 test("portable reports reject non-HTTP evidence links", () => {
   const report: SavedReport = {
     id: "report-unsafe",

@@ -171,7 +171,7 @@ const resultSchema = z
         switchWhen: z.string(),
       })
       .passthrough(),
-    products: z.array(productSchema).length(2),
+    products: z.array(productSchema).min(2).max(8),
     dimensions: z.array(
       z
         .object({
@@ -194,14 +194,44 @@ const resultSchema = z
         .passthrough(),
     ),
   })
-  .passthrough();
+  .passthrough()
+  .superRefine((result, context) => {
+    const productNames = result.products.map((product) => product.name);
+    if (new Set(productNames).size !== productNames.length) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Product names must be unique",
+        path: ["products"],
+      });
+    }
+    if (!productNames.includes(result.recommendation.winner)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Recommendation winner must be in the shortlist",
+        path: ["recommendation", "winner"],
+      });
+    }
+    result.dimensions.forEach((dimension, index) => {
+      const scoreNames = Object.keys(dimension.productScores);
+      if (
+        scoreNames.length !== productNames.length ||
+        productNames.some((name) => !scoreNames.includes(name))
+      ) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Dimension scores must cover the complete shortlist",
+          path: ["dimensions", index, "productScores"],
+        });
+      }
+    });
+  });
 
 const savedReportSchema = z
   .object({
     id: z.string(),
     title: z.string(),
     savedAt: z.string(),
-    urls: z.tuple([httpUrlSchema, httpUrlSchema]),
+    urls: z.array(httpUrlSchema).min(2).max(8),
     context: z.string(),
     priorities: prioritySchema,
     result: resultSchema,
@@ -240,7 +270,7 @@ export interface SavedReport {
   id: string;
   title: string;
   savedAt: string;
-  urls: [string, string];
+  urls: string[];
   context: string;
   priorities: PriorityWeights;
   criteria: ComparisonCriterion[];

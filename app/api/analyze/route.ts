@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { parseAnalyzeRequest } from "@/lib/analyze-request";
 import { analyzeWithModel } from "@/lib/analyzer";
 import {
   messages,
@@ -12,33 +13,6 @@ import type { AnalyzeRequest } from "@/lib/types";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
-
-const requestSchema = z
-  .object({
-    urls: z.tuple([z.string().url(), z.string().url()]),
-    context: z.string().trim().min(10).max(2_000),
-    criteria: z
-      .array(
-        z
-          .object({
-            key: z.string().trim().min(1).max(80),
-            label: z.string().trim().min(1).max(80),
-            hint: z.string().trim().max(200),
-            weight: z.number().min(0).max(100),
-          })
-          .strict(),
-      )
-      .min(2)
-      .max(8)
-      .refine(
-        (criteria) =>
-          new Set(criteria.map((criterion) => criterion.key)).size ===
-          criteria.length,
-        "Criterion keys must be unique",
-      ),
-    locale: z.enum(["zh-CN", "en"]).default("zh-CN"),
-  })
-  .strict();
 
 function isBundledSampleRequest(body: AnalyzeRequest) {
   const urls = body.urls;
@@ -53,6 +27,7 @@ function isBundledSampleRequest(body: AnalyzeRequest) {
     "automation",
   ]);
   return (
+    urls.length === 2 &&
     hosts.includes("cmux.com") &&
     hosts.includes("otty.sh") &&
     body.criteria.length === sampleKeys.size &&
@@ -81,7 +56,7 @@ export async function POST(request: Request) {
       );
     }
     const apiKey = sessionApiKey || process.env.OPENAI_API_KEY;
-    const body = requestSchema.parse(input) as AnalyzeRequest;
+    const body = parseAnalyzeRequest(input) as AnalyzeRequest;
 
     if (!apiKey && isBundledSampleRequest(body)) {
       const sample = sampleComparisonForLocale(locale);
@@ -111,11 +86,7 @@ export async function POST(request: Request) {
       body.urls.map((url) => collectProductSource(url)),
     )) as Awaited<ReturnType<typeof collectProductSource>>[];
 
-    const result = await analyzeWithModel(
-      body,
-      [sources[0], sources[1]],
-      apiKey,
-    );
+    const result = await analyzeWithModel(body, sources, apiKey);
     return NextResponse.json(result);
   } catch (error) {
     const t = messages[locale];
