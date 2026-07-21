@@ -2250,6 +2250,51 @@ body {
   background: linear-gradient(90deg, var(--green), var(--blue));
 }
 
+.confidence-calibration {
+  border-color: var(--line);
+  background: rgba(24, 24, 37, 0.72);
+  color: var(--ink);
+}
+
+.confidence-calibration > header,
+.confidence-evidence-mix {
+  border-color: var(--line);
+}
+
+.confidence-calibration > header p,
+.confidence-calibration > header span,
+.confidence-calibration li b,
+.confidence-evidence-mix span {
+  color: var(--muted);
+}
+
+.confidence-calibration.moderate > header strong {
+  color: var(--peach);
+}
+
+.confidence-calibration.limited > header strong {
+  color: #f38ba8;
+}
+
+.confidence-evidence-mix span {
+  border-color: var(--line);
+}
+
+.confidence-evidence-mix b,
+.confidence-calibration li p {
+  color: var(--ink);
+}
+
+.confidence-calibration li > span {
+  background: rgba(166, 227, 161, 0.14);
+  color: var(--green);
+}
+
+.confidence-calibration li.limiting > span {
+  background: rgba(243, 139, 168, 0.14);
+  color: #f38ba8;
+}
+
 .product-verdict {
   border: 0;
   border-radius: 14px;
