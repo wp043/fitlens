@@ -31,6 +31,7 @@ import {
   type ConfidenceFactor,
 } from "@/lib/confidence";
 import { calculateWeightedWinner } from "@/lib/scoring";
+import { createRedactedReport } from "@/lib/redaction";
 import {
   detectEvidenceConflicts,
   type EvidenceConflict,
@@ -136,6 +137,7 @@ function comparisonAsMarkdown(
   t: Messages,
   trialResults: TrialResult[] = [],
   conflicts: EvidenceConflict[] = [],
+  redacted = false,
 ) {
   const evidenceLabels: Record<EvidenceLevel, string> = {
     verified: t.verified,
@@ -208,11 +210,22 @@ ${product.evidence
         .join("\n")}\n\n`
     : "";
 
+  const trialSection = redacted
+    ? ""
+    : `## ${t.markdownTrial}\n${result.trialPlan
+        .map((item, index) => {
+          const trial = trialResults[index];
+          const status = trial ? ` [${trialStatusLabels[trial.status]}]` : "";
+          const note = trial?.note.trim() ? ` — ${trial.note.trim()}` : "";
+          return `${index + 1}. **${item.task}**${status} — ${item.reason}${note}`;
+        })
+        .join("\n")}\n\n`;
+
   return `# ${result.title}
 
 ${t.markdownAnalyzed}: ${new Date(result.generatedAt).toLocaleString(locale)}.
 
-## ${t.markdownRecommendation}: ${result.recommendation.winner}
+${redacted ? `> ${t.redactedDisclosure}\n\n` : ""}## ${t.markdownRecommendation}: ${result.recommendation.winner}
 
 ${result.recommendation.summary}
 
@@ -225,17 +238,7 @@ ${productSections}
 ${conflictSection}## ${t.markdownUnknowns}
 ${result.unknowns.map((item) => `- ${item}`).join("\n")}
 
-## ${t.markdownTrial}
-${result.trialPlan
-  .map((item, index) => {
-    const trial = trialResults[index];
-    const status = trial ? ` [${trialStatusLabels[trial.status]}]` : "";
-    const note = trial?.note.trim() ? ` — ${trial.note.trim()}` : "";
-    return `${index + 1}. **${item.task}**${status} — ${item.reason}${note}`;
-  })
-  .join("\n")}
-
-${notes.trim() ? `## ${t.markdownNotes}\n${notes.trim()}\n\n` : ""}---
+${trialSection}${notes.trim() ? `## ${t.markdownNotes}\n${notes.trim()}\n\n` : ""}---
 ${t.generatedBy} · ${new Date(result.generatedAt).toLocaleDateString(locale)}.
 `;
 }
@@ -713,6 +716,47 @@ export function CompareWorkbench({
     const anchor = document.createElement("a");
     anchor.href = url;
     anchor.download = `${safeFilename(report.title)}.fitlens.json`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function exportRedactedMarkdown() {
+    const localReport = currentPortableReport();
+    if (!localReport) return;
+    const { report } = createRedactedReport(localReport);
+    const blob = new Blob(
+      [
+        comparisonAsMarkdown(
+          report.result,
+          "",
+          locale,
+          t,
+          [],
+          report.conflicts,
+          true,
+        ),
+      ],
+      { type: "text/markdown;charset=utf-8" },
+    );
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `${safeFilename(report.title)}.shared.md`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function exportRedactedJson() {
+    const localReport = currentPortableReport();
+    if (!localReport) return;
+    const { report } = createRedactedReport(localReport);
+    const blob = new Blob([serializeReport(report)], {
+      type: "application/json;charset=utf-8",
+    });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `${safeFilename(report.title)}.shared.fitlens.json`;
     anchor.click();
     URL.revokeObjectURL(url);
   }
@@ -1340,6 +1384,17 @@ export function CompareWorkbench({
             </button>
             <button onClick={exportMarkdown}>{t.exportMarkdown}</button>
             <button onClick={exportJson}>{t.exportJson}</button>
+            <details className="share-menu">
+              <summary>{t.shareSafeCopy}</summary>
+              <div>
+                <strong>{t.shareSafeTitle}</strong>
+                <p>{t.shareSafeCopyDetail}</p>
+                <button onClick={exportRedactedMarkdown}>
+                  {t.shareMarkdown}
+                </button>
+                <button onClick={exportRedactedJson}>{t.shareJson}</button>
+              </div>
+            </details>
             <button onClick={() => importInputRef.current?.click()}>
               {t.import}
             </button>
