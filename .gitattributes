@@ -1,0 +1,18 @@
+# Force LF in the working tree on every platform.
+#
+# Without this, git's core.autocrlf checks out CRLF on Windows. V8 coverage
+# reports byte offsets, and the offset-to-line mapping then drifts further with
+# each preceding line, so the coverage ratchet reported phantom uncovered lines
+# on windows-latest only. Line endings must not be a platform variable.
+* text=auto eol=lf
+
+# Binary assets must never be touched.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.pdf binary
