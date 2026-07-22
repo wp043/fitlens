@@ -4,7 +4,7 @@
     "components/compare-workbench.tsx": {
       "maxLines": 1453,
       "previousLines": 2519,
-      "reason": "Legacy workbench coordinator; this sprint removes 1,065 lines and the baseline cannot grow."
+      "reason": "Legacy workbench coordinator; this sprint removes 1,066 lines and the baseline cannot grow."
     },
     "lib/i18n.ts": {
       "maxLines": 731,
