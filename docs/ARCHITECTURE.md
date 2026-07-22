@@ -67,6 +67,7 @@ configured model, validates the structured response, and returns it.
 | Per-candidate collection outcomes and safe public failures | `lib/source-diagnostics.ts` |
 | Provider env resolution, client construction, normalized provider errors | `lib/model-provider.ts` |
 | Model prompt, response schema, and response cross-field validation | `lib/analyzer.ts` |
+| Run manifests, bounded snapshots, hashing, and offline replay | `lib/reproducibility.ts` |
 | Criteria templates and legacy criteria migration | `lib/criteria.ts` |
 | Candidate URL normalization, deduplication, storage validation, and search | `lib/candidate-inbox.ts` |
 | Decision profile validation | `lib/decision-profiles.ts` |
@@ -170,10 +171,39 @@ These are the contracts most likely to cause subtle errors if weakened:
 9. Share-safe exports are derived copies. They do not mutate the local report
    and do not contain context, notes, trials, revisions, criterion hints, or
    manual evidence.
-10. API keys, provider names, models, and provider base URLs never enter report
-   history or exports.
+10. API keys, provider base URLs, provider responses, and raw failure messages
+   never enter report history or exports. Provider kind and model identifier are
+   retained deliberately as non-secret provenance.
 11. Old portable reports are migrated at the schema boundary rather than
     scattered through UI code.
+12. Replay verifies the trusted request and every bounded source snapshot
+    against its manifest before deterministic finalization. It never fetches a
+    URL or calls a model.
+
+## Reproducibility boundary
+
+Every completed live run carries a v1 manifest with stable prompt, response
+schema, source-adapter, and replay identifiers; provider kind/model; canonical
+SHA-256 hashes for the trusted request, source snapshots, supplemental
+documents, and validated model output; and timing/status metadata. Provider
+identity and the model-output hash are part of the run ID, so two judgments
+over the same sources cannot alias. Failures expose only a stage and stable
+code. Credentials, endpoints, upstream payloads, and exception text are not
+part of this contract. Bundled samples and failed runs have no model-output
+hash and cannot be exported as replay bundles.
+
+A complete report may also contain a v1 replay bundle. It includes the parsed
+trusted request, bounded public source snapshots, and the already validated
+model output. `replayAnalysisBundle` verifies request, source, and model-output
+hashes before it runs the same strict
+parser, citation normalization, privacy calibration, and result finalizer used
+by a live run. This is a reproducibility tool, not a fresh research run: it
+cannot discover source changes or regenerate model judgments.
+
+Replay bundles are private local artifacts because the trusted request can
+contain a sensitive workflow. Share-safe projection always drops the entire
+bundle while retaining the non-secret manifest. Portable report v4 accepts
+v1–v3 imports and bounds replay text and document counts during import.
 
 ## Security boundaries
 
@@ -273,7 +303,8 @@ for a local single-user tool, not a shared hosted application.
 | Locale storage in `localStorage` | Workbench | Current language preference |
 | API key in `sessionStorage` | Workbench | Current-tab model key override |
 | `.env.local` | Local Next.js server | Provider, model, API key, optional GitHub token |
-| Exported `.json` / `.md` | User | Portable backup or share-safe report |
+| Exported `.json` / `.md` | User | Portable v4 backup or share-safe report |
+| Exported `.fitlens-replay.json` | User | Private bounded source snapshots and trusted request for offline replay |
 | Exported `.html` / `.adr.md` / printed PDF | User | Durable offline decision artifacts |
 | `.fitlens/snapshots/<watch-id>/` | CLI watch runner | Immutable results, `latest.json`, deterministic changes, `trend.json`, and `trend.html` |
 

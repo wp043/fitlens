@@ -26,6 +26,7 @@ import {
   readBoundedJson,
   RequestGuardError,
 } from "@/lib/request-guard";
+import { runManifestFromError } from "@/lib/reproducibility";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -74,16 +75,17 @@ export async function POST(request: Request) {
     return NextResponse.json(result);
   } catch (error) {
     const t = messages[locale];
+    const analysisRun = runManifestFromError(error);
     if (error instanceof MissingModelCredentialsError) {
-      return NextResponse.json({ error: t.missingKey }, { status: 503 });
+      return NextResponse.json({ error: t.missingKey, analysisRun }, { status: 503 });
     }
     if (error instanceof CandidateSourceCollectionError) {
       return NextResponse.json(
-        createSourceFailureResponse(
+        { ...createSourceFailureResponse(
           error.failures,
           t.sourceCollectionFailed,
           (code) => t[code],
-        ),
+        ), analysisRun },
         { status: sourceFailureHttpStatus(error.failures) },
       );
     }
@@ -104,7 +106,7 @@ export async function POST(request: Request) {
         : error instanceof Error
           ? error.message
           : t.genericFailure;
-    return NextResponse.json({ error: message }, { status: 400 });
+    return NextResponse.json({ error: message, analysisRun }, { status: 400 });
   } finally {
     releaseAnalysisSlot?.();
   }

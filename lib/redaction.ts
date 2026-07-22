@@ -19,6 +19,9 @@ export function redactComparisonResult(
 ): ComparisonResult {
   return {
     ...result,
+    // Replay contains the private decision context and captured page text. It
+    // is deliberately local-only even though the manifest itself is safe.
+    replayBundle: undefined,
     products: result.products.map((product) => ({
       ...product,
       evidence: product.evidence

@@ -28,6 +28,7 @@ import { compareResults, type ComparisonDiff } from "../lib/diff.ts";
 import { sendLocalNotification } from "../lib/local-notifications.ts";
 import type { ComparisonResult } from "../lib/types.ts";
 import { createDoctorReport, formatDoctorReport } from "../lib/doctor.ts";
+import { parseReplayBundle, replayAnalysisBundle } from "../lib/reproducibility.ts";
 
 async function writeJsonAtomic(path: string, value: unknown) {
   const temporary = `${path}.tmp-${process.pid}`;
@@ -173,6 +174,20 @@ async function main() {
       process.stdout.write(output);
     }
     if (!report.healthy) process.exitCode = 1;
+    return;
+  }
+
+  if (options.command === "replay") {
+    const bundle = parseReplayBundle(await readFile(resolve(options.replayFile!), "utf8"));
+    const result = replayAnalysisBundle(bundle);
+    const output = options.format === "markdown"
+      ? comparisonToMarkdown(result)
+      : `${JSON.stringify(result, null, 2)}\n`;
+    if (options.outputFile) {
+      await writeFile(resolve(options.outputFile), output, "utf8");
+    } else {
+      process.stdout.write(output);
+    }
     return;
   }
 

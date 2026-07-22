@@ -101,7 +101,7 @@ const dimensionSchema = z
   })
   .strict();
 
-const comparisonSchema = z
+export const analysisModelOutputSchema = z
   .object({
     title: z.string(),
     recommendation: z
@@ -196,9 +196,10 @@ export async function analyzeWithModel(
   request: AnalyzeRequest,
   sources: CollectedSource[],
   provider: ModelProviderConfig,
+  onModelOutput?: (output: unknown) => void,
 ): Promise<ComparisonResult> {
   const parsed = await requestStructuredOutput(provider, {
-    schema: comparisonSchema,
+    schema: analysisModelOutputSchema,
     schemaName: "fitlens_comparison",
     ...buildAnalysisModelRequest(request, sources),
   });
@@ -206,6 +207,18 @@ export async function analyzeWithModel(
   if (!parsed) {
     throw new Error(messages[request.locale].modelFailed);
   }
+  onModelOutput?.(parsed);
+  return finalizeAnalysisResult(request, sources, parsed);
+}
+
+/** Deterministic post-model validation used by live analysis and offline replay. */
+export function finalizeAnalysisResult(
+  request: AnalyzeRequest,
+  sources: CollectedSource[],
+  modelOutput: unknown,
+  generatedAt = new Date().toISOString(),
+): ComparisonResult {
+  const parsed = analysisModelOutputSchema.parse(modelOutput);
   if (parsed.products.length !== sources.length) {
     throw new Error(messages[request.locale].modelFailed);
   }
@@ -307,7 +320,7 @@ export async function analyzeWithModel(
       evidence: safeEvidence.map((evidence) => ({
         ...evidence,
         origin: "collected" as const,
-        capturedAt: new Date().toISOString(),
+        capturedAt: generatedAt,
       })),
       pricing: safePricing,
       privacy: safePrivacy,
@@ -316,7 +329,7 @@ export async function analyzeWithModel(
 
   return {
     ...parsed,
-    generatedAt: new Date().toISOString(),
+    generatedAt,
     products,
     dimensions,
   };

@@ -11,6 +11,11 @@ import {
   type SourceFailureDiagnostic,
 } from "./source-diagnostics.ts";
 import type { AnalyzeRequest, ComparisonResult } from "./types.ts";
+import {
+  attachRunManifest,
+  createReplayBundle,
+  createRunManifest,
+} from "./reproducibility.ts";
 
 export class MissingModelCredentialsError extends Error {
   constructor() {
@@ -60,11 +65,16 @@ export async function runAnalysis(
   input: unknown,
   options: AnalysisServiceOptions,
 ): Promise<ComparisonResult> {
+  const startedAt = new Date();
   const body = parseAnalyzeRequest(input);
+  let stage: "source" | "model" | "finalize" = "source";
+  let collectedSources: CollectedSource[] = [];
+  let provider: ReturnType<typeof resolveModelProviderConfig> | undefined;
+  try {
   if (options.env.FITLENS_DISABLE_LIVE_ANALYSIS === "1") {
     throw new MissingModelCredentialsError();
   }
-  const provider = resolveModelProviderConfig(options.env, options.sessionApiKey);
+  provider = resolveModelProviderConfig(options.env, options.sessionApiKey);
 
   if (
     options.allowBundledSample !== false &&
@@ -75,6 +85,7 @@ export async function runAnalysis(
     const dimensions = new Map(
       sample.dimensions.map((dimension) => [dimension.key, dimension]),
     );
+    const finishedAt = new Date();
     return {
       ...sample,
       generatedAt: new Date().toISOString(),
@@ -84,6 +95,13 @@ export async function runAnalysis(
         label: criterion.label,
         weight: criterion.weight,
       })),
+      analysisRun: createRunManifest({
+        request: body,
+        provider: { kind: "bundled-sample", model: "fitlens-bundled-sample@1" },
+        startedAt,
+        finishedAt,
+        status: "complete",
+      }),
     };
   }
 
@@ -96,5 +114,56 @@ export async function runAnalysis(
     options.collectSource ?? collectProductSource,
   );
   if (!collected.ok) throw new CandidateSourceCollectionError(collected.failures);
-  return analyzeWithModel(body, collected.sources, provider);
+  collectedSources = collected.sources;
+  stage = "model";
+  let modelOutput: unknown;
+  const result = await analyzeWithModel(body, collected.sources, provider, (output) => {
+    modelOutput = output;
+    stage = "finalize";
+  });
+  const finishedAt = new Date();
+  const analysisRun = createRunManifest({
+    request: body,
+    sources: collected.sources,
+    provider,
+    startedAt,
+    finishedAt,
+    status: "complete",
+    modelOutput,
+  });
+  return {
+    ...result,
+    analysisRun,
+    replayBundle: createReplayBundle({
+      request: body,
+      sources: collected.sources,
+      modelOutput,
+      manifest: analysisRun,
+      generatedAt: result.generatedAt,
+    }),
+  };
+  } catch (error) {
+    const finishedAt = new Date();
+    const code =
+      error instanceof MissingModelCredentialsError
+        ? "missing_model_credentials"
+        : error instanceof CandidateSourceCollectionError
+          ? "candidate_source_collection_failed"
+          : error instanceof Error && /^[a-z0-9_]+$/i.test(error.message)
+            ? error.message
+            : "analysis_failed";
+    attachRunManifest(
+      error,
+      createRunManifest({
+        request: body,
+        sources: collectedSources,
+        provider: provider ?? { kind: "bundled-sample", model: "unresolved" },
+        startedAt,
+        finishedAt,
+        status: "failed",
+        failure: { stage, code },
+      }),
+    );
+    throw error;
+  }
 }

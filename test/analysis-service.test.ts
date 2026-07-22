@@ -7,6 +7,7 @@ import {
 } from "../lib/analysis-service.ts";
 import { getBuiltInCriteriaTemplates } from "../lib/criteria.ts";
 import { SourceError } from "../lib/source.ts";
+import { runManifestFromError } from "../lib/reproducibility.ts";
 
 test("returns the bundled comparison through the shared headless service", async () => {
   const criteria = getBuiltInCriteriaTemplates("en").find(
@@ -23,6 +24,9 @@ test("returns the bundled comparison through the shared headless service", async
   );
   assert.equal(result.products.length, 2);
   assert.equal(result.dimensions.length, criteria.length);
+  assert.equal(result.analysisRun?.provider.kind, "bundled-sample");
+  assert.equal(result.analysisRun?.modelOutputHash, undefined);
+  assert.equal(result.replayBundle, undefined);
 });
 
 test("requires credentials for non-sample headless analysis", async () => {
@@ -96,4 +100,33 @@ test("returns ordered source diagnostics before any model request", async () => 
       error.failures[0].code === "privateNetwork" &&
       error.failures[1].code === "fetchFailed",
   );
+});
+
+test("failed analysis exposes only stable non-secret run metadata", async () => {
+  const criteria = getBuiltInCriteriaTemplates("en").find(
+    (template) => template.id === "general",
+  )!.criteria;
+  let captured: unknown;
+  try {
+    await runAnalysis(
+      {
+        urls: ["https://one.test/", "https://two.test/"],
+        context: "A sufficiently detailed comparison workflow.",
+        criteria,
+        locale: "en",
+      },
+      {
+        env: { OPENAI_API_KEY: "super-secret-provider-key" },
+        collectSource: async () => { throw new SourceError("fetchFailed", "secret upstream body"); },
+      },
+    );
+  } catch (error) {
+    captured = error;
+  }
+  const manifest = runManifestFromError(captured);
+  assert.equal(manifest?.status, "failed");
+  assert.equal(manifest?.failure?.stage, "source");
+  assert.equal(manifest?.failure?.code, "candidate_source_collection_failed");
+  assert.equal(manifest?.modelOutputHash, undefined);
+  assert.doesNotMatch(JSON.stringify(manifest), /super-secret|upstream body/);
 });

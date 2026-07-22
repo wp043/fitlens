@@ -58,6 +58,7 @@ refresh, and export.
 | **Keep the messy parts visible** | Pricing uncertainty, missing disclosures, conflicting claims, and source failures stay explicit instead of being smoothed into a confident answer. |
 | **Build a local research memory** | Search and filter up to 50 saved reports. Reopen a decision, reuse its inputs, add manual evidence, refresh sources, and review deterministic diffs. |
 | **Keep a durable decision record** | Export JSON, Markdown, self-contained HTML, an ADR, or a print-optimized PDF; share-safe copies remove private context, notes, trials, revisions, and manual evidence. |
+| **Replay a decision offline** | Every live run records non-secret version/hash provenance. A private bounded replay bundle can rerun validation and deterministic finalization without fetching sources or paying for another model call. |
 
 ## Quick start
 
@@ -197,9 +198,10 @@ newer and better supported.
 - Export complete JSON/Markdown backups, offline HTML, architecture decision
   records, print/PDF artifacts, or share-safe copies for someone else.
 
-Portable reports are versioned and validated on import. Existing v1, v2, and v3
-reports remain compatible with the current dynamic shortlist and criteria
-models.
+Portable reports are versioned and validated on import. Current complete exports
+use v4; existing v1, v2, and v3 reports remain importable. Complete JSON may
+contain the private decision context and replay snapshots. Share-safe JSON and
+Markdown remove that material while retaining non-secret run provenance.
 
 ## Model providers
 
@@ -218,7 +220,9 @@ FITLENS_MODEL_API_KEY=
 
 Remote compatible endpoints must use HTTPS. Plain HTTP is allowed only for
 loopback addresses. Base URLs containing credentials, query parameters, or
-fragments are rejected, and provider configuration never enters saved reports.
+fragments are rejected. Credentials and provider endpoints never enter saved
+reports; only the non-secret provider kind and model identifier are retained as
+run provenance.
 
 ## CLI and headless use
 
@@ -240,6 +244,24 @@ context.txt` for longer workflows, or `pnpm fitlens --help` for the complete
 command reference. Built-in `general`, `developer-tools`, `privacy-first`, and
 `daily-use` templates are available through `--template`; JSON is the default
 stdout format for scripts.
+
+Live JSON output includes a versioned run manifest and, when real sources were
+collected, a bounded replay bundle. Save or export that bundle and replay it
+later with no network or provider access:
+
+```bash
+pnpm fitlens replay \
+  --bundle comparison.fitlens-replay.json \
+  --format markdown \
+  --output replayed.md
+```
+
+Replay verifies the request, source, and validated model-output hashes, then
+reruns the same structured parser and deterministic result finalizer. Provider,
+model, and output identity are bound into the run ID. It reproduces the captured decision;
+it does not refresh evidence or ask the model for a new judgment. Replay files
+include your workflow context and public page snapshots, so treat them as
+private complete backups rather than share-safe exports.
 
 ### Watchlists and snapshots
 
