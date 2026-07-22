@@ -1,0 +1,30 @@
+{
+  "fixtureVersion": 1,
+  "sourceUrl": "https://registry.npmjs.org/next",
+  "capturedAt": "2026-07-22T05:04:07Z",
+  "payload": {
+    "name": "next",
+    "description": "The React Framework",
+    "dist-tags": {
+      "latest": "16.2.11",
+      "canary": "16.3.0-canary.93"
+    },
+    "time": {
+      "16.2.11": "2026-07-21T16:00:01.566Z"
+    },
+    "versions": {
+      "16.2.11": {
+        "description": "The React Framework",
+        "license": "MIT",
+        "engines": {
+          "node": ">=20.9.0"
+        },
+        "keywords": ["react", "framework", "nextjs", "web", "server", "node"],
+        "repository": {
+          "url": "git+https://github.com/vercel/next.js.git",
+          "type": "git"
+        }
+      }
+    }
+  }
+}

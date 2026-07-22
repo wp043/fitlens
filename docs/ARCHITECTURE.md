@@ -54,10 +54,13 @@ configured model, validates the structured response, and returns it.
 | Public analysis endpoint and status codes | `app/api/analyze/route.ts` |
 | Shared browser/CLI orchestration and source failure boundary | `lib/analysis-service.ts` |
 | Headless argument parsing and entry point | `lib/cli.ts`, `scripts/fitlens.ts` |
-| Watchlist validation, due scheduling, and snapshot naming | `lib/watchlist.ts` |
+| Watchlist validation, due scheduling, snapshot trends, and offline chart rendering | `lib/watchlist.ts` |
+| Argument-safe native desktop notifications | `lib/local-notifications.ts` |
 | Request schema and URL-list validation | `lib/analyze-request.ts` |
 | URL policy, DNS checks, redirects, byte caps, page/GitHub collection | `lib/source.ts` |
+| Opt-in guarded JavaScript rendering for thin application shells | `lib/source.ts` |
 | Official pricing, docs, privacy, security, and changelog discovery | `lib/source-adapters/registry.ts` |
+| npm, PyPI, App Store, and Chrome Web Store metadata normalization | `lib/source-adapters/marketplaces.ts` |
 | Per-candidate collection outcomes and safe public failures | `lib/source-diagnostics.ts` |
 | Provider env resolution, client construction, normalized provider errors | `lib/model-provider.ts` |
 | Model prompt, response schema, and response cross-field validation | `lib/analyzer.ts` |
@@ -183,9 +186,17 @@ These are the contracts most likely to cause subtle errors if weakened:
 - Actual streamed bytes are capped; `Content-Length` alone is not trusted.
 - Supplemental documents and GitHub metadata, README, and latest-release
   requests use the same guarded transport.
+- npm, PyPI, and Apple listings use their official public JSON endpoints;
+  Chrome Web Store evidence is extracted from its guarded public listing because
+  it has no equivalent anonymous metadata endpoint.
 - Supplemental collection is bounded to one page per recognized kind and
   4,000 extracted characters per page. An optional supplemental-page failure
   does not invalidate a successfully collected homepage.
+- Browser rendering is opt-in and only considered for thin application shells.
+  Chromium receives the initial HTML offline; external scripts, styles, and
+  data are re-fetched through the guarded Node transport, while media, fonts,
+  WebSockets, service workers, non-GET requests, and bounded-resource overages
+  are blocked. A rendering failure falls back to the original static page.
 
 The remaining DNS-rebinding gap is explicit: Node's connection lookup happens
 after the policy lookup. FitLens is intended to run as an unprivileged local
@@ -222,7 +233,7 @@ for a local single-user tool, not a shared hosted application.
 | `.env.local` | Local Next.js server | Provider, model, API key, optional GitHub token |
 | Exported `.json` / `.md` | User | Portable backup or share-safe report |
 | Exported `.html` / `.adr.md` / printed PDF | User | Durable offline decision artifacts |
-| `.fitlens/snapshots/<watch-id>/` | CLI watch runner | Immutable timestamped results and `latest.json` |
+| `.fitlens/snapshots/<watch-id>/` | CLI watch runner | Immutable results, `latest.json`, deterministic changes, `trend.json`, and `trend.html` |
 
 Browser history deliberately keeps its existing storage key. Schema migration
 happens while loading, so older local reports do not require a separate data
@@ -236,15 +247,17 @@ to the original localStorage key.
 | --- | --- | --- |
 | Domain | `test/{scoring,evidence,confidence,conflicts,privacy,diff,freshness,pairwise,decision-profiles}.test.ts` | Deterministic decision logic and edge cases |
 | Portable data | `test/{report,redaction,research-library,persistence,candidate-inbox}.test.ts` | Migration, import safety, redaction, local indexing, and storage fallback |
-| External boundaries | `test/{source,source-adapters,source-diagnostics,model-provider}.test.ts` | URL/DNS/redirect policy, source discovery, optional-page isolation, public errors, provider config without live calls |
+| External boundaries | `test/{source,source-adapters,source-diagnostics,model-provider,real-site-fixtures}.test.ts` | URL/DNS/redirect policy, source discovery, optional-page isolation, curated real response compatibility, public errors, and provider config without live calls |
 | Product contract | `test/{criteria,i18n}.test.ts` | Stable criteria and bilingual dictionary parity |
 | Browser contract | `e2e/workflows.spec.ts` | Candidate promotion, evidence review, WCAG scans, and the full-page visual baseline |
 | Build contract | `pnpm lint`, `pnpm exec tsc --noEmit`, `pnpm build` | Static correctness and production compilation |
-| Maintenance contract | `.github/workflows/ci.yml`, `.github/dependabot.yml` | Repeatable CI checks, Chromium coverage, audits, and dependency update visibility |
+| Maintenance contract | `.github/workflows/ci.yml`, `.github/dependabot.yml` | Linux/macOS/Windows quality checks, Linux Chromium coverage and audits, and dependency update visibility |
 
-Network tests use injected DNS/fetch behavior. The fast test suite does not
-depend on live websites, GitHub, or a model provider. Browser tests start the
-local Next.js app and use the bundled report, so they also require no model key.
+Network tests use injected DNS/fetch behavior. Real-site fixtures are curated,
+timestamped excerpts with source URLs; CI never refreshes them or calls those
+sites. The fast suite therefore does not depend on live websites, GitHub, or a
+model provider. Browser tests start the local Next.js app and use the bundled
+report, so they also require no model key.
 
 ## Deliberate non-goals
 

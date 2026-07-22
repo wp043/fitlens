@@ -1,0 +1,24 @@
+{
+  "fixtureVersion": 1,
+  "sourceUrl": "https://itunes.apple.com/lookup?id=1016366447",
+  "listingUrl": "https://apps.apple.com/us/app/bear-markdown-notes/id1016366447",
+  "capturedAt": "2026-07-22T05:04:07Z",
+  "payload": {
+    "resultCount": 1,
+    "results": [
+      {
+        "trackName": "Bear - Markdown Notes",
+        "sellerName": "Shiny Frog Ltd.",
+        "version": "2.9.1",
+        "formattedPrice": "Free",
+        "currency": "USD",
+        "genres": ["Productivity", "Utilities"],
+        "minimumOsVersion": "15.6",
+        "averageUserRating": 4.67753,
+        "userRatingCount": 6841,
+        "currentVersionReleaseNotes": null,
+        "description": "Bear is a beautiful, powerfully simple Markdown app to capture, write, and organize your life. Getting started requires no signup or account."
+      }
+    ]
+  }
+}
