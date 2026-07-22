@@ -17,7 +17,9 @@ import {
   createRunManifest,
 } from "./reproducibility.ts";
 import {
+  AnalysisBudgetExceededError,
   AnalysisCancelledError,
+  createJobDeadline,
   type JobClock,
   PublicSourceCache,
   systemJobClock,
@@ -74,7 +76,7 @@ function isBundledSampleRequest(body: AnalyzeRequest) {
 export interface AnalysisServiceOptions {
   env: Record<string, string | undefined>;
   sessionApiKey?: string;
-  collectSource?: (url: string) => Promise<CollectedSource>;
+  collectSource?: (url: string, signal?: AbortSignal) => Promise<CollectedSource>;
   allowBundledSample?: boolean;
   signal?: AbortSignal;
   clock?: JobClock;
@@ -88,13 +90,15 @@ export async function runAnalysis(
 ): Promise<ComparisonResult> {
   const clock = options.clock ?? systemJobClock;
   const startedAt = new Date(clock.now());
-  const deadline = clock.now() + (options.budgetMs ?? 55_000);
   const body = parseAnalyzeRequest(input);
+  const budgetMs = options.budgetMs ?? 55_000;
+  const deadline = clock.now() + budgetMs;
+  const job = createJobDeadline(options.signal, budgetMs, clock);
   let stage: "source" | "model" | "finalize" = "source";
   let collectedSources: CollectedSource[] = [];
   let provider: ReturnType<typeof resolveModelProviderConfig> | undefined;
   try {
-  throwIfAborted(options.signal);
+  throwIfAborted(job.signal);
   if (options.env.FITLENS_DISABLE_LIVE_ANALYSIS === "1") {
     throw new MissingModelCredentialsError();
   }
@@ -137,23 +141,24 @@ export async function runAnalysis(
   const cacheEligible = !options.collectSource && !options.env.GITHUB_TOKEN;
   const collect =
     options.collectSource ??
-    ((url: string) => collectProductSource(url, undefined, options.signal));
+    ((url: string, signal?: AbortSignal) =>
+      collectProductSource(url, undefined, signal));
   const collected = await collectCandidateSources(
     body.urls,
     async (url) => {
-      throwIfAborted(options.signal);
+      throwIfAborted(job.signal);
       const key = new URL(url).toString();
       const cached = cacheEligible ? publicSourceCache.get(key) : undefined;
       if (cached) return cached;
-      const source = await withTransientRetry(() => collect(url), {
-        signal: options.signal,
+      const source = await withTransientRetry(() => collect(url, job.signal), {
+        signal: job.signal,
         clock,
         deadline,
       });
       if (cacheEligible) publicSourceCache.set(key, source);
       return source;
     },
-    { overallConcurrency: 3, perHostConcurrency: 1, signal: options.signal },
+    { overallConcurrency: 3, perHostConcurrency: 1, signal: job.signal },
   );
   if (!collected.ok) throw new CandidateSourceCollectionError(collected.failures);
   collectedSources = collected.sources;
@@ -165,8 +170,8 @@ export async function runAnalysis(
       modelOutput = output;
       stage = "finalize";
       options.onProgress?.("finalize");
-    }, options.signal),
-    { signal: options.signal, clock, deadline, policy: { attempts: 2 } },
+    }, job.signal),
+    { signal: job.signal, clock, deadline, policy: { attempts: 2 } },
   );
   const finishedAt = new Date(clock.now());
   const analysisRun = createRunManifest({
@@ -192,8 +197,10 @@ export async function runAnalysis(
   } catch (error) {
     const finishedAt = new Date(clock.now());
     const code =
-      error instanceof AnalysisCancelledError || options.signal?.aborted
-        ? "analysis_cancelled"
+      error instanceof AnalysisBudgetExceededError
+        ? "analysis_budget_exceeded"
+        : error instanceof AnalysisCancelledError || options.signal?.aborted
+          ? "analysis_cancelled"
         : error instanceof MissingModelCredentialsError
         ? "missing_model_credentials"
         : error instanceof CandidateSourceCollectionError
@@ -214,5 +221,7 @@ export async function runAnalysis(
       }),
     );
     throw error;
+  } finally {
+    job.dispose();
   }
 }

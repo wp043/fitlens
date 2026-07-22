@@ -380,18 +380,20 @@ export async function fetchRemoteText(
           }
         }
       }
+      const jobSignal = options.signal ?? dependencies.signal;
       response = await dependencies.fetch(current, {
         headers: requestHeaders,
         redirect: "manual",
-        signal: (options.signal ?? dependencies.signal)
+        signal: jobSignal
           ? AbortSignal.any([
-              (options.signal ?? dependencies.signal)!,
+              jobSignal,
               AbortSignal.timeout(12_000),
             ])
           : AbortSignal.timeout(12_000),
       }, validatedAddresses);
     } catch (error) {
-      if (options.signal?.aborted) throw error;
+      const jobSignal = options.signal ?? dependencies.signal;
+      if (jobSignal?.aborted) throw jobSignal.reason ?? error;
       throw new SourceError("fetchFailed", current.hostname);
     }
 

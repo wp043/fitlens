@@ -9,6 +9,8 @@ from the visible draft.
 ## Budgets and retries
 
 - A job has a 55-second service budget, below the route's 60-second ceiling.
+  The deadline is an active abort signal, so it interrupts an in-flight source,
+  guarded browser, or model operation rather than waiting for an attempt to end.
 - At most three candidates collect concurrently and at most one candidate per
   hostname. Input order is preserved.
 - Source requests make at most three attempts. Model requests make at most two.

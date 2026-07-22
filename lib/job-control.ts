@@ -21,12 +21,18 @@ export interface JobClock {
   random(): number;
 }
 
+function abortFailure(signal?: AbortSignal) {
+  return signal?.reason instanceof AnalysisBudgetExceededError
+    ? signal.reason
+    : new AnalysisCancelledError();
+}
+
 export const systemJobClock: JobClock = {
   now: Date.now,
   random: Math.random,
   sleep(ms, signal) {
     return new Promise((resolve, reject) => {
-      if (signal?.aborted) return reject(new AnalysisCancelledError());
+      if (signal?.aborted) return reject(abortFailure(signal));
       const timer = setTimeout(done, ms);
       function done() {
         signal?.removeEventListener("abort", cancel);
@@ -34,7 +40,7 @@ export const systemJobClock: JobClock = {
       }
       function cancel() {
         clearTimeout(timer);
-        reject(new AnalysisCancelledError());
+        reject(abortFailure(signal));
       }
       signal?.addEventListener("abort", cancel, { once: true });
     });
@@ -48,7 +54,51 @@ export interface RetryPolicy {
 }
 
 export function throwIfAborted(signal?: AbortSignal) {
-  if (signal?.aborted) throw new AnalysisCancelledError();
+  if (signal?.aborted) throw abortFailure(signal);
+}
+
+async function raceWithSignal<T>(operation: Promise<T>, signal?: AbortSignal) {
+  if (!signal) return operation;
+  throwIfAborted(signal);
+  return new Promise<T>((resolve, reject) => {
+    const abort = () => reject(abortFailure(signal));
+    signal.addEventListener("abort", abort, { once: true });
+    operation.then(resolve, reject).finally(() => {
+      signal.removeEventListener("abort", abort);
+    });
+  });
+}
+
+/**
+ * Creates a signal that aborts in-flight work at the deadline. `dispose` only
+ * cancels the timer; it never makes a successful job look user-cancelled.
+ */
+export function createJobDeadline(
+  userSignal: AbortSignal | undefined,
+  budgetMs: number,
+  clock: JobClock = systemJobClock,
+) {
+  const deadlineController = new AbortController();
+  const timerController = new AbortController();
+  const signal = userSignal
+    ? AbortSignal.any([userSignal, deadlineController.signal])
+    : deadlineController.signal;
+  let disposed = false;
+  void clock.sleep(Math.max(0, budgetMs), timerController.signal).then(
+    () => {
+      if (!disposed) {
+        deadlineController.abort(new AnalysisBudgetExceededError());
+      }
+    },
+    () => undefined,
+  );
+  return {
+    signal,
+    dispose() {
+      disposed = true;
+      timerController.abort();
+    },
+  };
 }
 
 export function isTransientFailure(error: unknown) {
@@ -89,7 +139,7 @@ export async function withTransientRetry<T>(
       throw new AnalysisBudgetExceededError();
     }
     try {
-      return await operation();
+      return await raceWithSignal(operation(), options.signal);
     } catch (error) {
       throwIfAborted(options.signal);
       if (!isTransientFailure(error) || attempt + 1 >= policy.attempts) throw error;
