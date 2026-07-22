@@ -12,11 +12,13 @@ most 500 physical lines by default. That is a review signal, not a target:
 cohesive files should remain smaller when their ownership is naturally narrow.
 
 Existing files above the limit must appear in
-`config/code-health-baseline.json` with an explicit, non-growing maximum and a
-reason. The workbench entry additionally records its pre-decomposition size so
-the gate proves this sprint made a real reduction. The checker fails when an
-exception grows, disappears, lacks a reason, or becomes small enough that its
-exception should be removed.
+`config/code-health-baseline.json` with an exact line baseline and a reason.
+Actual lines must equal `maxLines`: growth fails, while shrinkage also fails
+with an instruction to lower the baseline (or remove the exception once the
+file reaches 500 lines). This prevents a file from shrinking and later growing
+back into unused allowance. The workbench entry additionally records its
+pre-decomposition size so the gate proves this sprint made a real reduction.
+The checker also fails when an exception disappears or lacks a reason.
 
 To intentionally update a baseline:
 
