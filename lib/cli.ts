@@ -1,6 +1,6 @@
 import type { Locale } from "./i18n.ts";
 
-export type CliOutputFormat = "json" | "markdown";
+export type CliOutputFormat = "json" | "markdown" | "text";
 
 export interface CliOptions {
   command: "analyze" | "demo" | "replay" | "watch" | "doctor" | "help";
@@ -22,13 +22,16 @@ export interface CliOptions {
   replayFile?: string;
 }
 
-export function parseCliArguments(args: string[]): CliOptions {
+export function parseCliArguments(
+  args: string[],
+  defaultFormat: CliOutputFormat = "json",
+): CliOptions {
   if (args.length === 0 || args.includes("--help") || args.includes("-h")) {
     return {
       command: "help",
       urls: [],
       locale: "en",
-      format: "json",
+      format: defaultFormat,
       template: "general",
       allowBundledSample: true,
       force: false,
@@ -51,7 +54,7 @@ export function parseCliArguments(args: string[]): CliOptions {
     command: args[0],
     urls: [],
     locale: "en",
-    format: "json",
+    format: defaultFormat,
     template: "general",
     allowBundledSample: true,
     force: false,
@@ -108,7 +111,9 @@ export function parseCliArguments(args: string[]): CliOptions {
         options.locale = value;
         break;
       case "--format":
-        if (value !== "json" && value !== "markdown") throw new Error("Format must be json or markdown");
+        if (value !== "json" && value !== "markdown" && value !== "text") {
+          throw new Error("Format must be json, markdown, or text");
+        }
         options.format = value;
         break;
       case "--output":
@@ -159,9 +164,9 @@ export function parseCliArguments(args: string[]): CliOptions {
 export const cliHelp = `FitLens CLI
 
 Usage:
-  fitlens demo [--format json|markdown] [--locale en|zh-CN] [--output <path>]
+  fitlens demo [--format text|markdown|json] [--locale en|zh-CN] [--output <path>]
   fitlens analyze --url <url> --url <url> --context <text> [options]
-  fitlens replay --bundle <path> [--format json|markdown] [--output <path>]
+  fitlens replay --bundle <path> [--format text|markdown|json] [--output <path>]
   fitlens watch --config <path> [--output-dir <path>] [--force]
   fitlens doctor [--json] [--output <path>] [--check-playwright] [--probe-provider]
 
@@ -176,7 +181,8 @@ Options:
   --criteria <path>      JSON array of 2–8 comparison criteria
   --template <name>      general, developer-tools, privacy-first, or daily-use
   --locale en|zh-CN      Output language (default: en)
-  --format json|markdown Output format (default: json)
+  --format <name>        json, markdown, or text
+                         (default: text on a terminal, json when piped)
   --output <path>        Write output to a file instead of stdout
   --no-sample            Require a configured provider for bundled examples
   --bundle <path>        Replay bundle to verify and rerun offline

@@ -18,6 +18,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   via `tsconfig.cli.json`.
 - `SECURITY.md` documents the deployment model, SSRF controls, prompt-injection
   boundary, credential handling, and reporting process.
+- `--format text` renders a styled terminal report: score bars, evidence badges
+  by level, and section rules. It is the default when stdout is a terminal;
+  JSON remains the default for pipes, redirects, and scripts. ANSI is never
+  written to a file, and `NO_COLOR` is honored. Zero new dependencies.
+  Widths are measured in terminal cells, so East Asian text stays aligned, and
+  Chinese line-breaking rules keep punctuation off the start of a line.
 
 ### Changed
 
@@ -30,6 +36,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CI pins Node to `22.22.0` instead of floating `22`. Line-coverage attribution
   can shift across V8 patch releases, which could fail the 100% ratchet with no
   source change.
+- `erasableSyntaxOnly` is enabled. `pnpm test` runs under Node's strip-only
+  TypeScript mode, which rejects syntax `tsc` accepts, so the typecheck now
+  catches that class of error instead of the test run.
+
+### Fixed
+
+- `.gitattributes` forces LF checkout. On Windows, CRLF shifted V8's coverage
+  offset-to-line mapping and failed the ratchet with phantom uncovered lines.
 
 ### Fixed
 

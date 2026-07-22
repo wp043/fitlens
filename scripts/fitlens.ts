@@ -2,9 +2,10 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { z } from "zod";
-import { parseCliArguments, cliHelp } from "../lib/cli.ts";
+import { parseCliArguments, cliHelp, type CliOutputFormat } from "../lib/cli.ts";
 import { getBuiltInCriteriaTemplates } from "../lib/criteria.ts";
 import { comparisonToMarkdown } from "../lib/markdown-report.ts";
+import { comparisonToTerminal } from "../lib/terminal-report.ts";
 import {
   CandidateSourceCollectionError,
   MissingModelCredentialsError,
@@ -159,10 +160,38 @@ const DEMO_CONTEXT =
   "Evaluating terminal-first coding agents for a small team that runs several " +
   "agents in parallel and cares about openness and automation.";
 
+/**
+ * `--format json` is the machine contract. `text` is for a human reading a
+ * terminal, so it never carries ANSI into a file or a pipe.
+ */
+function supportsColor() {
+  if (process.env.NO_COLOR) return false;
+  if (process.env.FORCE_COLOR && process.env.FORCE_COLOR !== "0") return true;
+  return Boolean(process.stdout.isTTY);
+}
+
+function renderResult(
+  result: ComparisonResult,
+  format: CliOutputFormat,
+  toFile: boolean,
+) {
+  if (format === "markdown") return comparisonToMarkdown(result);
+  if (format === "text") {
+    return comparisonToTerminal(result, {
+      width: process.stdout.columns,
+      color: !toFile && supportsColor(),
+    });
+  }
+  return `${JSON.stringify(result, null, 2)}\n`;
+}
+
 async function main() {
   const controller = new AbortController();
   process.once("SIGINT", () => controller.abort());
-  const options = parseCliArguments(process.argv.slice(2));
+  const options = parseCliArguments(
+    process.argv.slice(2),
+    process.stdout.isTTY ? "text" : "json",
+  );
   if (options.command === "help") {
     process.stdout.write(cliHelp);
     return;
@@ -194,9 +223,7 @@ async function main() {
   if (options.command === "replay") {
     const bundle = parseReplayBundle(await readFile(resolve(options.replayFile!), "utf8"));
     const result = replayAnalysisBundle(bundle);
-    const output = options.format === "markdown"
-      ? comparisonToMarkdown(result)
-      : `${JSON.stringify(result, null, 2)}\n`;
+    const output = renderResult(result, options.format, Boolean(options.outputFile));
     if (options.outputFile) {
       await writeFile(resolve(options.outputFile), output, "utf8");
     } else {
@@ -237,10 +264,7 @@ async function main() {
       signal: controller.signal,
     },
   );
-  const output =
-    options.format === "markdown"
-      ? comparisonToMarkdown(result)
-      : `${JSON.stringify(result, null, 2)}\n`;
+  const output = renderResult(result, options.format, Boolean(options.outputFile));
   if (options.outputFile) {
     await writeFile(resolve(options.outputFile), output, "utf8");
   } else {

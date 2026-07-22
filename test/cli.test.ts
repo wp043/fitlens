@@ -94,3 +94,15 @@ test("demo needs no inputs and rejects analysis arguments", () => {
     /Demo takes no/,
   );
 });
+
+test("output format defaults to the caller's choice and accepts text", () => {
+  assert.equal(parseCliArguments(["demo"]).format, "json");
+  assert.equal(parseCliArguments(["demo"], "text").format, "text");
+  // An explicit flag always wins over the default.
+  assert.equal(parseCliArguments(["demo", "--format", "json"], "text").format, "json");
+  assert.equal(parseCliArguments(["demo", "--format", "text"]).format, "text");
+  assert.throws(
+    () => parseCliArguments(["demo", "--format", "yaml"]),
+    /json, markdown, or text/,
+  );
+});

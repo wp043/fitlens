@@ -70,9 +70,19 @@ npx fitlens demo
 
 That renders a complete comparison offline from a bundled sample: scored
 candidates, labeled evidence, calibrated confidence, conflicts, and unknowns.
-Add `--format markdown` for readable output, or `--locale zh-CN` for Chinese.
 Nothing is fetched and no credentials are read, so the output is identical on
-every machine.
+every machine. Add `--locale zh-CN` for Chinese.
+
+Output format follows where it is going, so the same command is readable for a
+human and parseable by a script:
+
+| Destination | Default | Override |
+| --- | --- | --- |
+| Terminal | Styled text with score bars and evidence badges | `--format json`, `--format markdown` |
+| Pipe or redirect | JSON | `--format text`, `--format markdown` |
+| `--output <path>` | Follows `--format`; never writes ANSI | — |
+
+`NO_COLOR` is honored.
 
 ### Then run it for real
 
