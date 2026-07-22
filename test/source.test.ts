@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
+import { createServer } from "node:http";
 import test from "node:test";
 import {
   assertPublicHost,
   collectProductSource,
+  fetchAtValidatedAddresses,
   fetchRemoteText,
   isPublicIpAddress,
   needsBrowserRendering,
@@ -114,6 +116,65 @@ test("rejects a hostname when any DNS answer is not globally routable", async ()
     assertPublicHost(new URL("https://example.com"), dependencies),
     (error) => error instanceof SourceError && error.code === "privateNetwork",
   );
+});
+
+test("pins the validated DNS answers to the request transport", async () => {
+  const resolved = ["93.184.216.34", "2606:2800:220:1:248:1893:25c8:1946"];
+  let pinned: readonly string[] | undefined;
+  const dependencies = network(
+    async () => [...resolved, resolved[0]],
+    async (_input, _init, validatedAddresses) => {
+      pinned = validatedAddresses;
+      return new Response("safe", {
+        headers: { "content-type": "text/plain" },
+      });
+    },
+  );
+
+  const result = await fetchRemoteText(
+    "https://safe.example",
+    {
+      accept: "text/plain",
+      allowedContentTypes: ["text/plain"],
+      maxBytes: 100,
+    },
+    dependencies,
+  );
+
+  assert.equal(result.text, "safe");
+  assert.deepEqual(pinned, resolved);
+});
+
+test("the pinned transport connects without resolving the URL hostname", async (t) => {
+  let host: string | undefined;
+  const server = createServer((request, response) => {
+    host = request.headers.host;
+    response.writeHead(200, { "content-type": "text/plain" });
+    response.end("pinned");
+  });
+  await new Promise<void>((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", resolve);
+  });
+  t.after(
+    () =>
+      new Promise<void>((resolve, reject) => {
+        server.close((error) => (error ? reject(error) : resolve()));
+      }),
+  );
+
+  const address = server.address();
+  if (!address || typeof address === "string") {
+    throw new Error("Expected a TCP server address.");
+  }
+  const response = await fetchAtValidatedAddresses(
+    new URL(`http://unresolvable.invalid:${address.port}/evidence`),
+    undefined,
+    ["127.0.0.1"],
+  );
+
+  assert.equal(await response.text(), "pinned");
+  assert.equal(host, `unresolvable.invalid:${address.port}`);
 });
 
 test("validates the DNS result for every redirect before requesting it", async () => {

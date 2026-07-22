@@ -2,6 +2,7 @@ import * as cheerio from "cheerio";
 import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
 import type { Route } from "playwright";
+import { Agent, fetch as undiciFetch } from "undici";
 import { discoverSourceDocuments } from "./source-adapters/registry.ts";
 import {
   chromeStoreDocument,
@@ -74,13 +75,69 @@ const PRIVATE_HOST_PATTERNS = [
 ];
 
 export interface SourceNetworkDependencies {
-  fetch: typeof globalThis.fetch;
+  fetch: (
+    input: URL | RequestInfo,
+    init?: RequestInit,
+    validatedAddresses?: readonly string[],
+  ) => Promise<Response>;
   resolveHostname: (hostname: string) => Promise<string[]>;
   renderHtml?: (html: string, pageUrl: string) => Promise<string>;
 }
 
+/** @internal Exported so the DNS-to-socket binding can be contract-tested. */
+export async function fetchAtValidatedAddresses(
+  input: URL | RequestInfo,
+  init?: RequestInit,
+  validatedAddresses: readonly string[] = [],
+): Promise<Response> {
+  if (!validatedAddresses.length) {
+    throw new Error("A validated destination address is required.");
+  }
+  if (validatedAddresses.some((address) => isIP(address) === 0)) {
+    throw new Error("Every validated destination must be an IP address.");
+  }
+
+  const addresses = validatedAddresses.map((address) => ({
+    address,
+    family: isIP(address) as 4 | 6,
+  }));
+  const dispatcher = new Agent({
+    connect: {
+      lookup(_hostname, options, callback) {
+        const requestedFamily = Number(options.family || 0);
+        const eligible = requestedFamily
+          ? addresses.filter(({ family }) => family === requestedFamily)
+          : addresses;
+        if (!eligible.length) {
+          const error = new Error("No validated address matches the requested family.") as NodeJS.ErrnoException;
+          error.code = "ENOTFOUND";
+          callback(error, []);
+          return;
+        }
+        if (options.all) {
+          callback(null, eligible);
+          return;
+        }
+        callback(null, eligible[0].address, eligible[0].family);
+      },
+    },
+  });
+
+  try {
+    const response = await undiciFetch(input as import("undici").RequestInfo, {
+      ...(init as import("undici").RequestInit | undefined),
+      dispatcher,
+    });
+    void dispatcher.close().catch(() => undefined);
+    return response as unknown as Response;
+  } catch (error) {
+    await dispatcher.close();
+    throw error;
+  }
+}
+
 const defaultNetworkDependencies: SourceNetworkDependencies = {
-  fetch: globalThis.fetch,
+  fetch: fetchAtValidatedAddresses,
   async resolveHostname(hostname) {
     const results = await lookup(hostname, { all: true, verbatim: true });
     return results.map(({ address }) => address);
@@ -219,12 +276,12 @@ export function toPublicUrl(raw: string): URL {
 export async function assertPublicHost(
   url: URL,
   dependencies: SourceNetworkDependencies = defaultNetworkDependencies,
-): Promise<void> {
+): Promise<string[]> {
   const validated = toPublicUrl(url.toString());
   const hostname = validated.hostname.replace(/^\[|\]$/g, "");
   if (isIP(hostname)) {
     if (!isPublicIpAddress(hostname)) throw new SourceError("privateNetwork");
-    return;
+    return [hostname];
   }
 
   let addresses: string[];
@@ -236,6 +293,7 @@ export async function assertPublicHost(
   if (!addresses.length || addresses.some((address) => !isPublicIpAddress(address))) {
     throw new SourceError("privateNetwork");
   }
+  return [...new Set(addresses)];
 }
 
 function githubRepoFromUrl(raw: string): string | undefined {
@@ -293,7 +351,7 @@ export async function fetchRemoteText(
   const maxRedirects = options.maxRedirects ?? 5;
 
   for (let redirectCount = 0; redirectCount <= maxRedirects; redirectCount += 1) {
-    await assertPublicHost(current, dependencies);
+    const validatedAddresses = await assertPublicHost(current, dependencies);
     let response: Response;
     try {
       const requestHeaders: Record<string, string> = {
@@ -312,7 +370,7 @@ export async function fetchRemoteText(
         headers: requestHeaders,
         redirect: "manual",
         signal: AbortSignal.timeout(12_000),
-      });
+      }, validatedAddresses);
     } catch {
       throw new SourceError("fetchFailed", current.hostname);
     }

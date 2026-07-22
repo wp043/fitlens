@@ -198,9 +198,11 @@ These are the contracts most likely to cause subtle errors if weakened:
   WebSockets, service workers, non-GET requests, and bounded-resource overages
   are blocked. A rendering failure falls back to the original static page.
 
-The remaining DNS-rebinding gap is explicit: Node's connection lookup happens
-after the policy lookup. FitLens is intended to run as an unprivileged local
-process. A public deployment would also need outbound firewall or proxy policy.
+Each guarded request resolves and validates every DNS answer, then supplies that
+same immutable address set to the HTTP connection lookup. Redirects repeat the
+process with a fresh, destination-specific dispatcher, closing the DNS-rebinding
+window between policy evaluation and socket creation. A public deployment should
+still enforce an outbound firewall or proxy as defense in depth.
 
 ### Model boundary
 
