@@ -147,6 +147,67 @@ const confidenceCalibrationSchema = z
   })
   .passthrough();
 
+const analysisRunSchema = z.object({
+  schemaVersion: z.literal(1),
+  runId: z.string(),
+  status: z.enum(["complete", "failed"]),
+  provider: z.object({
+    kind: z.enum(["openai", "compatible", "bundled-sample", "replay"]),
+    model: z.string(),
+  }),
+  versions: z.object({
+    prompt: z.string(), schema: z.string(), adapter: z.string(), replay: z.string(),
+  }),
+  requestHash: z.string(),
+  sources: z.array(z.object({
+    inputUrl: httpUrlSchema,
+    contentHash: z.string(),
+    documentHashes: z.array(z.object({ kind: z.string(), url: httpUrlSchema, contentHash: z.string() })),
+  })),
+  timing: z.object({ startedAt: z.string(), finishedAt: z.string(), durationMs: z.number().min(0) }),
+  failure: z.object({
+    stage: z.enum(["request", "source", "model", "finalize", "replay"]),
+    code: z.string(),
+  }).optional(),
+}).passthrough();
+
+const replaySourceSchema = z.object({
+  inputUrl: httpUrlSchema,
+  homepageUrl: httpUrlSchema,
+  name: z.string().max(500),
+  description: z.string().max(4_000),
+  sourceMode: z.enum(["open-source", "website-only"]),
+  pageText: z.string().max(120_000),
+  documents: z.array(z.object({
+    kind: z.string(), title: z.string().max(500), url: httpUrlSchema, text: z.string().max(80_000),
+  })).max(12),
+  repo: z.object({
+    fullName: z.string(), url: httpUrlSchema, description: z.string().max(4_000),
+    license: z.string(), defaultBranch: z.string(), stars: z.number(), forks: z.number(),
+    openIssues: z.number(), pushedAt: z.string(), archived: z.boolean(),
+    topics: z.array(z.string()).max(50), readme: z.string().max(120_000),
+    latestRelease: z.object({
+      name: z.string(), tagName: z.string(), url: httpUrlSchema,
+      publishedAt: z.string(), notes: z.string().max(80_000),
+    }).optional(),
+  }).optional(),
+}).passthrough();
+
+const replayBundleSchema = z.object({
+  schemaVersion: z.literal(1),
+  createdAt: z.string(),
+  generatedAt: z.string(),
+  manifest: analysisRunSchema,
+  trustedRequest: z.object({
+    urls: z.array(httpUrlSchema).min(2).max(8),
+    context: z.string().max(20_000),
+    criteria: z.array(criterionSchema).min(2).max(8),
+    locale: z.enum(["zh-CN", "en"]),
+  }),
+  sourceSnapshots: z.array(replaySourceSchema).min(2).max(8),
+  modelOutput: z.unknown(),
+}).passthrough();
+
 const productSchema = z
   .object({
     name: z.string(),
@@ -199,6 +260,8 @@ const resultSchema = z
         })
         .passthrough(),
     ),
+    analysisRun: analysisRunSchema.optional(),
+    replayBundle: replayBundleSchema.optional(),
   })
   .passthrough()
   .superRefine((result, context) => {
@@ -275,7 +338,7 @@ const savedReportSchema = z
 
 const portableReportSchema = z
   .object({
-    schemaVersion: z.union([z.literal(1), z.literal(2), z.literal(3)]),
+    schemaVersion: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]),
     exportedAt: z.string(),
     report: savedReportSchema,
   })
@@ -348,7 +411,7 @@ export function calculateEvidenceCoverage(
 export function serializeReport(report: SavedReport) {
   return JSON.stringify(
     {
-      schemaVersion: 3,
+      schemaVersion: 4,
       exportedAt: new Date().toISOString(),
       report,
     },
@@ -371,7 +434,10 @@ export function normalizeSavedReport(input: unknown): SavedReport {
         hint: dimension.explanation,
         weight: report.priorities[dimension.key] ?? dimension.weight ?? 60,
       })),
-    revisions: report.revisions ?? [],
+    revisions: (report.revisions ?? []).map((revision) => ({
+      ...revision,
+      replayBundle: undefined,
+    })),
     trialResults:
       report.trialResults?.length
         ? report.trialResults

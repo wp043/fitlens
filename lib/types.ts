@@ -140,6 +140,69 @@ export interface ComparisonResult {
   dimensions: DimensionResult[];
   unknowns: string[];
   trialPlan: TrialTask[];
+  /** Non-secret provenance for auditing how this result was produced. */
+  analysisRun?: AnalysisRunManifest;
+  /** Local-only material for a zero-network, zero-model-cost replay. */
+  replayBundle?: AnalysisReplayBundle;
+}
+
+export interface AnalysisRunFailure {
+  stage: "request" | "source" | "model" | "finalize" | "replay";
+  code: string;
+}
+
+export interface AnalysisSourceManifest {
+  inputUrl: string;
+  contentHash: string;
+  documentHashes: Array<{ kind: string; url: string; contentHash: string }>;
+}
+
+export interface AnalysisRunManifest {
+  schemaVersion: 1;
+  runId: string;
+  status: "complete" | "failed";
+  provider: { kind: "openai" | "compatible" | "bundled-sample" | "replay"; model: string };
+  versions: { prompt: string; schema: string; adapter: string; replay: string };
+  requestHash: string;
+  sources: AnalysisSourceManifest[];
+  timing: { startedAt: string; finishedAt: string; durationMs: number };
+  failure?: AnalysisRunFailure;
+}
+
+export interface ReplaySourceSnapshot {
+  inputUrl: string;
+  homepageUrl: string;
+  name: string;
+  description: string;
+  sourceMode: "open-source" | "website-only";
+  pageText: string;
+  documents: Array<{ kind: string; title: string; url: string; text: string }>;
+  repo?: {
+    fullName: string;
+    url: string;
+    description: string;
+    license: string;
+    defaultBranch: string;
+    stars: number;
+    forks: number;
+    openIssues: number;
+    pushedAt: string;
+    archived: boolean;
+    topics: string[];
+    readme: string;
+    latestRelease?: { name: string; tagName: string; url: string; publishedAt: string; notes: string };
+  };
+}
+
+export interface AnalysisReplayBundle {
+  schemaVersion: 1;
+  createdAt: string;
+  generatedAt: string;
+  manifest: AnalysisRunManifest;
+  trustedRequest: AnalyzeRequest;
+  sourceSnapshots: ReplaySourceSnapshot[];
+  /** Validated model payload, never credentials or provider response metadata. */
+  modelOutput: unknown;
 }
 
 export interface AnalyzeRequest {

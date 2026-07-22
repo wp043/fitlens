@@ -555,7 +555,12 @@ export function CompareWorkbench({
         result: payload,
         notes,
         locale,
-        revisions: [...(stored?.revisions ?? []), previous].slice(
+        // Keep provenance for revisions without multiplying private source
+        // snapshots in every report refresh.
+        revisions: [
+          ...(stored?.revisions ?? []),
+          { ...previous, replayBundle: undefined },
+        ].slice(
           -maxRevisions,
         ),
         trialResults: stored?.trialResults ?? trialResults,
@@ -703,6 +708,15 @@ export function CompareWorkbench({
     anchor.download = `${safeFilename(report.title)}.fitlens.json`;
     anchor.click();
     URL.revokeObjectURL(url);
+  }
+
+  function exportReplayBundle() {
+    if (!result?.replayBundle) return;
+    downloadArtifact(
+      `${JSON.stringify(result.replayBundle, null, 2)}\n`,
+      `${safeFilename(result.title)}.fitlens-replay.json`,
+      "application/json;charset=utf-8",
+    );
   }
 
   function downloadArtifact(content: string, filename: string, type: string) {
@@ -1646,6 +1660,9 @@ export function CompareWorkbench({
             </button>
             <button onClick={exportMarkdown}>{t.exportMarkdown}</button>
             <button onClick={exportJson}>{t.exportJson}</button>
+            {result.replayBundle && (
+              <button onClick={exportReplayBundle}>{t.exportReplay}</button>
+            )}
             <button onClick={exportHtml}>{t.exportHtml}</button>
             <button onClick={exportAdr}>{t.exportAdr}</button>
             <button onClick={exportPdf}>{t.exportPdf}</button>
@@ -1668,6 +1685,14 @@ export function CompareWorkbench({
             )}
           </div>
         </div>
+        {result.analysisRun && (
+          <div className="run-provenance">
+            <strong>{t.runProvenance}</strong>{" "}
+            <span>{result.analysisRun.provider.kind} · {result.analysisRun.provider.model}</span>{" "}
+            <code>{result.analysisRun.runId}</code>
+            {result.replayBundle && <small>{t.replayPrivate}</small>}
+          </div>
+        )}
         {error && <div className="error-banner report-error">{error}</div>}
 
         <div className="verdict-card">

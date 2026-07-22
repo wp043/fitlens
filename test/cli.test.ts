@@ -61,3 +61,16 @@ test("parses doctor diagnostics without analysis inputs", () => {
   assert.equal(options.checkPlaywright, true);
   assert.equal(options.probeProvider, true);
 });
+
+test("parses an offline replay without analysis inputs", () => {
+  const options = parseCliArguments([
+    "replay",
+    "--bundle", "decision.fitlens-replay.json",
+    "--format", "markdown",
+    "--output", "decision.md",
+  ]);
+  assert.equal(options.command, "replay");
+  assert.equal(options.replayFile, "decision.fitlens-replay.json");
+  assert.equal(options.format, "markdown");
+  assert.throws(() => parseCliArguments(["replay"]), /--bundle/);
+});

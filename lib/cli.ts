@@ -3,7 +3,7 @@ import type { Locale } from "./i18n.ts";
 export type CliOutputFormat = "json" | "markdown";
 
 export interface CliOptions {
-  command: "analyze" | "watch" | "doctor" | "help";
+  command: "analyze" | "replay" | "watch" | "doctor" | "help";
   urls: string[];
   context?: string;
   contextFile?: string;
@@ -19,6 +19,7 @@ export interface CliOptions {
   doctorJson: boolean;
   checkPlaywright: boolean;
   probeProvider: boolean;
+  replayFile?: string;
 }
 
 export function parseCliArguments(args: string[]): CliOptions {
@@ -36,7 +37,7 @@ export function parseCliArguments(args: string[]): CliOptions {
       probeProvider: false,
     };
   }
-  if (args[0] !== "analyze" && args[0] !== "watch" && args[0] !== "doctor") {
+  if (args[0] !== "analyze" && args[0] !== "replay" && args[0] !== "watch" && args[0] !== "doctor") {
     throw new Error(`Unknown command: ${args[0]}`);
   }
 
@@ -113,11 +114,18 @@ export function parseCliArguments(args: string[]): CliOptions {
       case "--output-dir":
         options.outputDirectory = value;
         break;
+      case "--bundle":
+        options.replayFile = value;
+        break;
       default:
         throw new Error(`Unknown option: ${flag}`);
     }
   }
   if (options.command === "doctor") return options;
+  if (options.command === "replay") {
+    if (!options.replayFile) throw new Error("Replay requires --bundle");
+    return options;
+  }
   if (options.command === "watch") {
     if (!options.configFile) throw new Error("Watch requires --config");
     options.outputDirectory ??= ".fitlens/snapshots";
@@ -139,6 +147,7 @@ export const cliHelp = `FitLens CLI
 
 Usage:
   pnpm fitlens analyze --url <url> --url <url> --context <text> [options]
+  pnpm fitlens replay --bundle <path> [--format json|markdown] [--output <path>]
   pnpm fitlens watch --config <path> [--output-dir <path>] [--force]
   pnpm fitlens doctor [--json] [--output <path>] [--check-playwright] [--probe-provider]
 
@@ -152,6 +161,7 @@ Options:
   --format json|markdown Output format (default: json)
   --output <path>        Write output to a file instead of stdout
   --no-sample            Require a configured provider for bundled examples
+  --bundle <path>        Replay bundle to verify and rerun offline
   --config <path>        Watchlist JSON file
   --output-dir <path>    Snapshot root (default: .fitlens/snapshots)
   --force                Run every watch entry regardless of interval
