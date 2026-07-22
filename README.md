@@ -1,6 +1,6 @@
 <p align="center">
   <a href="assets/fitlens-logo.svg">
-    <img src="assets/fitlens-hero.gif" alt="FitLens — evidence in, decision out" width="900" />
+    <img src="assets/fitlens-logo.svg" alt="FitLens — evidence in, decision out" width="900" />
   </a>
 </p>
 
