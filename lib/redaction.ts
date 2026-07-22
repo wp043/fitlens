@@ -92,6 +92,7 @@ export function createRedactedReport(
       notes: "",
       revisions: [],
       trialResults: [],
+      pairwiseTrials: [],
       conflicts,
       confidenceCalibrations: calibrateComparisonConfidence(
         result.products,
@@ -102,7 +103,8 @@ export function createRedactedReport(
     },
     summary: {
       manualEvidenceRemoved,
-      trialResultsRemoved: report.trialResults.length,
+      trialResultsRemoved:
+        report.trialResults.length + (report.pairwiseTrials?.length ?? 0),
       revisionsRemoved: report.revisions.length,
     },
   };

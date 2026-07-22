@@ -53,6 +53,7 @@ refresh, and export.
 | **See the evidence quality** | Every claim is labeled `verified`, `vendor`, or `inferred`. Coverage, freshness, source diversity, contradictions, and calibrated confidence are separate signals. |
 | **Review before trusting** | Accept, reject, edit, and annotate individual claims. Rejected evidence stops affecting confidence, coverage, freshness, and conflict checks without erasing the audit trail. |
 | **Decide for your workflow** | Use editable criteria and reusable templates. Reweight the decision instantly without another model request. |
+| **Reuse how you decide** | Save complete decision profiles with workflow context and criteria, then apply them to the next product category. |
 | **Keep the messy parts visible** | Pricing uncertainty, missing disclosures, conflicting claims, and source failures stay explicit instead of being smoothed into a confident answer. |
 | **Build a local research memory** | Search and filter up to 50 saved reports. Reopen a decision, reuse its inputs, add manual evidence, refresh sources, and review deterministic diffs. |
 | **Share without oversharing** | Export full Markdown/JSON for yourself or create a share-safe copy that removes private context, notes, trials, revisions, and manual evidence. |
@@ -148,6 +149,8 @@ newer and better supported.
 - Review collected claims in place. Corrections preserve the model's original
   wording, and review status, notes, and edits survive source refreshes.
 - Turn the generated trial plan into a saved pass/fail checklist with notes.
+- Run the same hands-on task against any two shortlisted products and keep a
+  separate win/loss/tie standing that does not pretend to be model evidence.
 - Flag aging and stale sources, then refresh the report when the decision
   matters again.
 - Search saved research by product, workflow, evidence claim, source URL,
@@ -240,7 +243,7 @@ FitLens has no account system and no hosted database.
 | --- | --- | --- |
 | Reports, revisions, notes | Browser IndexedDB with `localStorage` fallback | Until you clear it |
 | Candidate inbox, notes, tags, archive state | Browser IndexedDB with `localStorage` fallback | Until you clear it |
-| Criteria templates and locale | Browser `localStorage` | Until you clear it |
+| Criteria templates, decision profiles, and locale | Browser `localStorage` | Until you clear it |
 | Key entered in the UI | Browser `sessionStorage` | Current tab session |
 | `.env.local` keys and provider config | Local server environment | Until the file changes |
 | Product source material | Configured model provider | According to that provider |
@@ -291,6 +294,7 @@ scripts/
 components/
   compare-workbench  local interactive research workspace
   candidate-inbox    quick capture, filtering, archive, and shortlist UI
+  pairwise-trials    head-to-head trial capture and standings UI
 lib/
   source             guarded website and GitHub collection
   source-adapters/   official document discovery and classification
@@ -306,6 +310,8 @@ lib/
   privacy            privacy-risk calibration
   report             portable schema, migration, and coverage
   candidate-inbox    URL capture, normalization, deduplication, and search
+  decision-profiles  reusable workflow-and-criteria validation
+  pairwise           deterministic trial standings
   persistence        IndexedDB adapter and safe localStorage migration
   research-library   local search index and facets
 test/                 deterministic domain and security tests
@@ -340,8 +346,8 @@ diagnostics, and URL/DNS/redirect safety without requiring live network calls.
 - Watchlists require an external local scheduler such as cron or launchd; the
   browser does not claim to run reliable background jobs while it is closed.
 
-The highest-value next step is reusable decision profiles and pairwise trial
-comparisons for close calls within a larger shortlist.
+The highest-value next step is richer HTML, ADR, and PDF exports for durable
+decision records outside FitLens.
 
 ## License
 

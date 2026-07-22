@@ -50,6 +50,7 @@ configured model, validates the structured response, and returns it.
 | Page metadata and root document | `app/layout.tsx` |
 | Workbench state and report interactions | `components/compare-workbench.tsx` |
 | Candidate capture, filtering, archive, and shortlist interactions | `components/candidate-inbox.tsx` |
+| Pairwise trial editing and standings UI | `components/pairwise-trials.tsx` |
 | Public analysis endpoint and status codes | `app/api/analyze/route.ts` |
 | Shared browser/CLI orchestration and source failure boundary | `lib/analysis-service.ts` |
 | Headless argument parsing and entry point | `lib/cli.ts`, `scripts/fitlens.ts` |
@@ -62,6 +63,8 @@ configured model, validates the structured response, and returns it.
 | Model prompt, response schema, and response cross-field validation | `lib/analyzer.ts` |
 | Criteria templates and legacy criteria migration | `lib/criteria.ts` |
 | Candidate URL normalization, deduplication, storage validation, and search | `lib/candidate-inbox.ts` |
+| Decision profile validation | `lib/decision-profiles.ts` |
+| Deterministic head-to-head standings | `lib/pairwise.ts` |
 | IndexedDB access, ordered writes, migration, and fallback policy | `lib/persistence.ts` |
 | Weighted fit calculation | `lib/scoring.ts` |
 | Active evidence filtering, manual merge, and review preservation | `lib/evidence.ts` |
@@ -212,6 +215,7 @@ for a local single-user tool, not a shared hosted application.
 | `fitlens-report-history-v1` in IndexedDB | Workbench | Up to 50 reports, revisions, notes, trials, and manual evidence |
 | `fitlens-candidate-inbox-v1` in IndexedDB | Candidate inbox | Captured product URLs, notes, tags, timestamps, and archive state |
 | Template storage in `localStorage` | Workbench | User-created criteria templates |
+| Decision profile storage in `localStorage` | Workbench | Reusable workflow context and criteria |
 | Locale storage in `localStorage` | Workbench | Current language preference |
 | API key in `sessionStorage` | Workbench | Current-tab model key override |
 | `.env.local` | Local Next.js server | Provider, model, API key, optional GitHub token |
@@ -228,7 +232,7 @@ to the original localStorage key.
 
 | Layer | Files | What it proves |
 | --- | --- | --- |
-| Domain | `test/{scoring,evidence,confidence,conflicts,privacy,diff,freshness}.test.ts` | Deterministic decision logic and edge cases |
+| Domain | `test/{scoring,evidence,confidence,conflicts,privacy,diff,freshness,pairwise,decision-profiles}.test.ts` | Deterministic decision logic and edge cases |
 | Portable data | `test/{report,redaction,research-library,persistence,candidate-inbox}.test.ts` | Migration, import safety, redaction, local indexing, and storage fallback |
 | External boundaries | `test/{source,source-adapters,source-diagnostics,model-provider}.test.ts` | URL/DNS/redirect policy, source discovery, optional-page isolation, public errors, provider config without live calls |
 | Product contract | `test/{criteria,i18n}.test.ts` | Stable criteria and bilingual dictionary parity |

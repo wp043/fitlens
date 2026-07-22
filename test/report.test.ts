@@ -42,6 +42,16 @@ test("portable reports preserve notes and preference weights", () => {
         note: "Completed in 12 minutes.",
       },
     ],
+    pairwiseTrials: [
+      {
+        id: "pair-1",
+        firstProduct: "cmux",
+        secondProduct: "Otty",
+        task: "Restore the same workspace.",
+        outcome: "first",
+        note: "cmux restored more state.",
+      },
+    ],
     conflicts: [],
     confidenceCalibrations: calibrateComparisonConfidence(sampleComparison.products),
   };
@@ -55,6 +65,7 @@ test("portable reports preserve notes and preference weights", () => {
   assert.deepEqual(restored.revisions, []);
   assert.equal(restored.trialResults[0].status, "passed");
   assert.equal(restored.trialResults[0].note, "Completed in 12 minutes.");
+  assert.equal(restored.pairwiseTrials?.[0].outcome, "first");
   assert.equal(restored.result.products.length, 2);
   assert.equal(restored.result.products[0].pricing?.hasFreeOption, true);
   assert.equal(restored.result.products[0].pricing?.plans[0].cadence, "free");

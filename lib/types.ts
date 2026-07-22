@@ -115,6 +115,18 @@ export interface TrialResult {
   updatedAt?: string;
 }
 
+export type PairwiseTrialOutcome = "untested" | "first" | "second" | "tie";
+
+export interface PairwiseTrialResult {
+  id: string;
+  firstProduct: string;
+  secondProduct: string;
+  task: string;
+  outcome: PairwiseTrialOutcome;
+  note: string;
+  updatedAt?: string;
+}
+
 export interface ComparisonResult {
   title: string;
   generatedAt: string;

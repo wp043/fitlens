@@ -33,6 +33,11 @@ import {
 import { calculateWeightedWinner } from "@/lib/scoring";
 import { createRedactedReport } from "@/lib/redaction";
 import { CandidateInbox } from "@/components/candidate-inbox";
+import { PairwiseTrials } from "@/components/pairwise-trials";
+import {
+  normalizeDecisionProfiles,
+  type DecisionProfile,
+} from "@/lib/decision-profiles";
 import {
   deleteBrowserValue,
   loadBrowserValue,
@@ -61,6 +66,7 @@ import type {
   EvidenceLevel,
   EvidenceReviewStatus,
   TrialResult,
+  PairwiseTrialResult,
   TrialStatus,
   PriorityWeights,
   PrivacyCategory,
@@ -119,6 +125,7 @@ const preferenceProfilesKey = "fitlens-preference-profiles-v1";
 const criteriaTemplatesKey = "fitlens-criteria-templates-v1";
 const localeKey = "fitlens-locale-v1";
 const candidateInboxKey = "fitlens-candidate-inbox-v1";
+const decisionProfilesKey = "fitlens-decision-profiles-v1";
 
 const maxSavedReports = 50;
 const maxRevisions = 5;
@@ -243,6 +250,7 @@ function comparisonAsMarkdown(
   trialResults: TrialResult[] = [],
   conflicts: EvidenceConflict[] = [],
   redacted = false,
+  pairwiseTrials: PairwiseTrialResult[] = [],
 ) {
   const evidenceLabels: Record<EvidenceLevel, string> = {
     verified: t.verified,
@@ -340,6 +348,19 @@ ${product.evidence
           return `${index + 1}. **${item.task}**${status} — ${item.reason}${note}`;
         })
         .join("\n")}\n\n`;
+  const pairwiseSection = redacted || pairwiseTrials.length === 0
+    ? ""
+    : `## ${t.pairwiseTitle}\n${pairwiseTrials
+        .map((trial) => {
+          const outcome = {
+            untested: t.pairwiseUntested,
+            first: t.pairwiseFirstWins.replace("{product}", trial.firstProduct),
+            second: t.pairwiseSecondWins.replace("{product}", trial.secondProduct),
+            tie: t.pairwiseTie,
+          }[trial.outcome];
+          return `- **${trial.firstProduct} vs ${trial.secondProduct}: ${outcome}** — ${trial.task}${trial.note ? `; ${trial.note}` : ""}`;
+        })
+        .join("\n")}\n\n`;
 
   return `# ${result.title}
 
@@ -358,7 +379,7 @@ ${productSections}
 ${conflictSection}## ${t.markdownUnknowns}
 ${result.unknowns.map((item) => `- ${item}`).join("\n")}
 
-${trialSection}${notes.trim() ? `## ${t.markdownNotes}\n${notes.trim()}\n\n` : ""}---
+${trialSection}${pairwiseSection}${notes.trim() ? `## ${t.markdownNotes}\n${notes.trim()}\n\n` : ""}---
 ${t.generatedBy} · ${new Date(result.generatedAt).toLocaleDateString(locale)}.
 `;
 }
@@ -471,6 +492,9 @@ export function CompareWorkbench({
   const [templateName, setTemplateName] = useState("");
   const [comparisonDiff, setComparisonDiff] = useState<ComparisonDiff>();
   const [trialResults, setTrialResults] = useState<TrialResult[]>([]);
+  const [pairwiseTrials, setPairwiseTrials] = useState<PairwiseTrialResult[]>([]);
+  const [decisionProfiles, setDecisionProfiles] = useState<DecisionProfile[]>([]);
+  const [decisionProfileName, setDecisionProfileName] = useState("");
   const [conflicts, setConflicts] = useState<EvidenceConflict[]>(() =>
     initialResult ? detectEvidenceConflicts(initialResult) : [],
   );
@@ -501,6 +525,12 @@ export function CompareWorkbench({
             normalizeCandidateInbox,
           );
           if (candidates) setCandidateInbox(candidates);
+          const storedDecisionProfiles = window.localStorage.getItem(decisionProfilesKey);
+          if (storedDecisionProfiles) {
+            setDecisionProfiles(
+              normalizeDecisionProfiles(JSON.parse(storedDecisionProfiles)),
+            );
+          }
         const requestedLocale = new URLSearchParams(window.location.search).get(
           "lang",
         );
@@ -755,6 +785,7 @@ export function CompareWorkbench({
       setTrialResults(
         payload.trialPlan.map((task) => ({ task: task.task, status: "untested", note: "" })),
       );
+      setPairwiseTrials([]);
       setComparisonDiff(undefined);
       const saved: SavedReport = {
         id: crypto.randomUUID(),
@@ -773,6 +804,7 @@ export function CompareWorkbench({
           status: "untested",
           note: "",
         })),
+        pairwiseTrials: [],
         conflicts: detectedConflicts,
         confidenceCalibrations: calibrateComparisonConfidence(
           payload.products,
@@ -823,6 +855,7 @@ export function CompareWorkbench({
           -maxRevisions,
         ),
         trialResults: stored?.trialResults ?? trialResults,
+        pairwiseTrials: stored?.pairwiseTrials ?? pairwiseTrials,
         conflicts: detectedConflicts,
         confidenceCalibrations: calibrateComparisonConfidence(
           payload.products,
@@ -843,6 +876,7 @@ export function CompareWorkbench({
             note: "",
           })),
       );
+      setPairwiseTrials(stored?.pairwiseTrials ?? pairwiseTrials);
       setComparisonDiff(nextDiff);
       setHistory(nextHistory);
       setCurrentReportId(reportId);
@@ -861,6 +895,7 @@ export function CompareWorkbench({
     setActiveTemplateId("");
     setResult(saved.result);
     setTrialResults(saved.trialResults);
+    setPairwiseTrials(saved.pairwiseTrials ?? []);
     setConflicts(saved.conflicts);
     setSourceFailures([]);
     setError("");
@@ -898,6 +933,7 @@ export function CompareWorkbench({
     setNotes("");
     setComparisonDiff(undefined);
     setTrialResults([]);
+    setPairwiseTrials([]);
     setConflicts([]);
     setSourceFailures([]);
     setError("");
@@ -907,7 +943,7 @@ export function CompareWorkbench({
   async function copyBrief() {
     if (!result) return;
     await navigator.clipboard.writeText(
-      comparisonAsMarkdown(result, notes, locale, t, trialResults, conflicts),
+      comparisonAsMarkdown(result, notes, locale, t, trialResults, conflicts, false, pairwiseTrials),
     );
     setCopied(true);
     window.setTimeout(() => setCopied(false), 1_600);
@@ -916,7 +952,7 @@ export function CompareWorkbench({
   function exportMarkdown() {
     if (!result) return;
     const blob = new Blob(
-      [comparisonAsMarkdown(result, notes, locale, t, trialResults, conflicts)],
+      [comparisonAsMarkdown(result, notes, locale, t, trialResults, conflicts, false, pairwiseTrials)],
       {
       type: "text/markdown;charset=utf-8",
       },
@@ -945,6 +981,7 @@ export function CompareWorkbench({
       locale: stored?.locale ?? locale,
       revisions: stored?.revisions ?? [],
       trialResults,
+      pairwiseTrials,
       conflicts,
       confidenceCalibrations,
     };
@@ -1069,6 +1106,18 @@ export function CompareWorkbench({
       setHistory(nextHistory);
       void persistBrowserValue(historyKey, nextHistory);
     }
+  }
+
+  function updatePairwiseTrials(nextTrials: PairwiseTrialResult[]) {
+    setPairwiseTrials(nextTrials);
+    if (!currentReportId) return;
+    const nextHistory = history.map((report) =>
+      report.id === currentReportId
+        ? { ...report, pairwiseTrials: nextTrials }
+        : report,
+    );
+    setHistory(nextHistory);
+    void persistBrowserValue(historyKey, nextHistory);
   }
 
   function updateEvidenceReview(
@@ -1269,6 +1318,36 @@ export function CompareWorkbench({
     );
   }
 
+  function saveDecisionProfile() {
+    const name = decisionProfileName.trim();
+    if (!name || context.trim().length < 10) return;
+    const nextProfiles = [
+      ...decisionProfiles,
+      {
+        id: crypto.randomUUID(),
+        name,
+        context: context.trim(),
+        criteria: cloneCriteria(criteria),
+        createdAt: new Date().toISOString(),
+      },
+    ];
+    setDecisionProfiles(nextProfiles);
+    setDecisionProfileName("");
+    window.localStorage.setItem(decisionProfilesKey, JSON.stringify(nextProfiles));
+  }
+
+  function applyDecisionProfile(profile: DecisionProfile) {
+    setContext(profile.context);
+    setCriteria(cloneCriteria(profile.criteria));
+    setActiveTemplateId("");
+  }
+
+  function deleteDecisionProfile(id: string) {
+    const nextProfiles = decisionProfiles.filter((profile) => profile.id !== id);
+    setDecisionProfiles(nextProfiles);
+    window.localStorage.setItem(decisionProfilesKey, JSON.stringify(nextProfiles));
+  }
+
   function persistCandidateInbox(items: CandidateInboxItem[]) {
     setCandidateInbox(items);
     void persistBrowserValue(candidateInboxKey, items);
@@ -1291,6 +1370,8 @@ export function CompareWorkbench({
     setNotes("");
     setComparisonDiff(undefined);
     setConflicts([]);
+    setTrialResults([]);
+    setPairwiseTrials([]);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -1635,6 +1716,46 @@ export function CompareWorkbench({
             </div>
           </div>
         </div>
+
+        {!exampleMode && (
+          <section className="decision-profiles-card">
+            <div>
+              <p className="eyebrow">{t.decisionProfilesTitle}</p>
+              <h3>{t.decisionProfilesTitle}</h3>
+              <p>{t.decisionProfilesCopy}</p>
+            </div>
+            <div className="decision-profile-list">
+              {decisionProfiles.length > 0 ? (
+                decisionProfiles.map((profile) => (
+                  <span key={profile.id}>
+                    <button type="button" onClick={() => applyDecisionProfile(profile)}>
+                      {profile.name}
+                    </button>
+                    <button type="button" aria-label={`${t.deleteTemplate}: ${profile.name}`} onClick={() => deleteDecisionProfile(profile.id)}>
+                      ×
+                    </button>
+                  </span>
+                ))
+              ) : (
+                <small>{t.noDecisionProfiles}</small>
+              )}
+            </div>
+            <div className="decision-profile-save">
+              <input
+                value={decisionProfileName}
+                placeholder={t.decisionProfileName}
+                onChange={(event) => setDecisionProfileName(event.target.value)}
+              />
+              <button
+                type="button"
+                disabled={!decisionProfileName.trim() || context.trim().length < 10}
+                onClick={saveDecisionProfile}
+              >
+                {t.saveDecisionProfile}
+              </button>
+            </div>
+          </section>
+        )}
 
         <div className="analyze-row">
           <div>
@@ -2616,6 +2737,13 @@ export function CompareWorkbench({
             ))}
           </div>
         </div>
+
+        <PairwiseTrials
+          products={result.products.map((product) => product.name)}
+          trials={pairwiseTrials}
+          messages={t}
+          onChange={updatePairwiseTrials}
+        />
 
         <div className="research-notes-card">
           <div>

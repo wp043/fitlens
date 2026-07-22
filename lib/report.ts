@@ -6,6 +6,7 @@ import type {
   PriorityWeights,
   ProductResult,
   TrialResult,
+  PairwiseTrialResult,
 } from "@/lib/types";
 import { detectEvidenceConflicts, type EvidenceConflict } from "./conflicts.ts";
 import { activeEvidence } from "./evidence.ts";
@@ -257,6 +258,15 @@ const savedReportSchema = z
       )
       .optional()
       .default([]),
+    pairwiseTrials: z.array(z.object({
+      id: z.string(),
+      firstProduct: z.string(),
+      secondProduct: z.string(),
+      task: z.string(),
+      outcome: z.enum(["untested", "first", "second", "tie"]),
+      note: z.string(),
+      updatedAt: z.string().optional(),
+    }).passthrough()).optional().default([]),
     conflicts: z.array(evidenceConflictSchema).optional(),
     confidenceCalibrations: z.array(confidenceCalibrationSchema).optional(),
     redactedAt: z.string().optional(),
@@ -284,6 +294,7 @@ export interface SavedReport {
   locale: Locale;
   revisions: ComparisonResult[];
   trialResults: TrialResult[];
+  pairwiseTrials?: PairwiseTrialResult[];
   conflicts: EvidenceConflict[];
   confidenceCalibrations: ConfidenceCalibration[];
   redactedAt?: string;
@@ -349,6 +360,7 @@ export function serializeReport(report: SavedReport) {
 export function normalizeSavedReport(input: unknown): SavedReport {
   const report = savedReportSchema.parse(input);
   const conflicts = detectEvidenceConflicts(report.result);
+  const productNames = new Set(report.result.products.map((product) => product.name));
   return {
     ...report,
     criteria:
@@ -368,6 +380,12 @@ export function normalizeSavedReport(input: unknown): SavedReport {
             status: "untested" as const,
             note: "",
           })),
+    pairwiseTrials: (report.pairwiseTrials ?? []).filter(
+      (trial) =>
+        trial.firstProduct !== trial.secondProduct &&
+        productNames.has(trial.firstProduct) &&
+        productNames.has(trial.secondProduct),
+    ),
     conflicts,
     confidenceCalibrations: calibrateComparisonConfidence(
       report.result.products,
