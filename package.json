@@ -15,12 +15,14 @@
     "fitlens": "node --import tsx scripts/fitlens.ts",
     "lint": "eslint .",
     "test": "node --test",
+    "test:performance": "node --import tsx scripts/performance-contract.ts",
+    "test:soak": "node --expose-gc --import tsx scripts/performance-soak.ts",
     "test:coverage-ratchet": "node scripts/check-coverage.mjs",
     "test:e2e": "playwright test",
     "test:e2e:update": "playwright test --update-snapshots",
     "test:production": "node --import tsx scripts/production-harness.ts",
     "check:code-health": "node scripts/check-code-health.mjs",
-    "check": "pnpm test && pnpm test:coverage-ratchet && pnpm check:code-health && pnpm lint && pnpm exec tsc --noEmit && pnpm build"
+    "check": "pnpm test && pnpm test:performance && pnpm test:coverage-ratchet && pnpm check:code-health && pnpm lint && pnpm exec tsc --noEmit && pnpm build"
   },
   "dependencies": {
     "cheerio": "^1.1.2",

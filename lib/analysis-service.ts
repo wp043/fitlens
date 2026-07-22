@@ -20,6 +20,8 @@ import {
   AnalysisBudgetExceededError,
   AnalysisCancelledError,
   createJobDeadline,
+  DEFAULT_OVERALL_CONCURRENCY,
+  DEFAULT_PER_HOST_CONCURRENCY,
   type JobClock,
   PublicSourceCache,
   systemJobClock,
@@ -27,9 +29,13 @@ import {
   withTransientRetry,
 } from "./job-control.ts";
 
+export const PUBLIC_SOURCE_CACHE_MAX_ENTRIES = 64;
+export const PUBLIC_SOURCE_CACHE_TTL_MS = 5 * 60_000;
+export const MODEL_RETRY_ATTEMPTS = 2;
+
 const publicSourceCache = new PublicSourceCache<CollectedSource>({
-  maxEntries: 64,
-  ttlMs: 5 * 60_000,
+  maxEntries: PUBLIC_SOURCE_CACHE_MAX_ENTRIES,
+  ttlMs: PUBLIC_SOURCE_CACHE_TTL_MS,
 });
 
 export function clearPublicSourceCache() {
@@ -158,7 +164,11 @@ export async function runAnalysis(
       if (cacheEligible) publicSourceCache.set(key, source);
       return source;
     },
-    { overallConcurrency: 3, perHostConcurrency: 1, signal: job.signal },
+    {
+      overallConcurrency: DEFAULT_OVERALL_CONCURRENCY,
+      perHostConcurrency: DEFAULT_PER_HOST_CONCURRENCY,
+      signal: job.signal,
+    },
   );
   if (!collected.ok) throw new CandidateSourceCollectionError(collected.failures);
   collectedSources = collected.sources;
@@ -171,7 +181,7 @@ export async function runAnalysis(
       stage = "finalize";
       options.onProgress?.("finalize");
     }, job.signal),
-    { signal: job.signal, clock, deadline, policy: { attempts: 2 } },
+    { signal: job.signal, clock, deadline, policy: { attempts: MODEL_RETRY_ATTEMPTS } },
   );
   const finishedAt = new Date(clock.now());
   const analysisRun = createRunManifest({

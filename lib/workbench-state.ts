@@ -12,6 +12,8 @@ export interface SourceFailure {
   message: string;
 }
 
+export const MAX_SAVED_REPORTS = 50;
+
 const sourceErrorCodes = new Set<SourceErrorCode>([
   "invalidUrl",
   "httpOnly",
@@ -43,7 +45,7 @@ export function normalizeReportHistory(input: unknown): SavedReport[] {
     } catch {
       return [];
     }
-  });
+  }).slice(0, MAX_SAVED_REPORTS);
 }
 
 export function initialWorkbenchCriteria(

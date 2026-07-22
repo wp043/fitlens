@@ -369,6 +369,7 @@ app/
   examples/          bundled no-key comparison
 scripts/
   fitlens             headless CLI entry point
+  performance-*       deterministic budget contract, fixtures, and local soak
 components/
   compare-workbench  stateful research coordinator
   comparison-*       builder, report, product, and follow-up presentation owners
@@ -414,16 +415,24 @@ privacy-safe public-source cache are documented in
 
 ```bash
 pnpm check
+pnpm test:performance
+pnpm test:soak -- --iterations 500
 pnpm test:production
 pnpm exec playwright install chromium
 pnpm test:e2e
 pnpm audit --prod
 ```
 
-`pnpm check` runs the fast deterministic tests, focused workflow coverage,
+`pnpm check` runs the fast deterministic tests, bounded performance contract,
+focused workflow coverage,
 the production file-size ratchet, ESLint, TypeScript, and the production build.
 See [Code-health ratchets](docs/CODE_HEALTH.md) for the 500-line default,
 explicit legacy baselines, coverage thresholds, and update procedure.
+The separate pure-workflow soak repeats migrations, replay validation, diffs,
+watch trends, cache churn, and candidate mutations with explicit-GC heap
+diagnostics. It requires no network or API key. See
+[Performance contracts and soak testing](docs/PERFORMANCE.md) for exact budgets,
+failure meanings, CI schedule, and limitations.
 `pnpm test:production` independently builds the application,
 starts that exact artifact with `next start`, and exercises local pages,
 production headers, and the guarded analysis endpoint without provider or
@@ -431,6 +440,7 @@ public-network access. Run those parts individually when iterating:
 
 ```bash
 pnpm test
+pnpm test:performance
 pnpm test:coverage-ratchet
 pnpm check:code-health
 pnpm lint
