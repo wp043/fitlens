@@ -370,7 +370,8 @@ app/
 scripts/
   fitlens             headless CLI entry point
 components/
-  compare-workbench  local interactive research workspace
+  compare-workbench  stateful research coordinator
+  comparison-*       builder, report, product, and follow-up presentation owners
   candidate-inbox    quick capture, filtering, archive, and shortlist UI
   pairwise-trials    head-to-head trial capture and standings UI
 lib/
@@ -396,6 +397,7 @@ lib/
   pairwise           deterministic trial standings
   persistence        IndexedDB adapter and safe localStorage migration
   research-library   local search index and facets
+  workbench-state    pure draft readiness, criteria, and candidate-list transitions
 test/                 deterministic domain and security tests
   fixtures/real-sites curated offline compatibility snapshots
 e2e/                  browser workflows, accessibility, and visual baseline
@@ -418,14 +420,19 @@ pnpm test:e2e
 pnpm audit --prod
 ```
 
-`pnpm check` runs the fast deterministic tests, ESLint, TypeScript, and the
-production build. `pnpm test:production` independently builds the application,
+`pnpm check` runs the fast deterministic tests, focused workflow coverage,
+the production file-size ratchet, ESLint, TypeScript, and the production build.
+See [Code-health ratchets](docs/CODE_HEALTH.md) for the 500-line default,
+explicit legacy baselines, coverage thresholds, and update procedure.
+`pnpm test:production` independently builds the application,
 starts that exact artifact with `next start`, and exercises local pages,
 production headers, and the guarded analysis endpoint without provider or
 public-network access. Run those parts individually when iterating:
 
 ```bash
 pnpm test
+pnpm test:coverage-ratchet
+pnpm check:code-health
 pnpm lint
 pnpm exec tsc --noEmit
 pnpm build

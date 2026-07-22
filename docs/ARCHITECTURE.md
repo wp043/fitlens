@@ -48,7 +48,12 @@ configured model, validates the structured response, and returns it.
 | Concern | Owner |
 | --- | --- |
 | Page metadata and root document | `app/layout.tsx` |
-| Workbench state and report interactions | `components/compare-workbench.tsx` |
+| Workbench orchestration and browser-owned state | `components/compare-workbench.tsx` |
+| Candidate, criteria, and decision-profile editor | `components/comparison-builder-editor.tsx` |
+| Report actions, recommendation, conflicts, and refresh diff | `components/comparison-report-summary.tsx` |
+| Per-product confidence, pricing, privacy, and evidence review | `components/comparison-product-card.tsx` |
+| Manual evidence, score matrix, trials, and notes | `components/comparison-followup.tsx` |
+| Pure draft readiness and candidate-list transitions | `lib/workbench-state.ts` |
 | Candidate capture, filtering, archive, and shortlist interactions | `components/candidate-inbox.tsx` |
 | Pairwise trial editing and standings UI | `components/pairwise-trials.tsx` |
 | Public analysis endpoint and status codes | `app/api/analyze/route.ts` |
@@ -322,9 +327,11 @@ to the original localStorage key.
 | Portable data | `test/{report,redaction,research-library,persistence,candidate-inbox}.test.ts` | Migration, import safety, redaction, local indexing, and storage fallback |
 | External boundaries | `test/{source,source-adapters,source-diagnostics,model-provider,real-site-fixtures,request-guard,security-headers,analyzer}.test.ts` | URL/DNS/redirect policy, source discovery, prompt-data isolation, loopback request policy, production headers, curated response compatibility, public errors, and provider config without live calls |
 | Product contract | `test/{criteria,i18n}.test.ts` | Stable criteria and bilingual dictionary parity |
+| Workbench workflow | `test/workbench-state.test.ts` | Pure draft validation, source diagnostics, candidate reordering, criteria initialization, plus a focused built-in coverage ratchet |
 | Browser contract | `e2e/{workflows,security}.spec.ts` | Candidate promotion, evidence review, local API rejection, response headers, WCAG scans, and the full-page visual baseline |
 | Production process | `scripts/production-harness.ts` | Fresh `next build`, real `next start`, local pages, production headers, request guards, and fail-closed no-provider analysis without public network calls |
 | Build contract | `pnpm lint`, `pnpm exec tsc --noEmit`, `pnpm build` | Static correctness and production compilation |
+| Code-health contract | `scripts/check-code-health.mjs`, `config/code-health-baseline.json` | 500-line default for production files, non-growing documented legacy exceptions, and a required workbench reduction |
 | Maintenance contract | `.github/workflows/ci.yml`, `.github/workflows/dependabot-maintenance.yml`, `.github/dependabot.yml` | Linux/macOS/Windows quality checks, Linux Chromium coverage and audits, author-and-SHA-verified minor/patch automation, and agent review for major updates |
 
 Network tests use injected DNS/fetch behavior. Real-site fixtures are curated,
