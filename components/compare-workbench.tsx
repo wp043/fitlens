@@ -513,12 +513,23 @@ export function CompareWorkbench({
     const frame = window.requestAnimationFrame(() => {
       void (async () => {
         try {
+          const requestedLocale = new URLSearchParams(
+            window.location.search,
+          ).get("lang");
+          const nextLocale = normalizeLocale(
+            requestedLocale ??
+              window.localStorage.getItem(localeKey) ??
+              navigator.language,
+          );
+          setLocale(nextLocale);
+          document.documentElement.lang = nextLocale;
+
           const saved = await loadBrowserValue(
             historyKey,
             normalizeReportHistory,
           );
           if (saved) {
-          setHistory(saved);
+            setHistory(saved);
           }
           setApiKey(window.sessionStorage.getItem(sessionApiKey) ?? "");
           const candidates = await loadBrowserValue(
@@ -532,69 +543,58 @@ export function CompareWorkbench({
               normalizeDecisionProfiles(JSON.parse(storedDecisionProfiles)),
             );
           }
-        const requestedLocale = new URLSearchParams(window.location.search).get(
-          "lang",
-        );
-        const nextLocale = normalizeLocale(
-          requestedLocale ??
-            window.localStorage.getItem(localeKey) ??
-            navigator.language,
-        );
-        setLocale(nextLocale);
-        document.documentElement.lang = nextLocale;
-
-        const storedTemplates = window.localStorage.getItem(
-          criteriaTemplatesKey,
-        );
-        if (storedTemplates) {
-          setCustomTemplates(
-            (JSON.parse(storedTemplates) as CriteriaTemplate[]).map(
-              (template) => ({
-                ...template,
-                builtIn: false,
-                criteria: cloneCriteria(template.criteria),
-              }),
-            ),
+          const storedTemplates = window.localStorage.getItem(
+            criteriaTemplatesKey,
           );
-        } else {
-          const legacyProfiles = window.localStorage.getItem(
-            preferenceProfilesKey,
-          );
-          if (legacyProfiles) {
-            const developerCriteria =
-              getBuiltInCriteriaTemplates(nextLocale).find(
-                (template) => template.id === "developer-tools",
-              )!.criteria;
-            const migrated = (
-              JSON.parse(legacyProfiles) as LegacyPreferenceProfile[]
-            ).map((profile) => ({
-              id: profile.id,
-              name: profile.name,
-              criteria: developerCriteria.map((criterion) => ({
-                ...criterion,
-                weight: profile.weights[criterion.key] ?? criterion.weight,
-              })),
-              builtIn: false,
-            }));
-            setCustomTemplates(migrated);
-            window.localStorage.setItem(
-              criteriaTemplatesKey,
-              JSON.stringify(migrated),
+          if (storedTemplates) {
+            setCustomTemplates(
+              (JSON.parse(storedTemplates) as CriteriaTemplate[]).map(
+                (template) => ({
+                  ...template,
+                  builtIn: false,
+                  criteria: cloneCriteria(template.criteria),
+                }),
+              ),
             );
-            window.localStorage.removeItem(preferenceProfilesKey);
+          } else {
+            const legacyProfiles = window.localStorage.getItem(
+              preferenceProfilesKey,
+            );
+            if (legacyProfiles) {
+              const developerCriteria =
+                getBuiltInCriteriaTemplates(nextLocale).find(
+                  (template) => template.id === "developer-tools",
+                )!.criteria;
+              const migrated = (
+                JSON.parse(legacyProfiles) as LegacyPreferenceProfile[]
+              ).map((profile) => ({
+                id: profile.id,
+                name: profile.name,
+                criteria: developerCriteria.map((criterion) => ({
+                  ...criterion,
+                  weight: profile.weights[criterion.key] ?? criterion.weight,
+                })),
+                builtIn: false,
+              }));
+              setCustomTemplates(migrated);
+              window.localStorage.setItem(
+                criteriaTemplatesKey,
+                JSON.stringify(migrated),
+              );
+              window.localStorage.removeItem(preferenceProfilesKey);
+            }
           }
-        }
 
-        if (exampleMode) {
-          setContext(messages[nextLocale].exampleContext);
-          setResult(sampleComparisonForLocale(nextLocale));
-          setConflicts(
-            detectEvidenceConflicts(sampleComparisonForLocale(nextLocale)),
-          );
-          setCriteria(initialCriteria(true, nextLocale));
-        } else {
-          setCriteria(initialCriteria(false, nextLocale));
-        }
+          if (exampleMode) {
+            setContext(messages[nextLocale].exampleContext);
+            setResult(sampleComparisonForLocale(nextLocale));
+            setConflicts(
+              detectEvidenceConflicts(sampleComparisonForLocale(nextLocale)),
+            );
+            setCriteria(initialCriteria(true, nextLocale));
+          } else {
+            setCriteria(initialCriteria(false, nextLocale));
+          }
         } catch {
           // A malformed or unavailable local store should never block comparing.
         }
@@ -1858,6 +1858,7 @@ export function CompareWorkbench({
           ref={importInputRef}
           className="visually-hidden"
           type="file"
+          aria-label={t.importReport}
           accept=".json,application/json"
           onChange={importJson}
         />
@@ -2341,6 +2342,7 @@ export function CompareWorkbench({
                 </div>
                 <div
                   className="coverage-meter"
+                  role="img"
                   aria-label={`${t.coverage} ${coverage.score}%`}
                 >
                   <i style={{ width: `${coverage.score}%` }} />
@@ -2357,7 +2359,10 @@ export function CompareWorkbench({
               <p className="product-verdict">{product.verdict}</p>
 
               {product.pricing && (
-                <section className="pricing-card" aria-label={t.pricingTitle}>
+                <section
+                  className="pricing-card"
+                  aria-label={`${product.name}: ${t.pricingTitle}`}
+                >
                   <div className="pricing-heading">
                     <div>
                       <h4>{t.pricingTitle}</h4>
@@ -2424,7 +2429,10 @@ export function CompareWorkbench({
               )}
 
               {product.privacy && (
-                <section className="privacy-card" aria-label={t.privacyTitle}>
+                <section
+                  className="privacy-card"
+                  aria-label={`${product.name}: ${t.privacyTitle}`}
+                >
                   <header>
                     <div>
                       <h4>{t.privacyTitle}</h4>

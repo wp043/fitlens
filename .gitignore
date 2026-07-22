@@ -6,6 +6,8 @@ node_modules
 *.tsbuildinfo
 .DS_Store
 .fitlens/
+playwright-report/
+test-results/
 
 # autonomous-skill per-sprint worktrees
 .worktrees/

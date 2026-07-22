@@ -273,7 +273,7 @@ flowchart TB
     DOMAIN --> DET[Deterministic scoring, evidence, confidence, privacy, diffs]
     DET --> UI
     UI <--> LOCAL[(Local research library)]
-    UI --> FILES[Markdown + JSON]
+    UI --> FILES[JSON · Markdown · HTML · ADR · PDF]
 ```
 
 The important seam is between model judgment and deterministic local logic.
@@ -317,22 +317,37 @@ lib/
   persistence        IndexedDB adapter and safe localStorage migration
   research-library   local search index and facets
 test/                 deterministic domain and security tests
+e2e/                  browser workflows, accessibility, and visual baseline
+.github/               CI and dependency maintenance
+playwright.config.ts   Chromium test and local server contract
 docs/                 architecture and worked product research
 ```
 
 ## Development
 
 ```bash
+pnpm check
+pnpm exec playwright install chromium
+pnpm test:e2e
+pnpm audit --prod
+```
+
+`pnpm check` runs the fast deterministic tests, ESLint, TypeScript, and the
+production build. Run those parts individually when iterating:
+
+```bash
 pnpm test
 pnpm lint
 pnpm exec tsc --noEmit
 pnpm build
-pnpm audit --prod
 ```
 
 The test suite covers scoring, report migration, i18n parity, confidence,
 conflicts, privacy, redaction, research search, provider configuration, source
 diagnostics, and URL/DNS/redirect safety without requiring live network calls.
+Playwright covers candidate capture, evidence review, automated WCAG checks,
+and a full-page visual contract. GitHub Actions runs both layers on every push
+and pull request; Dependabot keeps pnpm and workflow dependencies visible.
 
 ## Current limits
 
@@ -348,8 +363,9 @@ diagnostics, and URL/DNS/redirect safety without requiring live network calls.
 - Watchlists require an external local scheduler such as cron or launchd; the
   browser does not claim to run reliable background jobs while it is closed.
 
-The highest-value next step is browser-level E2E, accessibility, and visual
-regression coverage plus automated dependency maintenance.
+Further extensions should preserve the local-first boundary. Useful directions
+include a browser-rendered fallback for JavaScript-only sources, optional
+package-registry adapters, and richer trend views across watch snapshots.
 
 ## License
 

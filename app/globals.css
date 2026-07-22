@@ -4352,3 +4352,65 @@ footer {
     grid-template-columns: 1fr;
   }
 }
+
+/* Keep the cream comparison workspace comfortably readable at WCAG AA sizes. */
+.compare-builder .step-index {
+  color: #6f3f91;
+  font-weight: 600;
+}
+
+.compare-builder .local-api-copy small,
+.compare-builder .local-api-setup > p,
+.compare-builder .url-field > span,
+.compare-builder .context-block > p,
+.compare-builder .criteria-help,
+.compare-builder .analyze-row > div,
+.compare-builder .slider-copy small {
+  color: #574a51;
+}
+
+.compare-builder .criterion-index,
+.compare-builder .criterion-fields label > span,
+.compare-builder .add-criterion,
+.compare-builder .add-criterion small {
+  color: #5b4650;
+}
+
+.compare-builder .profile-chip.active button {
+  color: #57404d;
+}
+
+.compare-builder .decision-profiles-card {
+  background: rgba(79, 96, 132, 0.08);
+}
+
+.compare-builder .decision-profiles-card .eyebrow {
+  color: #2f614a;
+}
+
+.compare-builder .decision-profiles-card h3 {
+  color: #2d2529;
+}
+
+.compare-builder .decision-profiles-card p:last-child,
+.compare-builder .decision-profile-list small {
+  color: #574a51;
+}
+
+.compare-builder .decision-profile-save input {
+  background: rgba(255, 255, 255, 0.58);
+  color: #2d2529;
+}
+
+.method-cards article:nth-child(3) > span,
+.method-cards article:nth-child(3) p {
+  color: #574a51;
+}
+
+.unknown-card .eyebrow {
+  color: #365f43;
+}
+
+.unknown-card li {
+  color: #574a51;
+}

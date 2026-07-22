@@ -70,11 +70,19 @@ export function PairwiseTrials({ products, trials, messages: t, onChange }: Pair
         </div>
       </header>
       <div className="pairwise-builder">
-        <select value={firstProduct} onChange={(event) => setFirstProduct(event.target.value)}>
+        <select
+          aria-label={`${t.product} A`}
+          value={firstProduct}
+          onChange={(event) => setFirstProduct(event.target.value)}
+        >
           {products.map((product) => <option key={product}>{product}</option>)}
         </select>
         <span>vs</span>
-        <select value={secondProduct} onChange={(event) => setSecondProduct(event.target.value)}>
+        <select
+          aria-label={`${t.product} B`}
+          value={secondProduct}
+          onChange={(event) => setSecondProduct(event.target.value)}
+        >
           {products.map((product) => <option key={product}>{product}</option>)}
         </select>
         <input value={task} placeholder={t.pairwiseTask} onChange={(event) => setTask(event.target.value)} />
@@ -90,6 +98,7 @@ export function PairwiseTrials({ products, trials, messages: t, onChange }: Pair
               <p>{trial.task}</p>
             </div>
             <select
+              aria-label={`${t.pairwiseTask}: ${trial.task}`}
               value={trial.outcome}
               onChange={(event) => update(trial.id, { outcome: event.target.value as PairwiseTrialOutcome })}
             >
