@@ -13,7 +13,6 @@ import {
   messages,
   normalizeLocale,
   type Locale,
-  type Messages,
 } from "@/lib/i18n";
 import { examplePriorities, sampleComparisonForLocale } from "@/lib/sample";
 import {
@@ -25,16 +24,26 @@ import {
 import { compareResults, type ComparisonDiff } from "@/lib/diff";
 import { mergeManualEvidence } from "@/lib/evidence";
 import { calculateEvidenceFreshness } from "@/lib/freshness";
-import {
-  calibrateComparisonConfidence,
-  type ConfidenceCalibration,
-  type ConfidenceFactor,
-} from "@/lib/confidence";
+import { calibrateComparisonConfidence } from "@/lib/confidence";
 import { calculateWeightedWinner } from "@/lib/scoring";
 import { createRedactedReport } from "@/lib/redaction";
 import { reportToAdr, reportToHtml } from "@/lib/durable-exports";
 import { CandidateInbox } from "@/components/candidate-inbox";
 import { PairwiseTrials } from "@/components/pairwise-trials";
+import { BrandMark, SourcePill } from "@/components/workbench-primitives";
+import { ResearchLibraryPanel } from "@/components/research-library-panel";
+import {
+  cadenceLabel,
+  comparisonAsMarkdown,
+  confidenceBandLabel,
+  confidenceFactorLabel,
+  conflictTopicLabel,
+  formatDelta,
+  privacyCategoryLabel,
+  privacyRiskLabel,
+  privacyStatusLabel,
+  safeFilename,
+} from "@/components/compare-workbench-format";
 import {
   normalizeDecisionProfiles,
   type DecisionProfile,
@@ -49,20 +58,12 @@ import {
   type CandidateInboxItem,
 } from "@/lib/candidate-inbox";
 import {
-  buildResearchLibrary,
-  filterResearchLibrary,
-  listLibraryProducts,
-  type LibraryReviewFilter,
-  type LibrarySourceFilter,
-} from "@/lib/research-library";
-import {
   detectEvidenceConflicts,
   type EvidenceConflict,
 } from "@/lib/conflicts";
 import type {
   ComparisonCriterion,
   ComparisonResult,
-  BillingCadence,
   Evidence,
   EvidenceLevel,
   EvidenceReviewStatus,
@@ -70,9 +71,6 @@ import type {
   PairwiseTrialResult,
   TrialStatus,
   PriorityWeights,
-  PrivacyCategory,
-  PrivacyFindingStatus,
-  PrivacySecurityReview,
 } from "@/lib/types";
 import type { SourceErrorCode } from "@/lib/source";
 
@@ -157,272 +155,6 @@ function initialCriteria(exampleMode: boolean, locale: Locale) {
   }));
 }
 
-function formatDelta(value: number) {
-  return value > 0 ? `+${value}` : `${value}`;
-}
-
-function conflictTopicLabel(topic: string, t: Messages) {
-  return {
-    openSource: t.conflictTopicOpenSource,
-    pricing: t.conflictTopicPricing,
-    account: t.conflictTopicAccount,
-    telemetry: t.conflictTopicTelemetry,
-    offline: t.conflictTopicOffline,
-    selfHosting: t.conflictTopicSelfHosting,
-    other: t.conflictTopicOther,
-  }[topic] ?? t.conflictTopicOther;
-}
-
-function cadenceLabel(cadence: BillingCadence, t: Messages) {
-  return {
-    free: t.cadenceFree,
-    monthly: t.cadenceMonthly,
-    yearly: t.cadenceYearly,
-    "one-time": t.cadenceOneTime,
-    "usage-based": t.cadenceUsageBased,
-    custom: t.cadenceCustom,
-    unknown: t.cadenceUnknown,
-  }[cadence];
-}
-
-function privacyCategoryLabel(category: PrivacyCategory, t: Messages) {
-  return {
-    telemetry: t.privacyTelemetry,
-    account: t.privacyAccount,
-    retention: t.privacyRetention,
-    permissions: t.privacyPermissions,
-    encryption: t.privacyEncryption,
-    selfHosting: t.privacySelfHosting,
-  }[category];
-}
-
-function privacyStatusLabel(status: PrivacyFindingStatus, t: Messages) {
-  return {
-    positive: t.privacyPositive,
-    caution: t.privacyCaution,
-    unknown: t.privacyUnknown,
-  }[status];
-}
-
-function privacyRiskLabel(
-  riskLevel: PrivacySecurityReview["riskLevel"],
-  t: Messages,
-) {
-  return {
-    low: t.privacyRiskLow,
-    medium: t.privacyRiskMedium,
-    high: t.privacyRiskHigh,
-    unknown: t.privacyRiskUnknown,
-  }[riskLevel];
-}
-
-function confidenceBandLabel(calibration: ConfidenceCalibration, t: Messages) {
-  return {
-    strong: t.confidenceStrong,
-    moderate: t.confidenceModerate,
-    limited: t.confidenceLimited,
-  }[calibration.band];
-}
-
-function confidenceFactorLabel(factor: ConfidenceFactor, t: Messages) {
-  switch (factor.key) {
-    case "directVerification":
-      return `${t.confidenceDirect}: ${factor.value}%`;
-    case "sourceDiversity":
-      return `${t.confidenceDiversity}: ${factor.value}`;
-    case "freshness":
-      return `${t.confidenceFreshness}: ${factor.value}%`;
-    case "transparency":
-      return t.confidenceTransparency;
-    case "limitedSources":
-      return t.confidenceLimitedSources;
-    case "inferenceHeavy":
-      return t.confidenceInferenceHeavy;
-    case "conflicts":
-      return `${t.confidenceConflicts}: ${factor.value}`;
-  }
-}
-
-function comparisonAsMarkdown(
-  result: ComparisonResult,
-  notes: string,
-  locale: Locale,
-  t: Messages,
-  trialResults: TrialResult[] = [],
-  conflicts: EvidenceConflict[] = [],
-  redacted = false,
-  pairwiseTrials: PairwiseTrialResult[] = [],
-) {
-  const evidenceLabels: Record<EvidenceLevel, string> = {
-    verified: t.verified,
-    vendor: t.vendor,
-    inferred: t.inferred,
-  };
-  const trialStatusLabels: Record<TrialStatus, string> = {
-    untested: t.trialUntested,
-    passed: t.trialPassed,
-    failed: t.trialFailed,
-    skipped: t.trialSkipped,
-  };
-  const calibrations = calibrateComparisonConfidence(
-    result.products,
-    conflicts,
-    new Date(result.generatedAt),
-  );
-  const productSections = result.products
-    .map((product) => {
-      const pricing = product.pricing;
-      const pricingSection = pricing
-        ? `### ${t.markdownPricing}
-${pricing.summary}
-
-${pricing.plans.length > 0
-  ? pricing.plans
-      .map(
-        (plan) =>
-          `- **${plan.name}: ${plan.price} · ${cadenceLabel(plan.cadence, t)}** — ${t.pricingAudience}: ${plan.audience}${plan.limits.length ? `; ${t.pricingLimits}: ${plan.limits.join("; ")}` : ""} ([${evidenceLabels[plan.evidenceLevel]}](${plan.sourceUrl}))`,
-      )
-      .join("\n")
-  : `- ${t.pricingNoPlans}`}
-
-**${t.pricingUncertainty}:** ${pricing.uncertainty}
-
-`
-        : "";
-      const privacy = product.privacy;
-      const privacySection = privacy
-        ? `### ${t.markdownPrivacy}: ${t.privacyRisk} — ${privacyRiskLabel(privacy.riskLevel, t)}
-${privacy.summary}
-
-${privacy.findings
-  .map(
-    (finding) =>
-      `- **${privacyCategoryLabel(finding.category, t)} · ${privacyStatusLabel(finding.status, t)}:** ${finding.finding} ([${evidenceLabels[finding.evidenceLevel]}](${finding.sourceUrl}))\n  - ${t.privacyUncertainty}: ${finding.uncertainty}`,
-  )
-  .join("\n")}
-
-`
-        : "";
-      const calibration = calibrations.find((item) => item.product === product.name)!;
-      return `## ${product.name} — ${product.score}/100
-
-${product.verdict}
-
-### ${t.markdownConfidence}: ${calibration.score}/100 · ${confidenceBandLabel(calibration, t)}
-${t.confidenceMethod}
-
-- ${t.verified}: ${calibration.verified}; ${t.vendor}: ${calibration.vendor}; ${t.inferred}: ${calibration.inferred}; ${t.sources}: ${calibration.sourceCount}
-${calibration.factors.map((factor) => `- **${factor.effect === "supporting" ? t.confidenceSupporting : t.confidenceLimiting}:** ${confidenceFactorLabel(factor, t)}`).join("\n")}
-
-### ${t.markdownStrengths}
-${product.strengths.map((item) => `- ${item}`).join("\n")}
-
-### ${t.markdownTradeoffs}
-${product.tradeoffs.map((item) => `- ${item}`).join("\n")}
-
-${pricingSection}${privacySection}### ${t.markdownEvidence}
-${product.evidence
-  .filter((item) => item.reviewStatus !== "rejected")
-  .map(
-    (item) =>
-      `- **${evidenceLabels[item.level]}:** ${item.claim} ([${item.sourceLabel}](${item.sourceUrl}))`,
-  )
-  .join("\n")}`;
-    })
-    .join("\n\n");
-  const conflictSection = conflicts.length
-    ? `## ${t.markdownConflicts}\n${conflicts
-        .map(
-          (conflict) =>
-            `- **${conflict.product} · ${conflictTopicLabel(conflict.topic, t)} (${conflict.severity === "high" ? t.conflictHigh : t.conflictMedium})**\n  - ${conflict.first.claim} ([${conflict.first.sourceLabel}](${conflict.first.sourceUrl}))\n  - ${conflict.second.claim} ([${conflict.second.sourceLabel}](${conflict.second.sourceUrl}))`,
-        )
-        .join("\n")}\n\n`
-    : "";
-
-  const trialSection = redacted
-    ? ""
-    : `## ${t.markdownTrial}\n${result.trialPlan
-        .map((item, index) => {
-          const trial = trialResults[index];
-          const status = trial ? ` [${trialStatusLabels[trial.status]}]` : "";
-          const note = trial?.note.trim() ? ` — ${trial.note.trim()}` : "";
-          return `${index + 1}. **${item.task}**${status} — ${item.reason}${note}`;
-        })
-        .join("\n")}\n\n`;
-  const pairwiseSection = redacted || pairwiseTrials.length === 0
-    ? ""
-    : `## ${t.pairwiseTitle}\n${pairwiseTrials
-        .map((trial) => {
-          const outcome = {
-            untested: t.pairwiseUntested,
-            first: t.pairwiseFirstWins.replace("{product}", trial.firstProduct),
-            second: t.pairwiseSecondWins.replace("{product}", trial.secondProduct),
-            tie: t.pairwiseTie,
-          }[trial.outcome];
-          return `- **${trial.firstProduct} vs ${trial.secondProduct}: ${outcome}** — ${trial.task}${trial.note ? `; ${trial.note}` : ""}`;
-        })
-        .join("\n")}\n\n`;
-
-  return `# ${result.title}
-
-${t.markdownAnalyzed}: ${new Date(result.generatedAt).toLocaleString(locale)}.
-
-${redacted ? `> ${t.redactedDisclosure}\n\n` : ""}## ${t.markdownRecommendation}: ${result.recommendation.winner}
-
-${result.recommendation.summary}
-
-${result.recommendation.reasons.map((item) => `- ${item}`).join("\n")}
-
-**${t.markdownChooseDifferently}:** ${result.recommendation.switchWhen}
-
-${productSections}
-
-${conflictSection}## ${t.markdownUnknowns}
-${result.unknowns.map((item) => `- ${item}`).join("\n")}
-
-${trialSection}${pairwiseSection}${notes.trim() ? `## ${t.markdownNotes}\n${notes.trim()}\n\n` : ""}---
-${t.generatedBy} · ${new Date(result.generatedAt).toLocaleDateString(locale)}.
-`;
-}
-
-function safeFilename(title: string) {
-  return (
-    title
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-|-$/g, "") || "fitlens-report"
-  );
-}
-
-function BrandMark() {
-  return (
-    <span className="brand-mark" aria-hidden="true">
-      <svg viewBox="0 0 42 42">
-        <circle cx="18.5" cy="18.5" r="12" />
-        <path d="m27.4 27.4 8.5 8.5" />
-        <path d="m11.5 17 7 4 7-7" strokeWidth="1.8" />
-        <circle cx="11.5" cy="17" r="2" fill="var(--green)" stroke="none" />
-        <circle cx="18.5" cy="21" r="2" fill="var(--peach)" stroke="none" />
-        <circle cx="25.5" cy="14" r="2" fill="var(--pink)" stroke="none" />
-      </svg>
-    </span>
-  );
-}
-
-function SourcePill({
-  mode,
-  t,
-}: {
-  mode: "open-source" | "website-only";
-  t: Messages;
-}) {
-  return (
-    <span className={`source-pill ${mode}`}>
-      <span className="source-dot" />
-      {mode === "open-source" ? t.sourceOpen : t.sourceWebsite}
-    </span>
-  );
-}
 
 interface CompareWorkbenchProps {
   exampleMode?: boolean;
@@ -473,15 +205,6 @@ export function CompareWorkbench({
     "analyze",
   );
   const [history, setHistory] = useState<SavedReport[]>([]);
-  const [libraryQuery, setLibraryQuery] = useState("");
-  const [libraryProduct, setLibraryProduct] = useState("");
-  const [librarySource, setLibrarySource] =
-    useState<LibrarySourceFilter>("all");
-  const [libraryEvidence, setLibraryEvidence] = useState<
-    EvidenceLevel | "all"
-  >("all");
-  const [libraryReview, setLibraryReview] =
-    useState<LibraryReviewFilter>("all");
   const [copied, setCopied] = useState(false);
   const [apiKey, setApiKey] = useState("");
   const [showApiKey, setShowApiKey] = useState(false);
@@ -652,26 +375,6 @@ export function CompareWorkbench({
   );
   const currentWinner = result?.products.find(
     (product) => product.name === weightedWinner,
-  );
-  const libraryEntries = useMemo(() => buildResearchLibrary(history), [history]);
-  const libraryProducts = useMemo(() => listLibraryProducts(history), [history]);
-  const filteredLibrary = useMemo(
-    () =>
-      filterResearchLibrary(libraryEntries, {
-        query: libraryQuery,
-        product: libraryProduct,
-        sourceMode: librarySource,
-        evidenceLevel: libraryEvidence,
-        review: libraryReview,
-      }),
-    [
-      libraryEntries,
-      libraryQuery,
-      libraryProduct,
-      librarySource,
-      libraryEvidence,
-      libraryReview,
-    ],
   );
   const canAnalyze =
     urls.length >= 2 &&
@@ -1902,135 +1605,15 @@ export function CompareWorkbench({
             </button>
           </div>
           {history.length > 0 && (
-            <div className="history-panel library-panel">
-              <div className="history-head">
-                <div>
-                  <p className="eyebrow">{t.libraryEyebrow}</p>
-                  <h3>{t.libraryTitle}</h3>
-                  <small>{t.libraryCopy}</small>
-                </div>
-                <div>
-                  <button onClick={() => importInputRef.current?.click()}>
-                    {t.import}
-                  </button>
-                  <button onClick={clearHistory}>{t.clear}</button>
-                </div>
-              </div>
-              <div className="library-tools">
-                <label className="library-search">
-                  <span aria-hidden="true">⌕</span>
-                  <input
-                    type="search"
-                    value={libraryQuery}
-                    onChange={(event) => setLibraryQuery(event.target.value)}
-                    placeholder={t.librarySearchPlaceholder}
-                    aria-label={t.librarySearchAria}
-                  />
-                </label>
-                <div className="library-filters">
-                  <select
-                    value={libraryProduct}
-                    onChange={(event) => setLibraryProduct(event.target.value)}
-                    aria-label={t.libraryProductFilter}
-                  >
-                    <option value="">{t.libraryAllProducts}</option>
-                    {libraryProducts.map((product) => (
-                      <option key={product} value={product}>{product}</option>
-                    ))}
-                  </select>
-                  <select
-                    value={librarySource}
-                    onChange={(event) =>
-                      setLibrarySource(event.target.value as LibrarySourceFilter)
-                    }
-                    aria-label={t.librarySourceFilter}
-                  >
-                    <option value="all">{t.libraryAllSources}</option>
-                    <option value="open-source">{t.sourceOpen}</option>
-                    <option value="website-only">{t.sourceWebsite}</option>
-                  </select>
-                  <select
-                    value={libraryEvidence}
-                    onChange={(event) =>
-                      setLibraryEvidence(event.target.value as EvidenceLevel | "all")
-                    }
-                    aria-label={t.libraryEvidenceFilter}
-                  >
-                    <option value="all">{t.libraryAllEvidence}</option>
-                    <option value="verified">{t.verified}</option>
-                    <option value="vendor">{t.vendor}</option>
-                    <option value="inferred">{t.inferred}</option>
-                  </select>
-                  <select
-                    value={libraryReview}
-                    onChange={(event) =>
-                      setLibraryReview(event.target.value as LibraryReviewFilter)
-                    }
-                    aria-label={t.libraryReviewFilter}
-                  >
-                    <option value="all">{t.libraryAllDecisions}</option>
-                    <option value="ready">{t.libraryReady}</option>
-                    <option value="needs-review">{t.libraryNeedsReview}</option>
-                  </select>
-                </div>
-              </div>
-              <div className="library-summary">
-                {t.libraryShowing
-                  .replace("{shown}", String(filteredLibrary.length))
-                  .replace("{total}", String(history.length))}
-              </div>
-              {filteredLibrary.length > 0 ? (
-                <div className="history-list library-list">
-                  {filteredLibrary.map((entry) => {
-                    const saved = entry.report;
-                    return (
-                      <article key={saved.id} className="library-card">
-                        <div className="library-card-top">
-                          <div>
-                            <span>{saved.title}</span>
-                            <small>
-                              {new Date(saved.savedAt).toLocaleDateString(locale)}
-                              {saved.revisions.length > 0
-                                ? ` · ${saved.revisions.length} ${t.revisions}`
-                                : ""}
-                            </small>
-                          </div>
-                          <i className={entry.needsReview ? "review" : "ready"}>
-                            {entry.needsReview ? t.libraryNeedsReview : t.libraryReady}
-                          </i>
-                        </div>
-                        <div className="library-product-chips">
-                          {entry.products.map((product) => (
-                            <span key={product}>{product}</span>
-                          ))}
-                        </div>
-                        <div className="library-decision">
-                          <small>{t.libraryDecision}</small>
-                          <strong>{saved.result.recommendation.winner}</strong>
-                        </div>
-                        <div className="library-metrics">
-                          <span>{entry.evidenceCount} {t.libraryEvidence}</span>
-                          <span>{entry.verifiedCount} {t.verified}</span>
-                          <span>{entry.sourceCount} {t.sources}</span>
-                        </div>
-                        <div className="library-card-actions">
-                          <button onClick={() => loadReport(saved)}>{t.open}</button>
-                          <button onClick={() => reuseReportInputs(saved)}>
-                            {t.libraryReuseInputs}
-                          </button>
-                        </div>
-                      </article>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="library-empty">
-                  <span>⌕</span>
-                  <strong>{t.libraryNoResults}</strong>
-                  <small>{t.libraryNoResultsCopy}</small>
-                </div>
-              )}
-            </div>
+            <ResearchLibraryPanel
+              history={history}
+              locale={locale}
+              messages={t}
+              onImport={() => importInputRef.current?.click()}
+              onClear={clearHistory}
+              onOpen={loadReport}
+              onReuse={reuseReportInputs}
+            />
           )}
           <Link className="example-link" href="/examples/cmux-vs-otty">
             {t.exampleLink} <span>↗</span>
