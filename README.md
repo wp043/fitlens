@@ -376,7 +376,11 @@ Playwright covers candidate capture, evidence review, automated WCAG checks,
 and platform-specific full-page visual contracts. GitHub Actions runs the core
 quality gate on Linux, macOS, and Windows, with browser contracts and production
 dependency auditing on Linux. Dependabot keeps pnpm and workflow dependencies
-visible.
+visible. A privileged follow-up workflow never checks out dependency-PR code;
+it verifies the Dependabot author and tested head SHA through the GitHub API,
+requests rebases for outdated branches, retries one failed CI attempt, and
+merges minor or patch updates only after the complete CI matrix passes. Major
+updates and persistent failures remain open with an agent-review label.
 
 ## Current limits
 

@@ -251,7 +251,7 @@ to the original localStorage key.
 | Product contract | `test/{criteria,i18n}.test.ts` | Stable criteria and bilingual dictionary parity |
 | Browser contract | `e2e/workflows.spec.ts` | Candidate promotion, evidence review, WCAG scans, and the full-page visual baseline |
 | Build contract | `pnpm lint`, `pnpm exec tsc --noEmit`, `pnpm build` | Static correctness and production compilation |
-| Maintenance contract | `.github/workflows/ci.yml`, `.github/dependabot.yml` | Linux/macOS/Windows quality checks, Linux Chromium coverage and audits, and dependency update visibility |
+| Maintenance contract | `.github/workflows/ci.yml`, `.github/workflows/dependabot-maintenance.yml`, `.github/dependabot.yml` | Linux/macOS/Windows quality checks, Linux Chromium coverage and audits, author-and-SHA-verified minor/patch automation, and agent review for major updates |
 
 Network tests use injected DNS/fetch behavior. Real-site fixtures are curated,
 timestamped excerpts with source URLs; CI never refreshes them or calls those
