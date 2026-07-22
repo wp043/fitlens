@@ -346,8 +346,10 @@ The test suite covers scoring, report migration, i18n parity, confidence,
 conflicts, privacy, redaction, research search, provider configuration, source
 diagnostics, and URL/DNS/redirect safety without requiring live network calls.
 Playwright covers candidate capture, evidence review, automated WCAG checks,
-and a full-page visual contract. GitHub Actions runs both layers on every push
-and pull request; Dependabot keeps pnpm and workflow dependencies visible.
+and platform-specific full-page visual contracts. GitHub Actions runs the core
+quality gate on Linux, macOS, and Windows, with browser contracts and production
+dependency auditing on Linux. Dependabot keeps pnpm and workflow dependencies
+visible.
 
 ## Current limits
 
