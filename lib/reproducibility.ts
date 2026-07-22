@@ -195,7 +195,7 @@ const manifestSchema = z.object({
 const replaySchema = z.object({
   schemaVersion: z.literal(1), createdAt: z.string(), generatedAt: z.string(), manifest: manifestSchema,
   trustedRequest: z.object({ urls: z.array(z.string().url()).min(2).max(8), context: z.string().max(20_000), criteria: z.array(criterionSchema).min(2).max(8), locale: z.enum(["zh-CN", "en"]) }).strict(),
-  sourceSnapshots: z.array(sourceSchema).min(2).max(8), modelOutput: z.unknown(),
+  sourceSnapshots: z.array(sourceSchema).min(2).max(REPLAY_LIMITS.sources), modelOutput: z.unknown(),
 }).strict().refine(
   (bundle) => Boolean(bundle.manifest.modelOutputHash),
   "Replay bundle manifest must include a model output hash",

@@ -143,6 +143,9 @@ function storageAndPayloadContract() {
   assert.ok(parsedBundle.sourceSnapshots.every(
     (source) => source.documents.length === REPLAY_LIMITS.documentsPerSource,
   ));
+  const tooManySources = structuredClone(smallBundle);
+  tooManySources.sourceSnapshots.push(structuredClone(tooManySources.sourceSnapshots[0]));
+  assert.throws(() => parseReplayBundle(JSON.stringify(tooManySources)));
 
   const maximumReport = createPerformanceReport(maximumBundle, MAX_REPORT_REVISIONS);
   const reportJson = serializeReport(maximumReport);

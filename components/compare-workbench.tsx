@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  MAX_REPORT_REVISIONS,
   parseReport,
   serializeReport,
   type SavedReport,
@@ -63,6 +64,7 @@ import type {
   PriorityWeights,
 } from "@/lib/types";
 import {
+  MAX_SAVED_REPORTS,
   canAnalyzeDraft,
   initialWorkbenchCriteria,
   isSourceFailure,
@@ -95,9 +97,6 @@ const criteriaTemplatesKey = "fitlens-criteria-templates-v1";
 const localeKey = "fitlens-locale-v1";
 const candidateInboxKey = "fitlens-candidate-inbox-v1";
 const decisionProfilesKey = "fitlens-decision-profiles-v1";
-
-const maxSavedReports = 50;
-const maxRevisions = 5;
 
 interface CompareWorkbenchProps {
   exampleMode?: boolean;
@@ -440,7 +439,7 @@ export function CompareWorkbench({
           detectedConflicts,
         ),
       };
-      const nextHistory = [saved, ...history].slice(0, maxSavedReports);
+      const nextHistory = [saved, ...history].slice(0, MAX_SAVED_REPORTS);
       setHistory(nextHistory);
       setCurrentReportId(saved.id);
       setNotes("");
@@ -505,7 +504,7 @@ export function CompareWorkbench({
           ...(stored?.revisions ?? []),
           { ...previous, replayBundle: undefined },
         ].slice(
-          -maxRevisions,
+          -MAX_REPORT_REVISIONS,
         ),
         trialResults: stored?.trialResults ?? trialResults,
         pairwiseTrials: stored?.pairwiseTrials ?? pairwiseTrials,
@@ -517,7 +516,7 @@ export function CompareWorkbench({
       };
       const nextHistory = stored
         ? history.map((report) => (report.id === reportId ? saved : report))
-        : [saved, ...history].slice(0, maxSavedReports);
+        : [saved, ...history].slice(0, MAX_SAVED_REPORTS);
       setResult(payload);
       setSourceFailures([]);
       setConflicts(detectedConflicts);
@@ -780,7 +779,7 @@ export function CompareWorkbench({
         savedAt: new Date().toISOString(),
         notes: imported.notes ?? "",
       };
-      const nextHistory = [saved, ...history].slice(0, maxSavedReports);
+      const nextHistory = [saved, ...history].slice(0, MAX_SAVED_REPORTS);
       setHistory(nextHistory);
       void persistBrowserValue(historyKey, nextHistory);
       loadReport(saved);
