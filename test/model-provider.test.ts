@@ -1,12 +1,112 @@
 import assert from "node:assert/strict";
+import { createServer } from "node:http";
 import test from "node:test";
+import { z } from "zod";
 import {
   ModelProviderConfigError,
   ModelProviderRequestError,
   modelProviderCanRun,
   normalizeProviderError,
+  requestStructuredOutput,
   resolveModelProviderConfig,
 } from "../lib/model-provider.ts";
+
+test("compatible provider honors the OpenAI Responses transport contract", async (t) => {
+  let requestBody: Record<string, unknown> | undefined;
+  let authorization: string | undefined;
+
+  const server = createServer(async (request, response) => {
+    authorization = request.headers.authorization;
+    const chunks: Buffer[] = [];
+    for await (const chunk of request) {
+      chunks.push(Buffer.from(chunk));
+    }
+    requestBody = JSON.parse(Buffer.concat(chunks).toString("utf8")) as Record<
+      string,
+      unknown
+    >;
+
+    response.writeHead(200, { "content-type": "application/json" });
+    response.end(
+      JSON.stringify({
+        id: "resp_contract",
+        object: "response",
+        created_at: 0,
+        status: "completed",
+        model: "local-contract-model",
+        output: [
+          {
+            id: "msg_contract",
+            type: "message",
+            status: "completed",
+            role: "assistant",
+            content: [
+              {
+                type: "output_text",
+                text: JSON.stringify({ answer: "verified" }),
+                annotations: [],
+              },
+            ],
+          },
+        ],
+      }),
+    );
+  });
+
+  await new Promise<void>((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", resolve);
+  });
+  t.after(
+    () =>
+      new Promise<void>((resolve, reject) => {
+        server.close((error) => (error ? reject(error) : resolve()));
+      }),
+  );
+
+  const address = server.address();
+  assert.notEqual(address, null);
+  assert.equal(typeof address, "object");
+  if (!address || typeof address === "string") {
+    throw new Error("Expected a TCP server address.");
+  }
+
+  const result = await requestStructuredOutput(
+    {
+      kind: "compatible",
+      model: "local-contract-model",
+      baseURL: `http://127.0.0.1:${address.port}/v1`,
+      isLoopback: true,
+    },
+    {
+      schema: z.object({ answer: z.string() }).strict(),
+      schemaName: "provider_contract",
+      instructions: "Return the contract result.",
+      input: "Verify this request.",
+    },
+  );
+
+  assert.deepEqual(result, { answer: "verified" });
+  assert.equal(authorization, "Bearer fitlens-local-provider");
+  assert.equal(requestBody?.model, "local-contract-model");
+  assert.equal(requestBody?.instructions, "Return the contract result.");
+  assert.equal(requestBody?.input, "Verify this request.");
+  assert.equal(requestBody?.reasoning, undefined);
+  assert.deepEqual(requestBody?.text, {
+    format: {
+      type: "json_schema",
+      name: "provider_contract",
+      strict: true,
+      schema: {
+        $schema: "http://json-schema.org/draft-07/schema#",
+        type: "object",
+        properties: { answer: { type: "string" } },
+        required: ["answer"],
+        additionalProperties: false,
+      },
+    },
+  });
+});
 
 test("OpenAI remains the default and a session key takes precedence", () => {
   const config = resolveModelProviderConfig(
