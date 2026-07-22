@@ -235,7 +235,8 @@ For recurring research, create a local `fitlens.watch.json`:
       "context": "I need a local-first terminal for daily agent work.",
       "template": "developer-tools",
       "locale": "en",
-      "intervalHours": 168
+      "intervalHours": 168,
+      "notifications": "changes"
     }
   ]
 }
@@ -247,11 +248,15 @@ Run due entries manually or from cron/launchd:
 pnpm fitlens watch --config fitlens.watch.json
 ```
 
-Each successful run writes an immutable timestamped snapshot and `latest.json`
-under `.fitlens/snapshots/<watch-id>/`, then atomically updates `lastRunAt` in
-the config. Failed entries keep their previous schedule state. Use `--force` to
-refresh everything regardless of interval; `.fitlens/` is ignored by Git by
-default so research snapshots are not published accidentally.
+Each successful run writes an immutable timestamped snapshot, `latest.json`, a
+bounded `trend.json`, and a self-contained `trend.html` score timeline under
+`.fitlens/snapshots/<watch-id>/`, then atomically updates `lastRunAt` in the
+config. Snapshots after the first also contain a deterministic change summary.
+Set `notifications` to `changes` or `always` for native macOS, Linux, or Windows
+alerts; the default is `off`, and an unavailable notification service never
+invalidates a successful refresh. Use `--force` to refresh everything regardless
+of interval. `.fitlens/` is ignored by Git so research snapshots are not
+published accidentally.
 
 ## Local by design
 
@@ -322,7 +327,8 @@ lib/
   cli                deterministic command parsing and help
   markdown-report    portable headless Markdown rendering
   durable-exports    escaped offline HTML and ADR rendering
-  watchlist          schedule validation, due selection, and snapshot naming
+  watchlist          scheduling, snapshot trends, and offline trend charts
+  local-notifications argument-safe native desktop alerts
   scoring            deterministic preference weighting
   confidence         deterministic evidence confidence
   conflicts          opposing-claim detection

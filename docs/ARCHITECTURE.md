@@ -54,7 +54,8 @@ configured model, validates the structured response, and returns it.
 | Public analysis endpoint and status codes | `app/api/analyze/route.ts` |
 | Shared browser/CLI orchestration and source failure boundary | `lib/analysis-service.ts` |
 | Headless argument parsing and entry point | `lib/cli.ts`, `scripts/fitlens.ts` |
-| Watchlist validation, due scheduling, and snapshot naming | `lib/watchlist.ts` |
+| Watchlist validation, due scheduling, snapshot trends, and offline chart rendering | `lib/watchlist.ts` |
+| Argument-safe native desktop notifications | `lib/local-notifications.ts` |
 | Request schema and URL-list validation | `lib/analyze-request.ts` |
 | URL policy, DNS checks, redirects, byte caps, page/GitHub collection | `lib/source.ts` |
 | Opt-in guarded JavaScript rendering for thin application shells | `lib/source.ts` |
@@ -232,7 +233,7 @@ for a local single-user tool, not a shared hosted application.
 | `.env.local` | Local Next.js server | Provider, model, API key, optional GitHub token |
 | Exported `.json` / `.md` | User | Portable backup or share-safe report |
 | Exported `.html` / `.adr.md` / printed PDF | User | Durable offline decision artifacts |
-| `.fitlens/snapshots/<watch-id>/` | CLI watch runner | Immutable timestamped results and `latest.json` |
+| `.fitlens/snapshots/<watch-id>/` | CLI watch runner | Immutable results, `latest.json`, deterministic changes, `trend.json`, and `trend.html` |
 
 Browser history deliberately keeps its existing storage key. Schema migration
 happens while loading, so older local reports do not require a separate data
