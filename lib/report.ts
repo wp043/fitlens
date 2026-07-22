@@ -15,6 +15,13 @@ import {
   type ConfidenceCalibration,
 } from "./confidence.ts";
 
+export const MAX_REPORT_REVISIONS = 5;
+export const MAX_PORTABLE_REPORT_BYTES = 24 * 1024 * 1024;
+
+function utf8Bytes(value: string) {
+  return new TextEncoder().encode(value).byteLength;
+}
+
 const httpUrlSchema = z
   .string()
   .url()
@@ -312,7 +319,7 @@ const savedReportSchema = z
     notes: z.string().optional().default(""),
     locale: z.enum(["zh-CN", "en"]).optional().default("zh-CN"),
     criteria: z.array(criterionSchema).min(2).max(8).optional(),
-    revisions: z.array(resultSchema).max(5).optional().default([]),
+    revisions: z.array(resultSchema).max(MAX_REPORT_REVISIONS).optional().default([]),
     trialResults: z
       .array(
         z
@@ -414,15 +421,19 @@ export function calculateEvidenceCoverage(
 }
 
 export function serializeReport(report: SavedReport) {
-  return JSON.stringify(
+  const serialized = JSON.stringify(
     {
       schemaVersion: 4,
       exportedAt: new Date().toISOString(),
-      report,
+      report: savedReportSchema.parse(report),
     },
     null,
     2,
   );
+  if (utf8Bytes(serialized) > MAX_PORTABLE_REPORT_BYTES) {
+    throw new Error("portable_report_too_large");
+  }
+  return serialized;
 }
 
 export function normalizeSavedReport(input: unknown): SavedReport {
@@ -466,6 +477,9 @@ export function normalizeSavedReport(input: unknown): SavedReport {
 }
 
 export function parseReport(input: string): SavedReport {
+  if (utf8Bytes(input) > MAX_PORTABLE_REPORT_BYTES) {
+    throw new Error("portable_report_too_large");
+  }
   const parsed = portableReportSchema.parse(JSON.parse(input));
   return normalizeSavedReport(parsed.report);
 }

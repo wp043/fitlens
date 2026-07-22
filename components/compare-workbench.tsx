@@ -1,5 +1,4 @@
 "use client";
-
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -24,6 +23,7 @@ import { mergeManualEvidence } from "@/lib/evidence";
 import { calibrateComparisonConfidence } from "@/lib/confidence";
 import { calculateWeightedWinner } from "@/lib/scoring";
 import { createRedactedReport } from "@/lib/redaction";
+import { serializeReplayBundle } from "@/lib/reproducibility";
 import { reportToAdr, reportToHtml } from "@/lib/durable-exports";
 import { CandidateInbox } from "@/components/candidate-inbox";
 import { BrandMark } from "@/components/workbench-primitives";
@@ -672,7 +672,7 @@ export function CompareWorkbench({
   function exportReplayBundle() {
     if (!result?.replayBundle) return;
     downloadArtifact(
-      `${JSON.stringify(result.replayBundle, null, 2)}\n`,
+      serializeReplayBundle(result.replayBundle),
       `${safeFilename(result.title)}.fitlens-replay.json`,
       "application/json;charset=utf-8",
     );

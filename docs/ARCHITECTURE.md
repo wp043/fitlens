@@ -330,6 +330,8 @@ to the original localStorage key.
 | Workbench workflow | `test/workbench-state.test.ts` | Pure draft validation, source diagnostics, candidate reordering, criteria initialization, plus a focused built-in coverage ratchet |
 | Browser contract | `e2e/{workflows,security}.spec.ts` | Candidate promotion, evidence review, local API rejection, response headers, WCAG scans, and the full-page visual baseline |
 | Production process | `scripts/production-harness.ts` | Fresh `next build`, real `next start`, local pages, production headers, request guards, and fail-closed no-provider analysis without public network calls |
+| Performance contract | `scripts/performance-contract.ts` | Deterministic concurrency, attempts, cache, history, revision, replay/report byte, watch, and candidate-operation budgets without wall-clock thresholds |
+| Pure workflow soak | `scripts/performance-soak.ts`, `.github/workflows/soak.yml` | Repeated migrations, replay validation/finalization, diffs, trends, cache churn, candidate transitions, retained-count invariants, and explicit-GC heap diagnostics |
 | Build contract | `pnpm lint`, `pnpm exec tsc --noEmit`, `pnpm build` | Static correctness and production compilation |
 | Code-health contract | `scripts/check-code-health.mjs`, `config/code-health-baseline.json` | 500-line default for production files, non-growing documented legacy exceptions, and a required workbench reduction |
 | Maintenance contract | `.github/workflows/ci.yml`, `.github/workflows/dependabot-maintenance.yml`, `.github/dependabot.yml` | Linux/macOS/Windows quality checks, Linux Chromium coverage and audits, author-and-SHA-verified minor/patch automation, and agent review for major updates |

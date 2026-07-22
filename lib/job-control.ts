@@ -53,6 +53,14 @@ export interface RetryPolicy {
   maxDelayMs: number;
 }
 
+export const DEFAULT_RETRY_POLICY: Readonly<RetryPolicy> = {
+  attempts: 3,
+  baseDelayMs: 250,
+  maxDelayMs: 2_000,
+};
+export const DEFAULT_OVERALL_CONCURRENCY = 3;
+export const DEFAULT_PER_HOST_CONCURRENCY = 1;
+
 export function throwIfAborted(signal?: AbortSignal) {
   if (signal?.aborted) throw abortFailure(signal);
 }
@@ -132,7 +140,7 @@ export async function withTransientRetry<T>(
   } = {},
 ): Promise<T> {
   const clock = options.clock ?? systemJobClock;
-  const policy = { attempts: 3, baseDelayMs: 250, maxDelayMs: 2_000, ...options.policy };
+  const policy = { ...DEFAULT_RETRY_POLICY, ...options.policy };
   for (let attempt = 0; ; attempt += 1) {
     throwIfAborted(options.signal);
     if (options.deadline !== undefined && clock.now() >= options.deadline) {
@@ -162,8 +170,8 @@ export async function mapWithHostLimits<T>(
   worker: (url: string, index: number) => Promise<T>,
   options: { overall?: number; perHost?: number; signal?: AbortSignal } = {},
 ): Promise<PromiseSettledResult<T>[]> {
-  const overall = Math.max(1, options.overall ?? 3);
-  const perHost = Math.max(1, options.perHost ?? 1);
+  const overall = Math.max(1, options.overall ?? DEFAULT_OVERALL_CONCURRENCY);
+  const perHost = Math.max(1, options.perHost ?? DEFAULT_PER_HOST_CONCURRENCY);
   const results: PromiseSettledResult<T>[] = new Array(urls.length);
   const pending = urls.map((url, index) => ({
     url,

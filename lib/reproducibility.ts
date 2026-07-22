@@ -18,10 +18,18 @@ export const ANALYSIS_VERSIONS = {
   replay: "fitlens-replay@1",
 } as const;
 
-const MAX_PAGE_TEXT = 120_000;
-const MAX_DOCUMENT_TEXT = 80_000;
-const MAX_REPOSITORY_TEXT = 120_000;
-const MAX_DOCUMENTS = 12;
+export const REPLAY_LIMITS = {
+  pageTextCharacters: 120_000,
+  documentTextCharacters: 80_000,
+  repositoryTextCharacters: 120_000,
+  documentsPerSource: 12,
+  sources: 8,
+} as const;
+export const MAX_REPLAY_BUNDLE_BYTES = 16 * 1024 * 1024;
+const MAX_PAGE_TEXT = REPLAY_LIMITS.pageTextCharacters;
+const MAX_DOCUMENT_TEXT = REPLAY_LIMITS.documentTextCharacters;
+const MAX_REPOSITORY_TEXT = REPLAY_LIMITS.repositoryTextCharacters;
+const MAX_DOCUMENTS = REPLAY_LIMITS.documentsPerSource;
 const sha256Schema = z.string().regex(/^sha256:[a-f0-9]{64}$/);
 
 function canonical(value: unknown): string {
@@ -146,7 +154,7 @@ export function createReplayBundle(options: {
   if (contentHash(options.modelOutput) !== options.manifest.modelOutputHash) {
     throw new Error("replay_model_output_hash_mismatch");
   }
-  return {
+  const bundle: AnalysisReplayBundle = {
     schemaVersion: 1,
     createdAt: options.manifest.timing.finishedAt,
     generatedAt: options.generatedAt ?? options.manifest.timing.finishedAt,
@@ -155,6 +163,8 @@ export function createReplayBundle(options: {
     sourceSnapshots: createSourceSnapshots(options.sources),
     modelOutput: structuredClone(options.modelOutput),
   };
+  serializeReplayBundle(bundle);
+  return bundle;
 }
 
 const criterionSchema = z.object({
@@ -192,7 +202,18 @@ const replaySchema = z.object({
 );
 
 export function parseReplayBundle(input: string): AnalysisReplayBundle {
+  if (new TextEncoder().encode(input).byteLength > MAX_REPLAY_BUNDLE_BYTES) {
+    throw new Error("replay_bundle_too_large");
+  }
   return replaySchema.parse(JSON.parse(input)) as AnalysisReplayBundle;
+}
+
+export function serializeReplayBundle(bundle: AnalysisReplayBundle) {
+  const serialized = `${JSON.stringify(bundle, null, 2)}\n`;
+  if (new TextEncoder().encode(serialized).byteLength > MAX_REPLAY_BUNDLE_BYTES) {
+    throw new Error("replay_bundle_too_large");
+  }
+  return serialized;
 }
 
 export function replayAnalysisBundle(input: AnalysisReplayBundle): ComparisonResult {
