@@ -57,6 +57,7 @@ structured response, and returns it.
 | Provider env resolution, client construction, normalized provider errors | `lib/model-provider.ts` |
 | Model prompt, response schema, and response cross-field validation | `lib/analyzer.ts` |
 | Criteria templates and legacy criteria migration | `lib/criteria.ts` |
+| Candidate URL normalization, deduplication, storage validation, and search | `lib/candidate-inbox.ts` |
 | Weighted fit calculation | `lib/scoring.ts` |
 | Active evidence filtering, manual merge, and review preservation | `lib/evidence.ts` |
 | Evidence age classification | `lib/freshness.ts` |
@@ -203,6 +204,7 @@ for a local single-user tool, not a shared hosted application.
 | Location | Owner | Contents |
 | --- | --- | --- |
 | `fitlens-report-history-v1` in `localStorage` | Workbench | Up to 50 reports, revisions, notes, trials, and manual evidence |
+| `fitlens-candidate-inbox-v1` in `localStorage` | Workbench | Captured product URLs, notes, tags, timestamps, and archive state |
 | Template storage in `localStorage` | Workbench | User-created criteria templates |
 | Locale storage in `localStorage` | Workbench | Current language preference |
 | API key in `sessionStorage` | Workbench | Current-tab model key override |

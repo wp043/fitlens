@@ -33,6 +33,12 @@ import {
 import { calculateWeightedWinner } from "@/lib/scoring";
 import { createRedactedReport } from "@/lib/redaction";
 import {
+  captureCandidates,
+  filterCandidates,
+  normalizeCandidateInbox,
+  type CandidateInboxItem,
+} from "@/lib/candidate-inbox";
+import {
   buildResearchLibrary,
   filterResearchLibrary,
   listLibraryProducts,
@@ -108,6 +114,7 @@ const sessionApiKey = "fitlens-openai-api-key-v1";
 const preferenceProfilesKey = "fitlens-preference-profiles-v1";
 const criteriaTemplatesKey = "fitlens-criteria-templates-v1";
 const localeKey = "fitlens-locale-v1";
+const candidateInboxKey = "fitlens-candidate-inbox-v1";
 
 const maxSavedReports = 50;
 const maxRevisions = 5;
@@ -457,6 +464,12 @@ export function CompareWorkbench({
   const [manualEvidenceLevel, setManualEvidenceLevel] = useState<Evidence["level"]>(
     "verified",
   );
+  const [candidateInbox, setCandidateInbox] = useState<CandidateInboxItem[]>([]);
+  const [candidateCapture, setCandidateCapture] = useState("");
+  const [candidateQuery, setCandidateQuery] = useState("");
+  const [showArchivedCandidates, setShowArchivedCandidates] = useState(false);
+  const [selectedCandidateIds, setSelectedCandidateIds] = useState<string[]>([]);
+  const [candidateCaptureResult, setCandidateCaptureResult] = useState("");
   const importInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -477,6 +490,12 @@ export function CompareWorkbench({
           window.localStorage.setItem(historyKey, JSON.stringify(saved));
         }
         setApiKey(window.sessionStorage.getItem(sessionApiKey) ?? "");
+        const storedCandidates = window.localStorage.getItem(candidateInboxKey);
+        if (storedCandidates) {
+          const candidates = normalizeCandidateInbox(JSON.parse(storedCandidates));
+          setCandidateInbox(candidates);
+          window.localStorage.setItem(candidateInboxKey, JSON.stringify(candidates));
+        }
         const requestedLocale = new URLSearchParams(window.location.search).get(
           "lang",
         );
@@ -616,6 +635,15 @@ export function CompareWorkbench({
       libraryEvidence,
       libraryReview,
     ],
+  );
+  const filteredCandidates = useMemo(
+    () =>
+      filterCandidates(
+        candidateInbox,
+        candidateQuery,
+        showArchivedCandidates,
+      ),
+    [candidateInbox, candidateQuery, showArchivedCandidates],
   );
   const canAnalyze =
     urls.length >= 2 &&
@@ -1244,6 +1272,73 @@ export function CompareWorkbench({
     );
   }
 
+  function persistCandidateInbox(items: CandidateInboxItem[]) {
+    setCandidateInbox(items);
+    window.localStorage.setItem(candidateInboxKey, JSON.stringify(items));
+  }
+
+  function addCandidateLinks() {
+    const captured = captureCandidates(
+      candidateInbox,
+      candidateCapture,
+      () => crypto.randomUUID(),
+    );
+    persistCandidateInbox(captured.items);
+    if (captured.added > 0) setCandidateCapture("");
+    setCandidateCaptureResult(
+      t.inboxCaptureResult
+        .replace("{added}", String(captured.added))
+        .replace("{duplicates}", String(captured.duplicates))
+        .replace("{invalid}", String(captured.invalid)),
+    );
+  }
+
+  function updateCandidate(
+    id: string,
+    update: Partial<Pick<CandidateInboxItem, "note" | "tags" | "archived">>,
+  ) {
+    persistCandidateInbox(
+      candidateInbox.map((item) =>
+        item.id === id ? { ...item, ...update } : item,
+      ),
+    );
+    if (update.archived === true) {
+      setSelectedCandidateIds((current) =>
+        current.filter((candidateId) => candidateId !== id),
+      );
+    }
+  }
+
+  function deleteCandidate(id: string) {
+    persistCandidateInbox(candidateInbox.filter((item) => item.id !== id));
+    setSelectedCandidateIds((current) =>
+      current.filter((candidateId) => candidateId !== id),
+    );
+  }
+
+  function toggleCandidate(id: string) {
+    setSelectedCandidateIds((current) =>
+      current.includes(id)
+        ? current.filter((candidateId) => candidateId !== id)
+        : current.length < 8
+          ? [...current, id]
+          : current,
+    );
+  }
+
+  function compareSelectedCandidates() {
+    const selectedUrls = selectedCandidateIds.flatMap((id) => {
+      const candidate = candidateInbox.find((item) => item.id === id);
+      return candidate ? [candidate.url] : [];
+    });
+    if (selectedUrls.length < 2) return;
+    setUrls(selectedUrls);
+    setSourceFailures([]);
+    document
+      .querySelector(".compare-builder")
+      ?.scrollIntoView({ behavior: "smooth" });
+  }
+
   function startOver() {
     setResult(undefined);
     setUrls(["", ""]);
@@ -1305,6 +1400,149 @@ export function CompareWorkbench({
           </Link>
         )}
       </section>
+
+      {!exampleMode && (
+        <section className="candidate-inbox shell" aria-labelledby="candidate-inbox-title">
+          <header>
+            <div>
+              <p className="eyebrow">{t.inboxEyebrow}</p>
+              <h2 id="candidate-inbox-title">{t.inboxTitle}</h2>
+              <p>{t.inboxCopy}</p>
+            </div>
+            <div className="candidate-capture">
+              <textarea
+                value={candidateCapture}
+                rows={3}
+                placeholder={t.inboxCapturePlaceholder}
+                onChange={(event) => setCandidateCapture(event.target.value)}
+                onKeyDown={(event) => {
+                  if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+                    event.preventDefault();
+                    addCandidateLinks();
+                  }
+                }}
+              />
+              <button
+                type="button"
+                disabled={!candidateCapture.trim()}
+                onClick={addCandidateLinks}
+              >
+                + {t.inboxCapture}
+              </button>
+              {candidateCaptureResult && <small>{candidateCaptureResult}</small>}
+            </div>
+          </header>
+
+          <div className="candidate-inbox-toolbar">
+            <input
+              type="search"
+              value={candidateQuery}
+              placeholder={t.inboxSearch}
+              aria-label={t.inboxSearch}
+              onChange={(event) => setCandidateQuery(event.target.value)}
+            />
+            <label>
+              <input
+                type="checkbox"
+                checked={showArchivedCandidates}
+                onChange={(event) => setShowArchivedCandidates(event.target.checked)}
+              />
+              {t.inboxShowArchived}
+            </label>
+            <span>
+              {t.inboxSelected.replace(
+                "{count}",
+                String(selectedCandidateIds.length),
+              )}
+            </span>
+            <button
+              type="button"
+              disabled={selectedCandidateIds.length < 2}
+              onClick={compareSelectedCandidates}
+            >
+              {t.inboxCompare} →
+            </button>
+          </div>
+
+          {filteredCandidates.length > 0 ? (
+            <div className="candidate-inbox-grid">
+              {filteredCandidates.map((candidate) => {
+                const selected = selectedCandidateIds.includes(candidate.id);
+                return (
+                  <article
+                    className={`${candidate.archived ? "archived" : ""} ${selected ? "selected" : ""}`}
+                    key={candidate.id}
+                  >
+                    <header>
+                      <label className="candidate-select">
+                        <input
+                          type="checkbox"
+                          checked={selected}
+                          disabled={candidate.archived}
+                          onChange={() => toggleCandidate(candidate.id)}
+                        />
+                        <span>{candidate.name.slice(0, 1).toUpperCase()}</span>
+                      </label>
+                      <div>
+                        <strong>{candidate.name}</strong>
+                        <a href={candidate.url} target="_blank" rel="noreferrer">
+                          {candidate.url} ↗
+                        </a>
+                      </div>
+                    </header>
+                    <label>
+                      <span>{t.inboxNote}</span>
+                      <input
+                        value={candidate.note}
+                        onChange={(event) =>
+                          updateCandidate(candidate.id, { note: event.target.value })
+                        }
+                      />
+                    </label>
+                    <label>
+                      <span>{t.inboxTags}</span>
+                      <input
+                        value={candidate.tags.join(", ")}
+                        onChange={(event) =>
+                          updateCandidate(candidate.id, {
+                            tags: event.target.value
+                              .split(",")
+                              .map((tag) => tag.trim())
+                              .filter(Boolean),
+                          })
+                        }
+                      />
+                    </label>
+                    <footer>
+                      <time dateTime={candidate.addedAt}>
+                        {new Date(candidate.addedAt).toLocaleDateString(locale)}
+                      </time>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          updateCandidate(candidate.id, {
+                            archived: !candidate.archived,
+                          })
+                        }
+                      >
+                        {candidate.archived ? t.inboxRestore : t.inboxArchive}
+                      </button>
+                      <button type="button" onClick={() => deleteCandidate(candidate.id)}>
+                        {t.inboxDelete}
+                      </button>
+                    </footer>
+                  </article>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="candidate-inbox-empty">
+              <strong>{t.inboxEmpty}</strong>
+              <p>{t.inboxEmptyCopy}</p>
+            </div>
+          )}
+        </section>
+      )}
 
       <section className="compare-builder shell" aria-label={t.builderAria}>
         <div className="builder-head">

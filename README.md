@@ -49,6 +49,7 @@ refresh, and export.
 | | |
 | --- | --- |
 | **Research a shortlist** | Compare 2–8 products in one report. Reorder candidates without losing their evidence, scores, pricing, privacy findings, or trial results. |
+| **Keep a candidate inbox** | Paste product links as you discover them, add notes and tags, search or archive them, then promote any 2–8 candidates into a comparison without fetching a page. |
 | **See the evidence quality** | Every claim is labeled `verified`, `vendor`, or `inferred`. Coverage, freshness, source diversity, contradictions, and calibrated confidence are separate signals. |
 | **Review before trusting** | Accept, reject, edit, and annotate individual claims. Rejected evidence stops affecting confidence, coverage, freshness, and conflict checks without erasing the audit trail. |
 | **Decide for your workflow** | Use editable criteria and reusable templates. Reweight the decision instantly without another model request. |
@@ -151,6 +152,8 @@ newer and better supported.
   matters again.
 - Search saved research by product, workflow, evidence claim, source URL,
   recommendation, unknown, or note.
+- Capture links in a separate local candidate inbox, deduplicate tracking URLs,
+  and build a shortlist only when the comparison is worth running.
 - Export complete Markdown/JSON backups or share-safe copies for someone else.
 
 Portable reports are versioned and validated on import. Existing v1, v2, and v3
@@ -183,6 +186,7 @@ FitLens has no account system and no hosted database.
 | Data | Where it lives | How long |
 | --- | --- | --- |
 | Reports, revisions, notes, templates | Browser `localStorage` | Until you clear it |
+| Candidate inbox, notes, tags, archive state | Browser `localStorage` | Until you clear it |
 | Key entered in the UI | Browser `sessionStorage` | Current tab session |
 | `.env.local` keys and provider config | Local server environment | Until the file changes |
 | Product source material | Configured model provider | According to that provider |
@@ -240,6 +244,7 @@ lib/
   conflicts          opposing-claim detection
   privacy            privacy-risk calibration
   report             portable schema, migration, and coverage
+  candidate-inbox    URL capture, normalization, deduplication, and search
   research-library   local search index and facets
 test/                 deterministic domain and security tests
 docs/                 architecture and worked product research
@@ -271,8 +276,9 @@ diagnostics, and URL/DNS/redirect safety without requiring live network calls.
 - Compatible models must implement the Responses API and JSON Schema structured
   output used by FitLens.
 
-The highest-value next step is a candidate inbox for capturing product links
-as they appear, then promoting a shortlist into a focused comparison.
+The highest-value next step is splitting the growing workbench into focused
+feature modules and moving larger local datasets from `localStorage` to
+IndexedDB.
 
 ## License
 
