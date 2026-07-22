@@ -49,6 +49,7 @@ refresh, and export.
 | | |
 | --- | --- |
 | **Research a shortlist** | Compare 2–8 products in one report. Reorder candidates without losing their evidence, scores, pricing, privacy findings, or trial results. |
+| **Read official registries** | Enrich npm, PyPI, Apple App Store, and Chrome Web Store listings with normalized versions, requirements, licensing, release, rating, and repository signals when published. |
 | **Keep a candidate inbox** | Paste product links as you discover them, add notes and tags, search or archive them, then promote any 2–8 candidates into a comparison without fetching a page. |
 | **See the evidence quality** | Every claim is labeled `verified`, `vendor`, or `inferred`. Coverage, freshness, source diversity, contradictions, and calibrated confidence are separate signals. |
 | **Review before trusting** | Accept, reject, edit, and annotate individual claims. Rejected evidence stops affecting confidence, coverage, freshness, and conflict checks without erasing the audit trail. |
@@ -115,7 +116,8 @@ flowchart LR
     I --> J[Trial · notes · refresh · export]
 ```
 
-1. FitLens validates every candidate URL, collects its official page, follows
+1. FitLens validates every candidate URL, collects its official page or
+   supported registry/store metadata, follows
    high-value links for pricing, documentation, privacy, security, and release
    history, then inspects one linked GitHub repository when available.
 2. The configured model turns those sources into one strict report schema. It
@@ -313,7 +315,7 @@ components/
   pairwise-trials    head-to-head trial capture and standings UI
 lib/
   source             guarded website and GitHub collection
-  source-adapters/   official document discovery and classification
+  source-adapters/   official document and marketplace metadata adapters
   model-provider     provider configuration and structured Responses adapter
   analyzer           prompt, response schema, and cross-field validation
   analysis-service   shared browser and headless orchestration
@@ -381,8 +383,8 @@ visible.
 - Watchlists require an external local scheduler such as cron or launchd; the
   browser does not claim to run reliable background jobs while it is closed.
 
-Further extensions should preserve the local-first boundary. Useful directions
-include package-registry adapters and richer trend views across watch snapshots.
+Further extensions should preserve the local-first boundary. A useful direction
+is richer trend visualization across watch snapshots.
 
 ## License
 

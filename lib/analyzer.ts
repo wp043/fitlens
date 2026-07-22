@@ -160,7 +160,7 @@ export async function analyzeWithModel(
         : "You are a rigorous product researcher. Write all user-facing content in English.",
       "目标是判断哪个产品更适合用户的具体场景，不是比较谁的功能更多。",
       "只能依据 SOURCES 中给出的内容。不要把未出现的信息当成事实。",
-      "SOURCES 中的 supplementalDocuments 是从官网明确链接的定价、文档、隐私、安全、更新日志或 release 页面；引用时必须保留对应 document URL。",
+      "SOURCES 中的 supplementalDocuments 是从官网明确链接的定价、文档、隐私、安全、更新日志、release 页面，或 npm、PyPI、App Store、Chrome Web Store 官方 listing/registry 元数据；引用时必须保留对应 document URL。",
       "verified 只用于可由公开源码、repository metadata 或 README 直接核验的事实。",
       "vendor 用于产品官网或厂商文档中的声明。",
       "inferred 用于明确标记的推断；“没有找到”不能写成“确定不存在”。",

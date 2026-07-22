@@ -5,7 +5,12 @@ import type {
   SourceLink,
 } from "./types.ts";
 
-const terms: Record<Exclude<SourceDocumentKind, "release">, string[]> = {
+type DiscoverableDocumentKind = Exclude<
+  SourceDocumentKind,
+  "release" | "registry" | "store"
+>;
+
+const terms: Record<DiscoverableDocumentKind, string[]> = {
   pricing: ["pricing", "plans", "billing", "price", "定价", "价格", "套餐"],
   documentation: [
     "docs",
@@ -43,7 +48,7 @@ function searchable(link: SourceLink) {
 }
 
 function termAdapter(
-  kind: Exclude<SourceDocumentKind, "release">,
+  kind: DiscoverableDocumentKind,
   priority: number,
 ): SourceAdapter {
   return {

@@ -3,6 +3,11 @@ import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
 import type { Route } from "playwright";
 import { discoverSourceDocuments } from "./source-adapters/registry.ts";
+import {
+  chromeStoreDocument,
+  identifyMarketplace,
+  parseMarketplaceMetadata,
+} from "./source-adapters/marketplaces.ts";
 import type {
   CollectedSourceDocument,
   SourceLink,
@@ -754,6 +759,42 @@ export async function collectProductSource(
     };
   }
 
+  const marketplace = identifyMarketplace(input.toString());
+  if (marketplace?.metadataUrl) {
+    try {
+      const response = await fetchRemoteText(
+        marketplace.metadataUrl,
+        {
+          accept: "application/json,text/javascript",
+          allowedContentTypes: ["application/json", "text/javascript"],
+          maxBytes: 1_500_000,
+        },
+        dependencies,
+      );
+      const metadata = parseMarketplaceMetadata(marketplace, response.text);
+      if (metadata) {
+        const repository = metadata.repositoryUrl
+          ? githubRepoFromUrl(metadata.repositoryUrl)
+          : undefined;
+        const github = repository
+          ? await collectGitHub(repository, dependencies).catch(() => undefined)
+          : undefined;
+        return {
+          inputUrl: input.toString(),
+          homepageUrl: marketplace.pageUrl,
+          name: metadata.name,
+          description: metadata.description,
+          sourceMode: github ? "open-source" : "website-only",
+          pageText: metadata.document.text,
+          documents: [metadata.document, ...(github?.documents ?? [])],
+          repo: github?.repo,
+        };
+      }
+    } catch {
+      // Registry enrichment is optional; the public listing remains collectable.
+    }
+  }
+
   const html = await fetchText(input.toString(), dependencies);
   let page = extractPage(html.text, html.finalUrl);
   if (needsBrowserRendering(html.text, page.body)) {
@@ -778,12 +819,23 @@ export async function collectProductSource(
   const discoveredRepo = page.repoUrl
     ? githubRepoFromUrl(page.repoUrl)
     : undefined;
-  const [documents, github] = await Promise.all([
+  const [supplementalDocuments, github] = await Promise.all([
     collectSupplementalDocuments(html.finalUrl, page.links, dependencies),
     discoveredRepo
       ? collectGitHub(discoveredRepo, dependencies).catch(() => undefined)
       : Promise.resolve(undefined),
   ]);
+  const marketplaceDocuments =
+    marketplace?.kind === "chrome-web-store"
+      ? [
+          chromeStoreDocument(
+            marketplace,
+            page.title,
+            page.description,
+            page.body,
+          ),
+        ]
+      : [];
 
   return {
     inputUrl: input.toString(),
@@ -792,7 +844,11 @@ export async function collectProductSource(
     description: page.description,
     sourceMode: github ? "open-source" : "website-only",
     pageText: page.body,
-    documents: [...documents, ...(github?.documents ?? [])],
+    documents: [
+      ...marketplaceDocuments,
+      ...supplementalDocuments,
+      ...(github?.documents ?? []),
+    ],
     repo: github?.repo,
   };
 }

@@ -59,6 +59,7 @@ configured model, validates the structured response, and returns it.
 | URL policy, DNS checks, redirects, byte caps, page/GitHub collection | `lib/source.ts` |
 | Opt-in guarded JavaScript rendering for thin application shells | `lib/source.ts` |
 | Official pricing, docs, privacy, security, and changelog discovery | `lib/source-adapters/registry.ts` |
+| npm, PyPI, App Store, and Chrome Web Store metadata normalization | `lib/source-adapters/marketplaces.ts` |
 | Per-candidate collection outcomes and safe public failures | `lib/source-diagnostics.ts` |
 | Provider env resolution, client construction, normalized provider errors | `lib/model-provider.ts` |
 | Model prompt, response schema, and response cross-field validation | `lib/analyzer.ts` |
@@ -184,6 +185,9 @@ These are the contracts most likely to cause subtle errors if weakened:
 - Actual streamed bytes are capped; `Content-Length` alone is not trusted.
 - Supplemental documents and GitHub metadata, README, and latest-release
   requests use the same guarded transport.
+- npm, PyPI, and Apple listings use their official public JSON endpoints;
+  Chrome Web Store evidence is extracted from its guarded public listing because
+  it has no equivalent anonymous metadata endpoint.
 - Supplemental collection is bounded to one page per recognized kind and
   4,000 extracted characters per page. An optional supplemental-page failure
   does not invalidate a successfully collected homepage.
