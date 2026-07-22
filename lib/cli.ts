@@ -3,7 +3,7 @@ import type { Locale } from "./i18n.ts";
 export type CliOutputFormat = "json" | "markdown";
 
 export interface CliOptions {
-  command: "analyze" | "help";
+  command: "analyze" | "watch" | "help";
   urls: string[];
   context?: string;
   contextFile?: string;
@@ -13,6 +13,9 @@ export interface CliOptions {
   format: CliOutputFormat;
   outputFile?: string;
   allowBundledSample: boolean;
+  configFile?: string;
+  outputDirectory?: string;
+  force: boolean;
 }
 
 export function parseCliArguments(args: string[]): CliOptions {
@@ -24,22 +27,30 @@ export function parseCliArguments(args: string[]): CliOptions {
       format: "json",
       template: "general",
       allowBundledSample: true,
+      force: false,
     };
   }
-  if (args[0] !== "analyze") throw new Error(`Unknown command: ${args[0]}`);
+  if (args[0] !== "analyze" && args[0] !== "watch") {
+    throw new Error(`Unknown command: ${args[0]}`);
+  }
 
   const options: CliOptions = {
-    command: "analyze",
+    command: args[0],
     urls: [],
     locale: "en",
     format: "json",
     template: "general",
     allowBundledSample: true,
+    force: false,
   };
   for (let index = 1; index < args.length; index += 1) {
     const flag = args[index];
     if (flag === "--no-sample") {
       options.allowBundledSample = false;
+      continue;
+    }
+    if (flag === "--force") {
+      options.force = true;
       continue;
     }
     const value = args[index + 1];
@@ -75,9 +86,20 @@ export function parseCliArguments(args: string[]): CliOptions {
       case "--output":
         options.outputFile = value;
         break;
+      case "--config":
+        options.configFile = value;
+        break;
+      case "--output-dir":
+        options.outputDirectory = value;
+        break;
       default:
         throw new Error(`Unknown option: ${flag}`);
     }
+  }
+  if (options.command === "watch") {
+    if (!options.configFile) throw new Error("Watch requires --config");
+    options.outputDirectory ??= ".fitlens/snapshots";
+    return options;
   }
   if (options.urls.length < 2 || options.urls.length > 8) {
     throw new Error("Analyze requires 2–8 --url values");
@@ -95,6 +117,7 @@ export const cliHelp = `FitLens CLI
 
 Usage:
   pnpm fitlens analyze --url <url> --url <url> --context <text> [options]
+  pnpm fitlens watch --config <path> [--output-dir <path>] [--force]
 
 Options:
   --url <url>            Product URL; repeat 2–8 times
@@ -106,5 +129,8 @@ Options:
   --format json|markdown Output format (default: json)
   --output <path>        Write output to a file instead of stdout
   --no-sample            Require a configured provider for bundled examples
+  --config <path>        Watchlist JSON file
+  --output-dir <path>    Snapshot root (default: .fitlens/snapshots)
+  --force                Run every watch entry regardless of interval
   --help                 Show this help
 `;

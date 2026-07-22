@@ -53,6 +53,7 @@ configured model, validates the structured response, and returns it.
 | Public analysis endpoint and status codes | `app/api/analyze/route.ts` |
 | Shared browser/CLI orchestration and source failure boundary | `lib/analysis-service.ts` |
 | Headless argument parsing and entry point | `lib/cli.ts`, `scripts/fitlens.ts` |
+| Watchlist validation, due scheduling, and snapshot naming | `lib/watchlist.ts` |
 | Request schema and URL-list validation | `lib/analyze-request.ts` |
 | URL policy, DNS checks, redirects, byte caps, page/GitHub collection | `lib/source.ts` |
 | Official pricing, docs, privacy, security, and changelog discovery | `lib/source-adapters/registry.ts` |
@@ -215,6 +216,7 @@ for a local single-user tool, not a shared hosted application.
 | API key in `sessionStorage` | Workbench | Current-tab model key override |
 | `.env.local` | Local Next.js server | Provider, model, API key, optional GitHub token |
 | Exported `.json` / `.md` | User | Portable backup or share-safe report |
+| `.fitlens/snapshots/<watch-id>/` | CLI watch runner | Immutable timestamped results and `latest.json` |
 
 Browser history deliberately keeps its existing storage key. Schema migration
 happens while loading, so older local reports do not require a separate data

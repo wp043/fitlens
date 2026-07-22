@@ -200,6 +200,38 @@ command reference. Built-in `general`, `developer-tools`, `privacy-first`, and
 `daily-use` templates are available through `--template`; JSON is the default
 stdout format for scripts.
 
+### Watchlists and snapshots
+
+For recurring research, create a local `fitlens.watch.json`:
+
+```json
+{
+  "version": 1,
+  "entries": [
+    {
+      "id": "terminal-tools",
+      "urls": ["https://product-a.example", "https://product-b.example"],
+      "context": "I need a local-first terminal for daily agent work.",
+      "template": "developer-tools",
+      "locale": "en",
+      "intervalHours": 168
+    }
+  ]
+}
+```
+
+Run due entries manually or from cron/launchd:
+
+```bash
+pnpm fitlens watch --config fitlens.watch.json
+```
+
+Each successful run writes an immutable timestamped snapshot and `latest.json`
+under `.fitlens/snapshots/<watch-id>/`, then atomically updates `lastRunAt` in
+the config. Failed entries keep their previous schedule state. Use `--force` to
+refresh everything regardless of interval; `.fitlens/` is ignored by Git by
+default so research snapshots are not published accidentally.
+
 ## Local by design
 
 FitLens has no account system and no hosted database.
@@ -267,6 +299,7 @@ lib/
   analysis-service   shared browser and headless orchestration
   cli                deterministic command parsing and help
   markdown-report    portable headless Markdown rendering
+  watchlist          schedule validation, due selection, and snapshot naming
   scoring            deterministic preference weighting
   confidence         deterministic evidence confidence
   conflicts          opposing-claim detection
@@ -304,9 +337,11 @@ diagnostics, and URL/DNS/redirect safety without requiring live network calls.
 - A report retains at most five prior revisions.
 - Compatible models must implement the Responses API and JSON Schema structured
   output used by FitLens.
+- Watchlists require an external local scheduler such as cron or launchd; the
+  browser does not claim to run reliable background jobs while it is closed.
 
-The highest-value next step is local watchlists with scheduled refreshes and
-source snapshots for decisions that need to stay current.
+The highest-value next step is reusable decision profiles and pairwise trial
+comparisons for close calls within a larger shortlist.
 
 ## License
 

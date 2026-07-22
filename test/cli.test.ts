@@ -33,3 +33,16 @@ test("rejects ambiguous context and incomplete shortlists", () => {
     "--context-file", "context.txt",
   ]), /either/);
 });
+
+test("parses a scheduled watchlist command", () => {
+  const options = parseCliArguments([
+    "watch",
+    "--config", "fitlens.watch.json",
+    "--output-dir", "research/snapshots",
+    "--force",
+  ]);
+  assert.equal(options.command, "watch");
+  assert.equal(options.configFile, "fitlens.watch.json");
+  assert.equal(options.outputDirectory, "research/snapshots");
+  assert.equal(options.force, true);
+});

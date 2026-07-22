@@ -5,6 +5,7 @@ node_modules
 *.log
 *.tsbuildinfo
 .DS_Store
+.fitlens/
 
 # autonomous-skill per-sprint worktrees
 .worktrees/
