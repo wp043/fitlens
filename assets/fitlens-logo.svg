@@ -1,0 +1,87 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 420" role="img" aria-labelledby="title desc">
+  <title id="title">FitLens</title>
+  <desc id="desc">Evidence cards pass through a lens and resolve into a clear decision.</desc>
+  <defs>
+    <linearGradient id="backdrop" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#181825"/>
+      <stop offset="0.55" stop-color="#1e1e2e"/>
+      <stop offset="1" stop-color="#30283d"/>
+    </linearGradient>
+    <linearGradient id="lens" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#cba6f7"/>
+      <stop offset="0.5" stop-color="#89b4fa"/>
+      <stop offset="1" stop-color="#a6e3a1"/>
+    </linearGradient>
+    <linearGradient id="wordmark" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#f5e0dc"/>
+      <stop offset="0.62" stop-color="#f5c2e7"/>
+      <stop offset="1" stop-color="#fab387"/>
+    </linearGradient>
+    <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="12" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <clipPath id="lensClip"><circle cx="295" cy="210" r="92"/></clipPath>
+  </defs>
+
+  <rect x="8" y="8" width="1184" height="404" rx="42" fill="url(#backdrop)" stroke="#45475a" stroke-width="2"/>
+  <circle cx="1030" cy="58" r="190" fill="none" stroke="#cba6f7" stroke-opacity="0.06" stroke-width="34"/>
+  <circle cx="1110" cy="370" r="220" fill="none" stroke="#89b4fa" stroke-opacity="0.04" stroke-width="52"/>
+
+  <g opacity="0.95">
+    <g>
+      <animateTransform attributeName="transform" type="translate" values="0 0;18 0;0 0" dur="3.2s" repeatCount="indefinite"/>
+      <rect x="78" y="126" width="116" height="54" rx="12" fill="#313244" stroke="#585b70"/>
+      <circle cx="101" cy="153" r="7" fill="#a6e3a1"/>
+      <path d="M119 145h50M119 160h35" stroke="#cdd6f4" stroke-opacity="0.7" stroke-width="5" stroke-linecap="round"/>
+      <rect x="58" y="184" width="136" height="54" rx="12" fill="#313244" stroke="#585b70"/>
+      <circle cx="81" cy="211" r="7" fill="#fab387"/>
+      <path d="M99 203h66M99 218h43" stroke="#cdd6f4" stroke-opacity="0.7" stroke-width="5" stroke-linecap="round"/>
+      <rect x="88" y="242" width="106" height="54" rx="12" fill="#313244" stroke="#585b70"/>
+      <circle cx="111" cy="269" r="7" fill="#f38ba8"/>
+      <path d="M129 261h42M129 276h30" stroke="#cdd6f4" stroke-opacity="0.7" stroke-width="5" stroke-linecap="round"/>
+    </g>
+
+    <path d="M202 153C234 158 247 178 265 195M202 211h62M202 269c32-5 45-25 63-42" fill="none" stroke="#a6adc8" stroke-opacity="0.42" stroke-width="3" stroke-linecap="round">
+      <animate attributeName="stroke-opacity" values="0.22;0.72;0.22" dur="3.2s" repeatCount="indefinite"/>
+    </path>
+
+    <circle cx="295" cy="210" r="112" fill="#cba6f7" fill-opacity="0.08" filter="url(#glow)">
+      <animate attributeName="fill-opacity" values="0.04;0.13;0.04" dur="3.2s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="295" cy="210" r="92" fill="#181825" fill-opacity="0.84" stroke="url(#lens)" stroke-width="12"/>
+    <g clip-path="url(#lensClip)">
+      <path d="M212 256L378 166" stroke="#89b4fa" stroke-opacity="0.16" stroke-width="32">
+        <animate attributeName="transform" values="translate(-45 0);translate(45 0);translate(-45 0)" dur="3.2s" repeatCount="indefinite"/>
+      </path>
+      <path d="M226 226h138" stroke="#45475a" stroke-width="2"/>
+      <circle cx="257" cy="205" r="9" fill="#a6e3a1"/>
+      <circle cx="295" cy="226" r="9" fill="#fab387"/>
+      <circle cx="333" cy="190" r="9" fill="#f38ba8"/>
+      <path d="M257 205l38 21 38-36" fill="none" stroke="#cdd6f4" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+    </g>
+    <path d="M360 277l54 54" stroke="#89b4fa" stroke-width="14" stroke-linecap="round"/>
+
+    <path d="M414 210h80" stroke="#a6adc8" stroke-opacity="0.45" stroke-width="3" stroke-linecap="round"/>
+    <g filter="url(#glow)">
+      <circle cx="520" cy="210" r="35" fill="#a6e3a1" fill-opacity="0.12" stroke="#a6e3a1" stroke-opacity="0.5"/>
+      <path d="M504 210l11 11 23-27" fill="none" stroke="#a6e3a1" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
+        <animate attributeName="stroke-dasharray" values="0 60;60 0;60 0" keyTimes="0;0.28;1" dur="3.2s" repeatCount="indefinite"/>
+      </path>
+    </g>
+  </g>
+
+  <g transform="translate(610 0)">
+    <text x="0" y="190" fill="url(#wordmark)" font-family="Manrope, Inter, ui-sans-serif, system-ui, sans-serif" font-size="88" font-weight="800" letter-spacing="-5">FitLens</text>
+    <text x="4" y="236" fill="#a6adc8" font-family="DM Mono, SFMono-Regular, Consolas, monospace" font-size="20" letter-spacing="4">EVIDENCE IN · DECISION OUT</text>
+    <path d="M5 270h394" stroke="#45475a" stroke-width="2"/>
+    <g font-family="DM Mono, SFMono-Regular, Consolas, monospace" font-size="15">
+      <circle cx="11" cy="307" r="5" fill="#a6e3a1"/>
+      <text x="27" y="313" fill="#cdd6f4">verified</text>
+      <circle cx="141" cy="307" r="5" fill="#fab387"/>
+      <text x="157" y="313" fill="#cdd6f4">vendor</text>
+      <circle cx="263" cy="307" r="5" fill="#f38ba8"/>
+      <text x="279" y="313" fill="#cdd6f4">inferred</text>
+    </g>
+  </g>
+</svg>
