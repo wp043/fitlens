@@ -22,8 +22,9 @@ test("reviews evidence in the bundled report", async ({ page }) => {
   const firstEvidence = page.locator(".evidence-review-item").first();
   await firstEvidence.getByRole("button", { name: /Accept/i }).click();
   await expect(firstEvidence.locator(".review-status")).toHaveText("Accepted");
-  await firstEvidence.getByPlaceholder(/Review note/i).fill("Verified during E2E.");
-  await firstEvidence.getByPlaceholder(/Review note/i).blur();
+  const reviewNote = firstEvidence.getByLabel(/Review note/i);
+  await reviewNote.fill("Verified during E2E.");
+  await reviewNote.blur();
   await expect(firstEvidence).toHaveClass(/accepted/);
 });
 
@@ -42,6 +43,7 @@ test("home and report have no automatically detectable WCAG violations", async (
 
 test("home visual contract", async ({ page }) => {
   await page.goto("/?lang=en");
+  await expect(page.locator("html")).toHaveAttribute("lang", "en");
   await page.evaluate(() => document.fonts.ready);
   await expect(page).toHaveScreenshot("home.png", {
     animations: "disabled",
