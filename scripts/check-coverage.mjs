@@ -19,8 +19,10 @@ process.stderr.write(child.stderr ?? "");
 if (child.status !== 0) {
   process.exitCode = child.status ?? 1;
 } else {
+  // Anchor on the row separator so `workbench-state.test.ts` can never match,
+  // and capture the uncovered-lines column so a regression names its lines.
   const match = child.stdout.match(
-    /workbench-state\.ts\s*\|\s*([\d.]+)\s*\|\s*([\d.]+)\s*\|\s*([\d.]+)/,
+    /[\s|]workbench-state\.ts\s*\|\s*([\d.]+)\s*\|\s*([\d.]+)\s*\|\s*([\d.]+)\s*\|([^\n]*)/,
   );
   if (!match) {
     process.stderr.write(
@@ -37,7 +39,17 @@ if (child.status !== 0) {
       .filter(([metric, minimum]) => actual[metric] < minimum)
       .map(([metric, minimum]) => `${metric} ${actual[metric]}% < ${minimum}%`);
     if (failures.length > 0) {
-      process.stderr.write(`Coverage ratchet failed: ${failures.join(", ")}\n`);
+      const uncovered = match[4].trim();
+      process.stderr.write(
+        `Coverage ratchet failed: ${failures.join(", ")}\n` +
+          `  file: lib/workbench-state.ts\n` +
+          `  uncovered lines: ${uncovered === "" ? "(none reported)" : uncovered}\n` +
+          `  node: ${process.version}\n` +
+          "  If the uncovered lines are non-executable (a closing brace or a\n" +
+          "  multi-line signature), this is V8/tsx line attribution drift rather\n" +
+          "  than a real coverage gap. Reproduce on the CI Node version before\n" +
+          "  changing thresholds.\n",
+      );
       process.exitCode = 1;
     } else {
       process.stdout.write(
