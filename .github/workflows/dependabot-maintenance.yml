@@ -105,6 +105,8 @@ jobs:
 
           if [[ "${title}" == *"production group"* || "${title}" == *"development group"* || "${title}" == *"actions group"* ]]; then
             auto_merge=true
+          elif [[ "${head_ref}" == dependabot/github_actions/* && "${title}" =~ from[[:space:]]+([0-9a-f]{40})[[:space:]]+to[[:space:]]+([0-9a-f]{40}) ]]; then
+            auto_merge=true
           elif [[ "${title}" =~ from[[:space:]]+v?([0-9]+)([^[:space:]]*)[[:space:]]+to[[:space:]]+v?([0-9]+) ]]; then
             if [[ "${BASH_REMATCH[1]}" == "${BASH_REMATCH[3]}" ]]; then
               auto_merge=true
