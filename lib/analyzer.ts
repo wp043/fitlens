@@ -95,7 +95,7 @@ const dimensionSchema = z
     key: z.string(),
     label: z.string(),
     weight: z.number().int().min(0).max(100),
-    productScores: z.record(z.number().int().min(0).max(100)),
+    productScores: z.record(z.string(), z.number().int().min(0).max(100)),
     winner: z.string(),
     explanation: z.string(),
   })
