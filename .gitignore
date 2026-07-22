@@ -2,7 +2,8 @@ node_modules
 .pnpm-store/
 .next
 .env
-.env.local
+.env.*
+!.env.example
 *.log
 *.tsbuildinfo
 .DS_Store
@@ -10,5 +11,12 @@ node_modules
 playwright-report/
 test-results/
 
-# autonomous-skill per-sprint worktrees
+# Local agent/tooling scratch. Never publish: may contain prompts,
+# transcripts, and machine-local paths.
 .worktrees/
+.autonomous/
+.openai/
+.wrangler/
+
+# compiled CLI output
+dist/
