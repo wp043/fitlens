@@ -43,6 +43,35 @@ test("requires credentials for non-sample headless analysis", async () => {
   );
 });
 
+test("live-analysis kill switch prevents provider and source activity", async () => {
+  const criteria = getBuiltInCriteriaTemplates("en").find(
+    (template) => template.id === "general",
+  )!.criteria;
+  let collected = false;
+  await assert.rejects(
+    runAnalysis(
+      {
+        urls: ["https://one.test/", "https://two.test/"],
+        context: "A sufficiently detailed comparison workflow.",
+        criteria,
+        locale: "en",
+      },
+      {
+        env: {
+          FITLENS_DISABLE_LIVE_ANALYSIS: "1",
+          OPENAI_API_KEY: "sk-test-key-that-would-otherwise-run",
+        },
+        collectSource: async () => {
+          collected = true;
+          throw new Error("must not run");
+        },
+      },
+    ),
+    MissingModelCredentialsError,
+  );
+  assert.equal(collected, false);
+});
+
 test("returns ordered source diagnostics before any model request", async () => {
   const criteria = getBuiltInCriteriaTemplates("en").find(
     (template) => template.id === "general",

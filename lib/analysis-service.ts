@@ -61,6 +61,9 @@ export async function runAnalysis(
   options: AnalysisServiceOptions,
 ): Promise<ComparisonResult> {
   const body = parseAnalyzeRequest(input);
+  if (options.env.FITLENS_DISABLE_LIVE_ANALYSIS === "1") {
+    throw new MissingModelCredentialsError();
+  }
   const provider = resolveModelProviderConfig(options.env, options.sessionApiKey);
 
   if (

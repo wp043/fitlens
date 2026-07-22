@@ -46,3 +46,18 @@ test("parses a scheduled watchlist command", () => {
   assert.equal(options.outputDirectory, "research/snapshots");
   assert.equal(options.force, true);
 });
+
+test("parses doctor diagnostics without analysis inputs", () => {
+  const options = parseCliArguments([
+    "doctor",
+    "--json",
+    "--output", ".fitlens/doctor.json",
+    "--check-playwright",
+    "--probe-provider",
+  ]);
+  assert.equal(options.command, "doctor");
+  assert.equal(options.doctorJson, true);
+  assert.equal(options.outputFile, ".fitlens/doctor.json");
+  assert.equal(options.checkPlaywright, true);
+  assert.equal(options.probeProvider, true);
+});

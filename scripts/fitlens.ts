@@ -27,6 +27,7 @@ import {
 import { compareResults, type ComparisonDiff } from "../lib/diff.ts";
 import { sendLocalNotification } from "../lib/local-notifications.ts";
 import type { ComparisonResult } from "../lib/types.ts";
+import { createDoctorReport, formatDoctorReport } from "../lib/doctor.ts";
 
 async function writeJsonAtomic(path: string, value: unknown) {
   const temporary = `${path}.tmp-${process.pid}`;
@@ -153,6 +154,25 @@ async function main() {
   }
   if (options.command === "watch") {
     await runWatchlist(options);
+    return;
+  }
+  if (options.command === "doctor") {
+    const report = await createDoctorReport({
+      checkPlaywright: options.checkPlaywright,
+      probeProvider: options.probeProvider,
+    });
+    const output = options.doctorJson
+      ? `${JSON.stringify(report, null, 2)}\n`
+      : formatDoctorReport(report);
+    if (options.outputFile) {
+      const outputPath = resolve(options.outputFile);
+      await mkdir(dirname(outputPath), { recursive: true });
+      await writeFile(outputPath, output, "utf8");
+      process.stdout.write(`Redacted diagnostics written to ${outputPath}\n`);
+    } else {
+      process.stdout.write(output);
+    }
+    if (!report.healthy) process.exitCode = 1;
     return;
   }
 

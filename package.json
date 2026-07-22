@@ -17,6 +17,7 @@
     "test": "node --test",
     "test:e2e": "playwright test",
     "test:e2e:update": "playwright test --update-snapshots",
+    "test:production": "node --import tsx scripts/production-harness.ts",
     "check": "pnpm test && pnpm lint && pnpm exec tsc --noEmit && pnpm build"
   },
   "dependencies": {

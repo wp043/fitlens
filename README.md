@@ -98,6 +98,26 @@ through the same public-address and redirect policy as the static collector.
 If rendering is unavailable or produces less content, FitLens keeps the static
 result.
 
+### Local diagnostics
+
+Run the cross-platform preflight before reporting an environment problem:
+
+```bash
+pnpm fitlens doctor
+pnpm fitlens doctor --check-playwright
+pnpm fitlens doctor --json --output .fitlens/doctor.json
+```
+
+Doctor checks the supported Node and pnpm versions, the checkout, and model
+provider configuration. Playwright/Chromium readiness is opt-in because the
+browser renderer is optional. A live provider check is also opt-in with
+`--probe-provider`; it makes one five-second `GET /models` request, records only
+the result status, and never stores a credential or response body. Diagnostic
+objects are redacted again before printing or writing: known secret environment
+values, bearer tokens, key-like fields, URL credentials, and the home directory
+are removed. Review any bundle before sharing it, as with every diagnostic
+artifact. See [Troubleshooting](docs/TROUBLESHOOTING.md) for symptom-based fixes.
+
 ## How a decision works
 
 ```mermaid
@@ -366,13 +386,17 @@ docs/                 architecture and worked product research
 
 ```bash
 pnpm check
+pnpm test:production
 pnpm exec playwright install chromium
 pnpm test:e2e
 pnpm audit --prod
 ```
 
 `pnpm check` runs the fast deterministic tests, ESLint, TypeScript, and the
-production build. Run those parts individually when iterating:
+production build. `pnpm test:production` independently builds the application,
+starts that exact artifact with `next start`, and exercises local pages,
+production headers, and the guarded analysis endpoint without provider or
+public-network access. Run those parts individually when iterating:
 
 ```bash
 pnpm test
@@ -391,7 +415,8 @@ on third-party availability.
 Playwright covers candidate capture, evidence review, local API rejection,
 browser security headers, automated WCAG checks, and platform-specific
 full-page visual contracts. GitHub Actions runs the core
-quality gate on Linux, macOS, and Windows, with browser contracts and production
+quality gate on Linux, macOS, and Windows, with browser contracts, a hermetic
+production-artifact harness, and production
 dependency auditing on Linux. Dependabot keeps pnpm and workflow dependencies
 visible. A privileged follow-up workflow never checks out dependency-PR code;
 it verifies the Dependabot author and tested head SHA through the GitHub API,
@@ -413,6 +438,8 @@ updates and persistent failures remain open with an agent-review label.
   output used by FitLens.
 - Watchlists require an external local scheduler such as cron or launchd; the
   browser does not claim to run reliable background jobs while it is closed.
+- Provider endpoint probing is diagnostic only; it verifies `/models` reachability
+  but does not prove that the configured model supports FitLens structured output.
 
 Further extensions should preserve the local-first boundary. A useful direction
 is richer trend visualization across watch snapshots.
