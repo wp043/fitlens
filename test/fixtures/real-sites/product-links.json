@@ -1,0 +1,24 @@
+{
+  "fixtureVersion": 1,
+  "capturedAt": "2026-07-22T05:04:07Z",
+  "sites": [
+    {
+      "sourceUrl": "https://otty.sh/",
+      "links": [
+        { "url": "https://docs.otty.sh/", "label": "Documents" },
+        { "url": "https://docs.otty.sh/changelog", "label": "Change Log" },
+        { "url": "https://docs.otty.sh/pricing", "label": "Price" },
+        { "url": "https://docs.otty.sh/privacy", "label": "Privacy Policy" }
+      ]
+    },
+    {
+      "sourceUrl": "https://cmux.com/",
+      "links": [
+        { "url": "https://docs.cmux.com/", "label": "Docs" },
+        { "url": "https://cmux.com/changelog", "label": "Changelog" },
+        { "url": "https://cmux.com/privacy", "label": "Privacy" },
+        { "url": "https://github.com/manaflow-ai/cmux", "label": "GitHub" }
+      ]
+    }
+  ]
+}

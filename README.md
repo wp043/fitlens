@@ -340,6 +340,7 @@ lib/
   persistence        IndexedDB adapter and safe localStorage migration
   research-library   local search index and facets
 test/                 deterministic domain and security tests
+  fixtures/real-sites curated offline compatibility snapshots
 e2e/                  browser workflows, accessibility, and visual baseline
 .github/               CI and dependency maintenance
 playwright.config.ts   Chromium test and local server contract
@@ -368,6 +369,9 @@ pnpm build
 The test suite covers scoring, report migration, i18n parity, confidence,
 conflicts, privacy, redaction, research search, provider configuration, source
 diagnostics, and URL/DNS/redirect safety without requiring live network calls.
+Curated npm, PyPI, App Store, Chrome Web Store, cmux, and Otty snapshots keep
+real public response shapes under regression coverage without making CI depend
+on third-party availability.
 Playwright covers candidate capture, evidence review, automated WCAG checks,
 and platform-specific full-page visual contracts. GitHub Actions runs the core
 quality gate on Linux, macOS, and Windows, with browser contracts and production

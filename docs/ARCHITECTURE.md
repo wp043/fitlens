@@ -247,15 +247,17 @@ to the original localStorage key.
 | --- | --- | --- |
 | Domain | `test/{scoring,evidence,confidence,conflicts,privacy,diff,freshness,pairwise,decision-profiles}.test.ts` | Deterministic decision logic and edge cases |
 | Portable data | `test/{report,redaction,research-library,persistence,candidate-inbox}.test.ts` | Migration, import safety, redaction, local indexing, and storage fallback |
-| External boundaries | `test/{source,source-adapters,source-diagnostics,model-provider}.test.ts` | URL/DNS/redirect policy, source discovery, optional-page isolation, public errors, provider config without live calls |
+| External boundaries | `test/{source,source-adapters,source-diagnostics,model-provider,real-site-fixtures}.test.ts` | URL/DNS/redirect policy, source discovery, optional-page isolation, curated real response compatibility, public errors, and provider config without live calls |
 | Product contract | `test/{criteria,i18n}.test.ts` | Stable criteria and bilingual dictionary parity |
 | Browser contract | `e2e/workflows.spec.ts` | Candidate promotion, evidence review, WCAG scans, and the full-page visual baseline |
 | Build contract | `pnpm lint`, `pnpm exec tsc --noEmit`, `pnpm build` | Static correctness and production compilation |
 | Maintenance contract | `.github/workflows/ci.yml`, `.github/dependabot.yml` | Linux/macOS/Windows quality checks, Linux Chromium coverage and audits, and dependency update visibility |
 
-Network tests use injected DNS/fetch behavior. The fast test suite does not
-depend on live websites, GitHub, or a model provider. Browser tests start the
-local Next.js app and use the bundled report, so they also require no model key.
+Network tests use injected DNS/fetch behavior. Real-site fixtures are curated,
+timestamped excerpts with source URLs; CI never refreshes them or calls those
+sites. The fast suite therefore does not depend on live websites, GitHub, or a
+model provider. Browser tests start the local Next.js app and use the bundled
+report, so they also require no model key.
 
 ## Deliberate non-goals
 
