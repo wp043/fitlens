@@ -3,7 +3,7 @@ import type { Locale } from "./i18n.ts";
 export type CliOutputFormat = "json" | "markdown";
 
 export interface CliOptions {
-  command: "analyze" | "replay" | "watch" | "doctor" | "help";
+  command: "analyze" | "demo" | "replay" | "watch" | "doctor" | "help";
   urls: string[];
   context?: string;
   contextFile?: string;
@@ -37,7 +37,13 @@ export function parseCliArguments(args: string[]): CliOptions {
       probeProvider: false,
     };
   }
-  if (args[0] !== "analyze" && args[0] !== "replay" && args[0] !== "watch" && args[0] !== "doctor") {
+  if (
+    args[0] !== "analyze" &&
+    args[0] !== "demo" &&
+    args[0] !== "replay" &&
+    args[0] !== "watch" &&
+    args[0] !== "doctor"
+  ) {
     throw new Error(`Unknown command: ${args[0]}`);
   }
 
@@ -122,6 +128,13 @@ export function parseCliArguments(args: string[]): CliOptions {
     }
   }
   if (options.command === "doctor") return options;
+  // `demo` supplies its own URLs, context, and criteria.
+  if (options.command === "demo") {
+    if (options.urls.length > 0 || options.context || options.contextFile) {
+      throw new Error("Demo takes no --url, --context, or --context-file");
+    }
+    return options;
+  }
   if (options.command === "replay") {
     if (!options.replayFile) throw new Error("Replay requires --bundle");
     return options;
@@ -146,10 +159,15 @@ export function parseCliArguments(args: string[]): CliOptions {
 export const cliHelp = `FitLens CLI
 
 Usage:
-  pnpm fitlens analyze --url <url> --url <url> --context <text> [options]
-  pnpm fitlens replay --bundle <path> [--format json|markdown] [--output <path>]
-  pnpm fitlens watch --config <path> [--output-dir <path>] [--force]
-  pnpm fitlens doctor [--json] [--output <path>] [--check-playwright] [--probe-provider]
+  fitlens demo [--format json|markdown] [--locale en|zh-CN] [--output <path>]
+  fitlens analyze --url <url> --url <url> --context <text> [options]
+  fitlens replay --bundle <path> [--format json|markdown] [--output <path>]
+  fitlens watch --config <path> [--output-dir <path>] [--force]
+  fitlens doctor [--json] [--output <path>] [--check-playwright] [--probe-provider]
+
+Run "fitlens demo" first: it renders a complete bundled comparison report
+offline, with no API key and no network access, so you can see the output
+shape before configuring a provider.
 
 Options:
   --url <url>            Product URL; repeat 2–8 times

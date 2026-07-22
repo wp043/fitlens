@@ -74,3 +74,23 @@ test("parses an offline replay without analysis inputs", () => {
   assert.equal(options.format, "markdown");
   assert.throws(() => parseCliArguments(["replay"]), /--bundle/);
 });
+
+test("demo needs no inputs and rejects analysis arguments", () => {
+  const options = parseCliArguments(["demo"]);
+  assert.equal(options.command, "demo");
+  assert.deepEqual(options.urls, []);
+  assert.equal(options.context, undefined);
+
+  const withFormat = parseCliArguments(["demo", "--format", "markdown", "--locale", "zh-CN"]);
+  assert.equal(withFormat.format, "markdown");
+  assert.equal(withFormat.locale, "zh-CN");
+
+  assert.throws(
+    () => parseCliArguments(["demo", "--url", "https://one.test"]),
+    /Demo takes no/,
+  );
+  assert.throws(
+    () => parseCliArguments(["demo", "--context", "some workflow context"]),
+    /Demo takes no/,
+  );
+});

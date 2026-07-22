@@ -150,6 +150,15 @@ async function runWatchlist(
   if (failures > 0) process.exitCode = 1;
 }
 
+/**
+ * Inputs the bundled sample recognizes. Keep in sync with
+ * `isBundledSampleRequest` in lib/analysis-service.ts.
+ */
+const DEMO_URLS = ["https://cmux.com", "https://otty.sh"];
+const DEMO_CONTEXT =
+  "Evaluating terminal-first coding agents for a small team that runs several " +
+  "agents in parallel and cares about openness and automation.";
+
 async function main() {
   const controller = new AbortController();
   process.once("SIGINT", () => controller.abort());
@@ -196,19 +205,35 @@ async function main() {
     return;
   }
 
-  const context = options.contextFile
-    ? await readFile(resolve(options.contextFile), "utf8")
-    : options.context!;
-  const criteria = options.criteriaFile
-    ? JSON.parse(await readFile(resolve(options.criteriaFile), "utf8"))
-    : getBuiltInCriteriaTemplates(options.locale).find(
-        (template) => template.id === options.template,
-      )!.criteria;
+  // `demo` is the zero-configuration entry point. It pins the inputs that the
+  // bundled sample recognizes so the report renders offline without a
+  // provider, and it hides any ambient credentials so the output stays
+  // identical on a configured machine.
+  const demo = options.command === "demo";
+  const context = demo
+    ? DEMO_CONTEXT
+    : options.contextFile
+      ? await readFile(resolve(options.contextFile), "utf8")
+      : options.context!;
+  const criteria = demo
+    ? getBuiltInCriteriaTemplates(options.locale).find(
+        (template) => template.id === "developer-tools",
+      )!.criteria
+    : options.criteriaFile
+      ? JSON.parse(await readFile(resolve(options.criteriaFile), "utf8"))
+      : getBuiltInCriteriaTemplates(options.locale).find(
+          (template) => template.id === options.template,
+        )!.criteria;
   const result = await runAnalysis(
-    { urls: options.urls, context, criteria, locale: options.locale },
     {
-      env: process.env,
-      allowBundledSample: options.allowBundledSample,
+      urls: demo ? DEMO_URLS : options.urls,
+      context,
+      criteria,
+      locale: options.locale,
+    },
+    {
+      env: demo ? {} : process.env,
+      allowBundledSample: demo ? true : options.allowBundledSample,
       signal: controller.signal,
     },
   );
