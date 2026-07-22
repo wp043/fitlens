@@ -19,6 +19,7 @@ function source(url: string): CollectedSource {
     description: "public description",
     sourceMode: "website-only",
     pageText: "public page",
+    documents: [],
   };
 }
 

@@ -222,6 +222,15 @@ test("collects GitHub metadata and README through the guarded transport", async 
           headers: { "content-type": "text/plain; charset=utf-8" },
         });
       }
+      if (url.endsWith("/releases/latest")) {
+        return Response.json({
+          name: "Widget 2.0",
+          tag_name: "v2.0.0",
+          html_url: "https://github.com/acme/widget/releases/tag/v2.0.0",
+          published_at: "2026-07-19T00:00:00Z",
+          body: "Adds a faster workflow.",
+        });
+      }
       return Response.json({
         full_name: "acme/widget",
         html_url: "https://github.com/acme/widget",
@@ -246,10 +255,13 @@ test("collects GitHub metadata and README through the guarded transport", async 
   );
   assert.equal(source.sourceMode, "open-source");
   assert.equal(source.repo?.license, "MIT");
+  assert.equal(source.repo?.latestRelease?.tagName, "v2.0.0");
+  assert.equal(source.documents[0]?.kind, "release");
   assert.match(source.pageText, /Secure README/);
   assert.deepEqual(calls, [
     "https://api.github.com/repos/acme/widget",
     "https://api.github.com/repos/acme/widget/readme",
+    "https://api.github.com/repos/acme/widget/releases/latest",
   ]);
 });
 

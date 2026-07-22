@@ -29,7 +29,7 @@ domain modules do not import the UI or route.
 │ app/api/analyze/route.ts · lib/analyze-request.ts             │
 ├──────────────────────────────────────────────────────────────┤
 │ External adapters                                             │
-│ lib/source.ts · lib/source-diagnostics.ts                     │
+│ lib/source.ts · lib/source-adapters/* · source-diagnostics.ts │
 │ lib/model-provider.ts · lib/analyzer.ts                       │
 ├──────────────────────────────────────────────────────────────┤
 │ Deterministic domain + portable data                          │
@@ -52,6 +52,7 @@ structured response, and returns it.
 | Public analysis endpoint and status codes | `app/api/analyze/route.ts` |
 | Request schema and URL-list validation | `lib/analyze-request.ts` |
 | URL policy, DNS checks, redirects, byte caps, page/GitHub collection | `lib/source.ts` |
+| Official pricing, docs, privacy, security, and changelog discovery | `lib/source-adapters/registry.ts` |
 | Per-candidate collection outcomes and safe public failures | `lib/source-diagnostics.ts` |
 | Provider env resolution, client construction, normalized provider errors | `lib/model-provider.ts` |
 | Model prompt, response schema, and response cross-field validation | `lib/analyzer.ts` |
@@ -81,6 +82,7 @@ sequenceDiagram
     participant UI as Browser workbench
     participant API as Analysis route
     participant Source as Guarded collector
+    participant Adapter as Source adapters
     participant Model as Provider adapter
 
     User->>UI: URLs, workflow, criteria, locale
@@ -88,6 +90,8 @@ sequenceDiagram
     API->>API: Parse request and provider config
     par Every candidate
         API->>Source: Collect source outcome
+        Source->>Adapter: Classify official linked documents
+        Adapter-->>Source: Bounded document candidates
     end
     alt Any source failed
         API-->>UI: 422/502 + safe per-row diagnostics
@@ -163,7 +167,11 @@ These are the contracts most likely to cause subtle errors if weakened:
 - Authorization is removed on cross-origin redirects.
 - Content type is allowlisted for each route.
 - Actual streamed bytes are capped; `Content-Length` alone is not trusted.
-- GitHub metadata and README requests use the same guarded transport.
+- Supplemental documents and GitHub metadata, README, and latest-release
+  requests use the same guarded transport.
+- Supplemental collection is bounded to one page per recognized kind and
+  4,000 extracted characters per page. An optional supplemental-page failure
+  does not invalidate a successfully collected homepage.
 
 The remaining DNS-rebinding gap is explicit: Node's connection lookup happens
 after the policy lookup. FitLens is intended to run as an unprivileged local
@@ -207,7 +215,7 @@ migration command.
 | --- | --- | --- |
 | Domain | `test/{scoring,evidence,confidence,conflicts,privacy,diff,freshness}.test.ts` | Deterministic decision logic and edge cases |
 | Portable data | `test/{report,redaction,research-library}.test.ts` | Migration, import safety, redaction, local indexing |
-| External boundaries | `test/{source,source-diagnostics,model-provider}.test.ts` | URL/DNS/redirect policy, public errors, provider config without live calls |
+| External boundaries | `test/{source,source-adapters,source-diagnostics,model-provider}.test.ts` | URL/DNS/redirect policy, source discovery, optional-page isolation, public errors, provider config without live calls |
 | Product contract | `test/{criteria,i18n}.test.ts` | Stable criteria and bilingual dictionary parity |
 | Build contract | `pnpm lint`, `pnpm exec tsc --noEmit`, `pnpm build` | Static correctness and production compilation |
 

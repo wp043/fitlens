@@ -97,8 +97,9 @@ flowchart LR
     I --> J[Trial · notes · refresh · export]
 ```
 
-1. FitLens validates every candidate URL and collects its official page plus one
-   linked GitHub repository when available.
+1. FitLens validates every candidate URL, collects its official page, follows
+   high-value links for pricing, documentation, privacy, security, and release
+   history, then inspects one linked GitHub repository when available.
 2. The configured model turns those sources into one strict report schema. It
    cannot add criteria, omit products, or silently invent source URLs.
 3. Deterministic local code recalculates weighted fit, evidence coverage,
@@ -200,7 +201,8 @@ flowchart TB
     UI[Browser workbench] --> API[Analysis route]
     API --> SRC[Guarded source collector]
     API --> MODEL[Model provider adapter]
-    SRC --> WEB[Official pages + GitHub]
+    SRC --> ADAPTERS[Source adapter registry]
+    ADAPTERS --> WEB[Official pages + GitHub]
     MODEL --> RESP[Structured Responses API]
     RESP --> DOMAIN[Validated comparison]
     DOMAIN --> DET[Deterministic scoring, evidence, confidence, privacy, diffs]
@@ -227,6 +229,7 @@ components/
   compare-workbench  local interactive research workspace
 lib/
   source             guarded website and GitHub collection
+  source-adapters/   official document discovery and classification
   model-provider     provider configuration and structured Responses adapter
   analyzer           prompt, response schema, and cross-field validation
   scoring            deterministic preference weighting
@@ -255,8 +258,9 @@ diagnostics, and URL/DNS/redirect safety without requiring live network calls.
 
 ## Current limits
 
-- Source collection starts with one official page and at most one discovered
-  GitHub repository per product.
+- Source collection starts with one official page, follows at most one page per
+  supported document kind, and inspects at most one discovered GitHub
+  repository plus its latest release per product.
 - JavaScript-heavy pages may expose less text to the HTML collector.
 - Dimension scores are explainable model judgments, not objective measurements.
 - Reports and the 50-item research library stay in one browser unless exported.
@@ -264,8 +268,9 @@ diagnostics, and URL/DNS/redirect safety without requiring live network calls.
 - Compatible models must implement the Responses API and JSON Schema structured
   output used by FitLens.
 
-The highest-value next step is dedicated source adapters for pricing pages,
-changelogs, releases, privacy policies, and documentation sites.
+The highest-value next step is an evidence review workspace for accepting,
+rejecting, editing, and annotating collected claims before they affect a
+decision.
 
 ## License
 

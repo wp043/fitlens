@@ -1,6 +1,11 @@
 import * as cheerio from "cheerio";
 import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
+import { discoverSourceDocuments } from "./source-adapters/registry.ts";
+import type {
+  CollectedSourceDocument,
+  SourceLink,
+} from "./source-adapters/types.ts";
 
 export type SourceErrorCode =
   | "invalidUrl"
@@ -31,6 +36,7 @@ export interface CollectedSource {
   description: string;
   sourceMode: "open-source" | "website-only";
   pageText: string;
+  documents: CollectedSourceDocument[];
   repo?: {
     fullName: string;
     url: string;
@@ -44,6 +50,13 @@ export interface CollectedSource {
     archived: boolean;
     topics: string[];
     readme: string;
+    latestRelease?: {
+      name: string;
+      tagName: string;
+      url: string;
+      publishedAt: string;
+      notes: string;
+    };
   };
 }
 
@@ -374,21 +387,58 @@ function extractPage(html: string, pageUrl: string) {
   );
   const body = compactWhitespace($("body").text()).slice(0, 18_000);
 
-  const links = $("a[href]")
+  const links: SourceLink[] = $("a[href]")
     .map((_, element) => {
       const href = $(element).attr("href");
       if (!href) return null;
       try {
-        return new URL(href, pageUrl).toString();
+        return {
+          url: new URL(href, pageUrl).toString(),
+          label: compactWhitespace($(element).text()),
+        };
       } catch {
         return null;
       }
     })
     .get()
-    .filter((value): value is string => Boolean(value));
+    .filter((value): value is SourceLink => Boolean(value));
 
-  const repoUrl = links.find((link) => githubRepoFromUrl(link));
-  return { title, description, body, repoUrl };
+  const repoUrl = links.find((link) => githubRepoFromUrl(link.url))?.url;
+  return { title, description, body, repoUrl, links };
+}
+
+async function collectSupplementalDocuments(
+  homepageUrl: string,
+  links: SourceLink[],
+  dependencies: SourceNetworkDependencies,
+): Promise<CollectedSourceDocument[]> {
+  const candidates = discoverSourceDocuments(homepageUrl, links);
+  const settled = await Promise.allSettled(
+    candidates.map(async (candidate): Promise<CollectedSourceDocument> => {
+      const response = await fetchRemoteText(
+        candidate.url,
+        {
+          accept: "text/html,application/xhtml+xml",
+          allowedContentTypes: ["text/html", "application/xhtml+xml"],
+          maxBytes: 500_000,
+        },
+        dependencies,
+      );
+      const page = extractPage(response.text, response.finalUrl);
+      return {
+        kind: candidate.kind,
+        title: page.title || candidate.label || candidate.kind,
+        url: response.finalUrl,
+        text: page.body.slice(0, 4_000),
+      };
+    }),
+  );
+
+  return settled.flatMap((result) =>
+    result.status === "fulfilled" && result.value.text
+      ? [result.value]
+      : [],
+  );
 }
 
 async function collectGitHub(
@@ -468,6 +518,57 @@ async function collectGitHub(
     }
   }
 
+  let latestRelease:
+    | {
+        name: string;
+        tagName: string;
+        url: string;
+        publishedAt: string;
+        notes: string;
+      }
+    | undefined;
+  try {
+    const releaseResponse = await fetchRemoteText(
+      `https://api.github.com/repos/${fullName}/releases/latest`,
+      {
+        accept: "application/vnd.github+json",
+        allowedContentTypes: [
+          "application/json",
+          "application/vnd.github+json",
+        ],
+        maxBytes: 250_000,
+        headers,
+        statusError: "githubFailed",
+      },
+      dependencies,
+    );
+    const release = JSON.parse(releaseResponse.text) as {
+      name?: string | null;
+      tag_name?: string;
+      html_url?: string;
+      published_at?: string | null;
+      body?: string | null;
+    };
+    if (release.tag_name && release.html_url) {
+      latestRelease = {
+        name: release.name?.trim() || release.tag_name,
+        tagName: release.tag_name,
+        url: release.html_url,
+        publishedAt: release.published_at ?? "",
+        notes: (release.body ?? "").slice(0, 4_000),
+      };
+    }
+  } catch (error) {
+    if (
+      error instanceof SourceError &&
+      ["privateNetwork", "credentialsNotAllowed", "httpOnly"].includes(
+        error.code,
+      )
+    ) {
+      throw error;
+    }
+  }
+
   return {
     homepageUrl: repo.homepage || repo.html_url,
     name: repo.name,
@@ -484,7 +585,26 @@ async function collectGitHub(
       archived: repo.archived,
       topics: repo.topics ?? [],
       readme,
+      latestRelease,
     },
+    documents: latestRelease
+      ? [
+          {
+            kind: "release" as const,
+            title: `${latestRelease.name} (${latestRelease.tagName})`,
+            url: latestRelease.url,
+            text: [
+              latestRelease.publishedAt
+                ? `Published: ${latestRelease.publishedAt}`
+                : "",
+              latestRelease.notes,
+            ]
+              .filter(Boolean)
+              .join("\n")
+              .slice(0, 4_000),
+          },
+        ]
+      : [],
   };
 }
 
@@ -504,6 +624,7 @@ export async function collectProductSource(
       description: github.repo.description,
       sourceMode: "open-source",
       pageText: github.repo.readme,
+      documents: github.documents,
       repo: github.repo,
     };
   }
@@ -513,9 +634,12 @@ export async function collectProductSource(
   const discoveredRepo = page.repoUrl
     ? githubRepoFromUrl(page.repoUrl)
     : undefined;
-  const github = discoveredRepo
-    ? await collectGitHub(discoveredRepo, dependencies).catch(() => undefined)
-    : undefined;
+  const [documents, github] = await Promise.all([
+    collectSupplementalDocuments(html.finalUrl, page.links, dependencies),
+    discoveredRepo
+      ? collectGitHub(discoveredRepo, dependencies).catch(() => undefined)
+      : Promise.resolve(undefined),
+  ]);
 
   return {
     inputUrl: input.toString(),
@@ -524,6 +648,7 @@ export async function collectProductSource(
     description: page.description,
     sourceMode: github ? "open-source" : "website-only",
     pageText: page.body,
+    documents: [...documents, ...(github?.documents ?? [])],
     repo: github?.repo,
   };
 }
