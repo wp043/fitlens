@@ -49,6 +49,7 @@ refresh, and export.
 | | |
 | --- | --- |
 | **Research a shortlist** | Compare 2–8 products in one report. Reorder candidates without losing their evidence, scores, pricing, privacy findings, or trial results. |
+| **Read official registries** | Enrich npm, PyPI, Apple App Store, and Chrome Web Store listings with normalized versions, requirements, licensing, release, rating, and repository signals when published. |
 | **Keep a candidate inbox** | Paste product links as you discover them, add notes and tags, search or archive them, then promote any 2–8 candidates into a comparison without fetching a page. |
 | **See the evidence quality** | Every claim is labeled `verified`, `vendor`, or `inferred`. Coverage, freshness, source diversity, contradictions, and calibrated confidence are separate signals. |
 | **Review before trusting** | Accept, reject, edit, and annotate individual claims. Rejected evidence stops affecting confidence, coverage, freshness, and conflict checks without erasing the audit trail. |
@@ -78,9 +79,24 @@ enter a key for the current browser session or create `.env.local`:
 OPENAI_API_KEY=
 OPENAI_MODEL=gpt-5.6-luna
 GITHUB_TOKEN=
+FITLENS_BROWSER_FALLBACK=0
 ```
 
 `GITHUB_TOKEN` is optional; it only raises GitHub API rate limits.
+`FITLENS_BROWSER_FALLBACK=1` opts into rendering thin JavaScript application
+shells. Install the matching local browser once with:
+
+```bash
+pnpm exec playwright install chromium
+```
+
+Static HTML remains the default. The renderer starts only when the initial page
+has very little readable text and recognizable application-shell markers. It
+blocks media, fonts, WebSockets, service workers, non-GET requests, oversized
+responses, and excessive request counts; scripts and data requests are fetched
+through the same public-address and redirect policy as the static collector.
+If rendering is unavailable or produces less content, FitLens keeps the static
+result.
 
 ## How a decision works
 
@@ -100,7 +116,8 @@ flowchart LR
     I --> J[Trial · notes · refresh · export]
 ```
 
-1. FitLens validates every candidate URL, collects its official page, follows
+1. FitLens validates every candidate URL, collects its official page or
+   supported registry/store metadata, follows
    high-value links for pricing, documentation, privacy, security, and release
    history, then inspects one linked GitHub repository when available.
 2. The configured model turns those sources into one strict report schema. It
@@ -218,7 +235,8 @@ For recurring research, create a local `fitlens.watch.json`:
       "context": "I need a local-first terminal for daily agent work.",
       "template": "developer-tools",
       "locale": "en",
-      "intervalHours": 168
+      "intervalHours": 168,
+      "notifications": "changes"
     }
   ]
 }
@@ -230,11 +248,15 @@ Run due entries manually or from cron/launchd:
 pnpm fitlens watch --config fitlens.watch.json
 ```
 
-Each successful run writes an immutable timestamped snapshot and `latest.json`
-under `.fitlens/snapshots/<watch-id>/`, then atomically updates `lastRunAt` in
-the config. Failed entries keep their previous schedule state. Use `--force` to
-refresh everything regardless of interval; `.fitlens/` is ignored by Git by
-default so research snapshots are not published accidentally.
+Each successful run writes an immutable timestamped snapshot, `latest.json`, a
+bounded `trend.json`, and a self-contained `trend.html` score timeline under
+`.fitlens/snapshots/<watch-id>/`, then atomically updates `lastRunAt` in the
+config. Snapshots after the first also contain a deterministic change summary.
+Set `notifications` to `changes` or `always` for native macOS, Linux, or Windows
+alerts; the default is `off`, and an unavailable notification service never
+invalidates a successful refresh. Use `--force` to refresh everything regardless
+of interval. `.fitlens/` is ignored by Git so research snapshots are not
+published accidentally.
 
 ## Local by design
 
@@ -298,14 +320,15 @@ components/
   pairwise-trials    head-to-head trial capture and standings UI
 lib/
   source             guarded website and GitHub collection
-  source-adapters/   official document discovery and classification
+  source-adapters/   official document and marketplace metadata adapters
   model-provider     provider configuration and structured Responses adapter
   analyzer           prompt, response schema, and cross-field validation
   analysis-service   shared browser and headless orchestration
   cli                deterministic command parsing and help
   markdown-report    portable headless Markdown rendering
   durable-exports    escaped offline HTML and ADR rendering
-  watchlist          schedule validation, due selection, and snapshot naming
+  watchlist          scheduling, snapshot trends, and offline trend charts
+  local-notifications argument-safe native desktop alerts
   scoring            deterministic preference weighting
   confidence         deterministic evidence confidence
   conflicts          opposing-claim detection
@@ -317,6 +340,7 @@ lib/
   persistence        IndexedDB adapter and safe localStorage migration
   research-library   local search index and facets
 test/                 deterministic domain and security tests
+  fixtures/real-sites curated offline compatibility snapshots
 e2e/                  browser workflows, accessibility, and visual baseline
 .github/               CI and dependency maintenance
 playwright.config.ts   Chromium test and local server contract
@@ -345,16 +369,22 @@ pnpm build
 The test suite covers scoring, report migration, i18n parity, confidence,
 conflicts, privacy, redaction, research search, provider configuration, source
 diagnostics, and URL/DNS/redirect safety without requiring live network calls.
+Curated npm, PyPI, App Store, Chrome Web Store, cmux, and Otty snapshots keep
+real public response shapes under regression coverage without making CI depend
+on third-party availability.
 Playwright covers candidate capture, evidence review, automated WCAG checks,
-and a full-page visual contract. GitHub Actions runs both layers on every push
-and pull request; Dependabot keeps pnpm and workflow dependencies visible.
+and platform-specific full-page visual contracts. GitHub Actions runs the core
+quality gate on Linux, macOS, and Windows, with browser contracts and production
+dependency auditing on Linux. Dependabot keeps pnpm and workflow dependencies
+visible.
 
 ## Current limits
 
 - Source collection starts with one official page, follows at most one page per
   supported document kind, and inspects at most one discovered GitHub
   repository plus its latest release per product.
-- JavaScript-heavy pages may expose less text to the HTML collector.
+- The opt-in browser fallback does not bypass logins, CAPTCHAs, consent walls,
+  or content that requires user interaction.
 - Dimension scores are explainable model judgments, not objective measurements.
 - Reports and the 50-item research library stay in one browser unless exported.
 - A report retains at most five prior revisions.
@@ -363,9 +393,8 @@ and pull request; Dependabot keeps pnpm and workflow dependencies visible.
 - Watchlists require an external local scheduler such as cron or launchd; the
   browser does not claim to run reliable background jobs while it is closed.
 
-Further extensions should preserve the local-first boundary. Useful directions
-include a browser-rendered fallback for JavaScript-only sources, optional
-package-registry adapters, and richer trend views across watch snapshots.
+Further extensions should preserve the local-first boundary. A useful direction
+is richer trend visualization across watch snapshots.
 
 ## License
 

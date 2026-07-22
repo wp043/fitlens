@@ -4,7 +4,9 @@ export type SourceDocumentKind =
   | "privacy"
   | "security"
   | "changelog"
-  | "release";
+  | "release"
+  | "registry"
+  | "store";
 
 export interface SourceLink {
   url: string;
