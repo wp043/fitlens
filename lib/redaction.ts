@@ -22,8 +22,18 @@ export function redactComparisonResult(
     products: result.products.map((product) => ({
       ...product,
       evidence: product.evidence
-        .filter((item) => item.origin !== "manual")
-        .map((item) => ({ ...item })),
+        .filter(
+          (item) =>
+            item.origin !== "manual" && item.reviewStatus !== "rejected",
+        )
+        .map((item) => ({
+          claim: item.originalClaim ?? item.claim,
+          level: item.level,
+          sourceLabel: item.sourceLabel,
+          sourceUrl: item.sourceUrl,
+          origin: item.origin,
+          capturedAt: item.capturedAt,
+        })),
       strengths: [...product.strengths],
       tradeoffs: [...product.tradeoffs],
       pricing: product.pricing

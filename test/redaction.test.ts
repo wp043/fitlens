@@ -112,3 +112,20 @@ test("creating a shared copy never mutates the local report", () => {
   assert.equal(source.result.trialPlan.length, sampleComparison.trialPlan.length);
   assert.equal(source.revisions.length, 1);
 });
+
+test("share-safe copies remove review notes and restore original claims", () => {
+  const source = privateReport();
+  const evidence = source.result.products[0].evidence[0];
+  evidence.originalClaim = evidence.claim;
+  evidence.claim = "Private edited wording.";
+  evidence.reviewStatus = "accepted";
+  evidence.reviewNote = "Private reviewer rationale.";
+  evidence.reviewedAt = "2026-07-20T12:00:00.000Z";
+
+  const { report } = createRedactedReport(source);
+  const shared = report.result.products[0].evidence[0];
+  assert.equal(shared.claim, evidence.originalClaim);
+  assert.equal(shared.originalClaim, undefined);
+  assert.equal(shared.reviewStatus, undefined);
+  assert.equal(shared.reviewNote, undefined);
+});

@@ -1,4 +1,5 @@
 import type { ProductResult } from "./types.ts";
+import { activeEvidence } from "./evidence.ts";
 
 export type FreshnessStatus = "fresh" | "aging" | "stale" | "unknown";
 
@@ -33,7 +34,7 @@ export function calculateEvidenceFreshness(
     stale: 0,
     unknown: 0,
   };
-  const timestamps = product.evidence
+  const timestamps = activeEvidence(product.evidence)
     .map((evidence) => evidence.capturedAt)
     .filter((value): value is string => Boolean(value))
     .map((value) => Date.parse(value))
@@ -41,7 +42,7 @@ export function calculateEvidenceFreshness(
   if (timestamps.length > 0) {
     result.latest = new Date(Math.max(...timestamps)).toISOString();
   }
-  for (const evidence of product.evidence) {
+  for (const evidence of activeEvidence(product.evidence)) {
     result[getFreshnessStatus(evidence.capturedAt, now)] += 1;
   }
   return result;

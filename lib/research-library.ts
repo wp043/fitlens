@@ -1,5 +1,6 @@
 import type { EvidenceLevel } from "./types.ts";
 import type { SavedReport } from "./report.ts";
+import { activeEvidence } from "./evidence.ts";
 
 export type LibrarySourceFilter = "all" | "open-source" | "website-only";
 export type LibraryReviewFilter = "all" | "ready" | "needs-review";
@@ -58,7 +59,7 @@ export function buildResearchLibrary(reports: SavedReport[]) {
     )
     .map<ResearchLibraryEntry>((report) => {
       const evidence = report.result.products.flatMap(
-        (product) => product.evidence,
+        (product) => activeEvidence(product.evidence),
       );
       return {
         report,
@@ -68,7 +69,13 @@ export function buildResearchLibrary(reports: SavedReport[]) {
           .length,
         sourceCount: new Set(evidence.map((item) => item.sourceUrl)).size,
         needsReview:
-          report.conflicts.length > 0 || report.result.unknowns.length > 0,
+          report.conflicts.length > 0 ||
+          report.result.unknowns.length > 0 ||
+          report.result.products.some((product) =>
+            product.evidence.some(
+              (item) => !item.reviewStatus || item.reviewStatus === "unreviewed",
+            ),
+          ),
       };
     });
 }
@@ -112,7 +119,7 @@ export function filterResearchLibrary(
     if (
       filters.evidenceLevel !== "all" &&
       !report.result.products.some((product) =>
-        product.evidence.some(
+        activeEvidence(product.evidence).some(
           (evidence) => evidence.level === filters.evidenceLevel,
         ),
       )

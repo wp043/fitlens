@@ -50,6 +50,7 @@ refresh, and export.
 | --- | --- |
 | **Research a shortlist** | Compare 2–8 products in one report. Reorder candidates without losing their evidence, scores, pricing, privacy findings, or trial results. |
 | **See the evidence quality** | Every claim is labeled `verified`, `vendor`, or `inferred`. Coverage, freshness, source diversity, contradictions, and calibrated confidence are separate signals. |
+| **Review before trusting** | Accept, reject, edit, and annotate individual claims. Rejected evidence stops affecting confidence, coverage, freshness, and conflict checks without erasing the audit trail. |
 | **Decide for your workflow** | Use editable criteria and reusable templates. Reweight the decision instantly without another model request. |
 | **Keep the messy parts visible** | Pricing uncertainty, missing disclosures, conflicting claims, and source failures stay explicit instead of being smoothed into a confident answer. |
 | **Build a local research memory** | Search and filter up to 50 saved reports. Reopen a decision, reuse its inputs, add manual evidence, refresh sources, and review deterministic diffs. |
@@ -143,6 +144,8 @@ newer and better supported.
 
 - Capture hands-on findings, screenshots, pricing checks, and privacy notes as
   manual evidence. Manual entries survive source refreshes.
+- Review collected claims in place. Corrections preserve the model's original
+  wording, and review status, notes, and edits survive source refreshes.
 - Turn the generated trial plan into a saved pass/fail checklist with notes.
 - Flag aging and stale sources, then refresh the report when the decision
   matters again.
@@ -268,9 +271,8 @@ diagnostics, and URL/DNS/redirect safety without requiring live network calls.
 - Compatible models must implement the Responses API and JSON Schema structured
   output used by FitLens.
 
-The highest-value next step is an evidence review workspace for accepting,
-rejecting, editing, and annotating collected claims before they affect a
-decision.
+The highest-value next step is a candidate inbox for capturing product links
+as they appear, then promoting a shortlist into a focused comparison.
 
 ## License
 

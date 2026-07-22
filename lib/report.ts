@@ -8,6 +8,7 @@ import type {
   TrialResult,
 } from "@/lib/types";
 import { detectEvidenceConflicts, type EvidenceConflict } from "./conflicts.ts";
+import { activeEvidence } from "./evidence.ts";
 import {
   calibrateComparisonConfidence,
   type ConfidenceCalibration,
@@ -35,11 +36,15 @@ const criterionSchema = z
 const evidenceSchema = z
   .object({
     claim: z.string(),
+    originalClaim: z.string().optional(),
     level: z.enum(["verified", "vendor", "inferred"]),
     sourceLabel: z.string(),
     sourceUrl: httpUrlSchema,
     origin: z.enum(["collected", "manual"]).optional(),
     capturedAt: z.string().optional(),
+    reviewStatus: z.enum(["unreviewed", "accepted", "rejected"]).optional(),
+    reviewNote: z.string().optional(),
+    reviewedAt: z.string().optional(),
   })
   .passthrough();
 
@@ -296,17 +301,18 @@ export interface EvidenceCoverage {
 export function calculateEvidenceCoverage(
   product: ProductResult,
 ): EvidenceCoverage {
-  const verified = product.evidence.filter(
+  const evidence = activeEvidence(product.evidence);
+  const verified = evidence.filter(
     (item) => item.level === "verified",
   ).length;
-  const vendor = product.evidence.filter(
+  const vendor = evidence.filter(
     (item) => item.level === "vendor",
   ).length;
-  const inferred = product.evidence.filter(
+  const inferred = evidence.filter(
     (item) => item.level === "inferred",
   ).length;
   const sourceCount = new Set(
-    product.evidence.map((item) => item.sourceUrl),
+    evidence.map((item) => item.sourceUrl),
   ).size;
   const evidenceWeight = verified * 1.25 + vendor + inferred * 0.6;
   const score = Math.min(
@@ -342,7 +348,7 @@ export function serializeReport(report: SavedReport) {
 
 export function normalizeSavedReport(input: unknown): SavedReport {
   const report = savedReportSchema.parse(input);
-  const conflicts = report.conflicts ?? detectEvidenceConflicts(report.result);
+  const conflicts = detectEvidenceConflicts(report.result);
   return {
     ...report,
     criteria:
@@ -363,9 +369,10 @@ export function normalizeSavedReport(input: unknown): SavedReport {
             note: "",
           })),
     conflicts,
-    confidenceCalibrations:
-      report.confidenceCalibrations ??
-      calibrateComparisonConfidence(report.result.products, conflicts),
+    confidenceCalibrations: calibrateComparisonConfidence(
+      report.result.products,
+      conflicts,
+    ),
   } as SavedReport;
 }
 

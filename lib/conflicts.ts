@@ -1,4 +1,5 @@
 import type { ComparisonResult, Evidence, EvidenceLevel } from "./types.ts";
+import { activeEvidence } from "./evidence.ts";
 
 export type ConflictSeverity = "high" | "medium";
 
@@ -112,10 +113,11 @@ export function detectEvidenceConflicts(
 ): EvidenceConflict[] {
   const conflicts: EvidenceConflict[] = [];
   for (const product of result.products) {
-    for (let firstIndex = 0; firstIndex < product.evidence.length; firstIndex += 1) {
-      for (let secondIndex = firstIndex + 1; secondIndex < product.evidence.length; secondIndex += 1) {
-        const first = product.evidence[firstIndex];
-        const second = product.evidence[secondIndex];
+    const evidence = activeEvidence(product.evidence);
+    for (let firstIndex = 0; firstIndex < evidence.length; firstIndex += 1) {
+      for (let secondIndex = firstIndex + 1; secondIndex < evidence.length; secondIndex += 1) {
+        const first = evidence[firstIndex];
+        const second = evidence[secondIndex];
         const topic = conflictTopic(first.claim, second.claim);
         if (!topic) continue;
         const identity = `${product.name}\u0000${topic}\u0000${first.claim}\u0000${second.claim}`;

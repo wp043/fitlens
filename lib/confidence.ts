@@ -1,4 +1,5 @@
 import type { EvidenceConflict } from "./conflicts.ts";
+import { activeEvidence } from "./evidence.ts";
 import { getFreshnessStatus } from "./freshness.ts";
 import type { ProductResult } from "./types.ts";
 
@@ -38,17 +39,18 @@ export function calibrateProductConfidence(
   conflicts: EvidenceConflict[] = [],
   now = new Date(),
 ): ConfidenceCalibration {
-  const verified = product.evidence.filter((item) => item.level === "verified").length;
-  const vendor = product.evidence.filter((item) => item.level === "vendor").length;
-  const inferred = product.evidence.filter((item) => item.level === "inferred").length;
+  const evidence = activeEvidence(product.evidence);
+  const verified = evidence.filter((item) => item.level === "verified").length;
+  const vendor = evidence.filter((item) => item.level === "vendor").length;
+  const inferred = evidence.filter((item) => item.level === "inferred").length;
   const total = verified + vendor + inferred;
-  const sourceCount = new Set(product.evidence.map((item) => item.sourceUrl)).size;
+  const sourceCount = new Set(evidence.map((item) => item.sourceUrl)).size;
   const directVerification = total ? (verified / total) * 100 : 0;
   const evidenceQuality = total
     ? (verified * 100 + vendor * 55 + inferred * 25) / total
     : 0;
   const sourceDiversity = Math.min(sourceCount / 3, 1) * 100;
-  const freshnessValues = product.evidence.map((item) => {
+  const freshnessValues = evidence.map((item) => {
     const status = getFreshnessStatus(item.capturedAt, now);
     return { fresh: 100, aging: 65, stale: 25, unknown: 40 }[status];
   });

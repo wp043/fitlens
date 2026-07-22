@@ -1210,6 +1210,7 @@ footer > span {
   --peach: #fab387;
   --pink: #f5c2e7;
   --blue: #89b4fa;
+  --red: #f38ba8;
   --cream: #f5e0dc;
   --cream-2: #f4eadf;
   --coffee: #3b3038;
@@ -3174,6 +3175,155 @@ footer {
 .manual-evidence-form button:disabled {
   cursor: default;
   opacity: 0.4;
+}
+
+.evidence-review-heading {
+  margin-bottom: 10px;
+}
+
+.evidence-review-heading h4 {
+  margin-bottom: 5px;
+}
+
+.evidence-review-heading p {
+  color: var(--muted);
+  font: 9px/1.5 "DM Mono", monospace;
+}
+
+.evidence-review-item {
+  margin-top: 10px;
+  padding: 14px;
+  display: grid;
+  gap: 11px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(30, 30, 46, 0.26);
+  transition: border-color 160ms ease, opacity 160ms ease;
+}
+
+.evidence-review-item.accepted {
+  border-color: rgba(166, 227, 161, 0.38);
+}
+
+.evidence-review-item.rejected {
+  border-color: rgba(243, 139, 168, 0.28);
+  opacity: 0.68;
+}
+
+.evidence-review-item > header,
+.evidence-review-item > footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.evidence-review-item > header a {
+  margin-left: auto;
+  color: var(--blue);
+  font: 9px "DM Mono", monospace;
+}
+
+.review-status {
+  padding: 3px 6px;
+  border-radius: 999px;
+  background: rgba(205, 214, 244, 0.08);
+  color: var(--muted);
+  font: 8px "DM Mono", monospace;
+}
+
+.review-status.accepted {
+  background: rgba(166, 227, 161, 0.1);
+  color: var(--green);
+}
+
+.review-status.rejected {
+  background: rgba(243, 139, 168, 0.1);
+  color: var(--red);
+}
+
+.evidence-review-item label {
+  display: grid;
+  gap: 5px;
+}
+
+.evidence-review-item label > span,
+.evidence-review-item details summary {
+  color: var(--muted);
+  font: 8px "DM Mono", monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.evidence-review-item textarea,
+.evidence-review-item input {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  outline: 0;
+  background: rgba(17, 17, 27, 0.36);
+  color: var(--ink);
+  font: inherit;
+  line-height: 1.5;
+}
+
+.evidence-review-item textarea {
+  min-height: 54px;
+  padding: 8px 9px;
+  resize: vertical;
+}
+
+.evidence-review-item input {
+  padding: 7px 9px;
+}
+
+.evidence-review-item textarea:focus,
+.evidence-review-item input:focus {
+  border-color: var(--mauve);
+}
+
+.evidence-review-item details p {
+  margin-top: 6px;
+  padding-left: 10px;
+  border-left: 2px solid var(--line);
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.evidence-review-item > footer {
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.evidence-review-item > footer small {
+  color: var(--muted);
+  font: 8px "DM Mono", monospace;
+}
+
+.evidence-review-item > footer div {
+  display: flex;
+  gap: 6px;
+}
+
+.evidence-review-item button {
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: rgba(205, 214, 244, 0.05);
+  color: var(--muted);
+  font: 8px "DM Mono", monospace;
+  cursor: pointer;
+}
+
+.evidence-review-item button.accept[aria-pressed="true"] {
+  border-color: rgba(166, 227, 161, 0.42);
+  background: rgba(166, 227, 161, 0.12);
+  color: var(--green);
+}
+
+.evidence-review-item button.reject[aria-pressed="true"] {
+  border-color: rgba(243, 139, 168, 0.38);
+  background: rgba(243, 139, 168, 0.1);
+  color: var(--red);
 }
 
 .local-data-tools {

@@ -42,9 +42,18 @@ const allFilters: ResearchLibraryFilters = {
   review: "all",
 };
 
+function acceptAllEvidence(report: SavedReport) {
+  for (const product of report.result.products) {
+    for (const evidence of product.evidence) evidence.reviewStatus = "accepted";
+  }
+  return report;
+}
+
 test("research library summarizes evidence and sorts newest reports first", () => {
   const older = savedReport("older", "2025-01-01T00:00:00.000Z");
-  const newer = savedReport("newer", "2026-01-01T00:00:00.000Z");
+  const newer = acceptAllEvidence(
+    savedReport("newer", "2026-01-01T00:00:00.000Z"),
+  );
   newer.result.unknowns = [];
 
   const entries = buildResearchLibrary([older, newer]);
@@ -93,7 +102,9 @@ test("library combines product, source, evidence, and review filters", () => {
     })),
   }));
   secondResult.unknowns = [];
-  const second = savedReport("second", "2026-02-01T00:00:00.000Z", secondResult);
+  const second = acceptAllEvidence(
+    savedReport("second", "2026-02-01T00:00:00.000Z", secondResult),
+  );
   const entries = buildResearchLibrary([first, second]);
 
   assert.equal(

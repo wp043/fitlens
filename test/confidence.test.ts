@@ -103,3 +103,12 @@ test("conflicting claims lower confidence and appear as a limiting factor", () =
   assert.ok(withConflict.score < baseline.score);
   assert.ok(withConflict.factors.some((factor) => factor.key === "conflicts"));
 });
+
+test("rejected evidence does not increase calibrated confidence", () => {
+  const candidate = product();
+  candidate.evidence[0].reviewStatus = "rejected";
+  const calibration = calibrateProductConfidence(candidate, [], now);
+
+  assert.equal(calibration.verified, 1);
+  assert.equal(calibration.sourceCount, 2);
+});

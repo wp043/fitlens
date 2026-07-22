@@ -49,6 +49,7 @@ import type {
   BillingCadence,
   Evidence,
   EvidenceLevel,
+  EvidenceReviewStatus,
   TrialResult,
   TrialStatus,
   PriorityWeights,
@@ -288,6 +289,7 @@ ${product.tradeoffs.map((item) => `- ${item}`).join("\n")}
 
 ${pricingSection}${privacySection}### ${t.markdownEvidence}
 ${product.evidence
+  .filter((item) => item.reviewStatus !== "rejected")
   .map(
     (item) =>
       `- **${evidenceLabels[item.level]}:** ${item.claim} ([${item.sourceLabel}](${item.sourceUrl}))`,
@@ -1044,6 +1046,64 @@ export function CompareWorkbench({
     }
   }
 
+  function updateEvidenceReview(
+    productName: string,
+    evidenceIndex: number,
+    update: Partial<
+      Pick<Evidence, "claim" | "reviewStatus" | "reviewNote">
+    >,
+  ) {
+    if (!result) return;
+    const nextResult: ComparisonResult = {
+      ...result,
+      products: result.products.map((product) => {
+        if (product.name !== productName) return product;
+        return {
+          ...product,
+          evidence: product.evidence.map((evidence, index) => {
+            if (index !== evidenceIndex) return evidence;
+            const nextClaim = update.claim?.trim() || evidence.claim;
+            const claimChanged = nextClaim !== evidence.claim;
+            return {
+              ...evidence,
+              ...update,
+              claim: nextClaim,
+              originalClaim: claimChanged
+                ? evidence.originalClaim ?? evidence.claim
+                : evidence.originalClaim,
+              reviewedAt:
+                update.reviewStatus && update.reviewStatus !== "unreviewed"
+                  ? new Date().toISOString()
+                  : update.reviewStatus === "unreviewed"
+                    ? undefined
+                    : evidence.reviewedAt,
+            };
+          }),
+        };
+      }),
+    };
+    const nextConflicts = detectEvidenceConflicts(nextResult);
+    setResult(nextResult);
+    setConflicts(nextConflicts);
+    const nextHistory = history.map((report) =>
+      report.id === currentReportId
+        ? {
+            ...report,
+            result: nextResult,
+            conflicts: nextConflicts,
+            confidenceCalibrations: calibrateComparisonConfidence(
+              nextResult.products,
+              nextConflicts,
+            ),
+          }
+        : report,
+    );
+    setHistory(nextHistory);
+    if (currentReportId) {
+      window.localStorage.setItem(historyKey, JSON.stringify(nextHistory));
+    }
+  }
+
   function addManualEvidence() {
     const productName = manualEvidenceProduct || result?.products[0]?.name;
     if (!result || !productName) return;
@@ -1064,6 +1124,8 @@ export function CompareWorkbench({
       sourceUrl,
       origin: "manual",
       capturedAt: new Date().toISOString(),
+      reviewStatus: "accepted",
+      reviewedAt: new Date().toISOString(),
     };
     const nextResult: ComparisonResult = {
       ...result,
@@ -2204,25 +2266,141 @@ export function CompareWorkbench({
               </div>
 
               <div className="evidence-stack">
-                <h4>{t.keyEvidence}</h4>
-                {product.evidence.map((item) => (
-                  <a
-                    href={item.sourceUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    key={`${item.claim}-${item.sourceUrl}`}
-                  >
-                    <span className={`evidence-badge ${item.level}`}>
-                      {evidenceLabels[item.level]}
-                    </span>
-                    <p>{item.claim}</p>
-                    <small>
-                      {item.sourceLabel} · {item.capturedAt
-                        ? `${t.checked} ${new Date(item.capturedAt).toLocaleDateString(locale)}`
-                        : t.unknownFreshness} ↗
-                    </small>
-                  </a>
-                ))}
+                <div className="evidence-review-heading">
+                  <div>
+                    <h4>{t.evidenceReviewTitle}</h4>
+                    <p>
+                      {t.evidenceReviewSummary
+                        .replace(
+                          "{accepted}",
+                          String(
+                            product.evidence.filter(
+                              (item) => item.reviewStatus === "accepted",
+                            ).length,
+                          ),
+                        )
+                        .replace(
+                          "{unreviewed}",
+                          String(
+                            product.evidence.filter(
+                              (item) =>
+                                !item.reviewStatus ||
+                                item.reviewStatus === "unreviewed",
+                            ).length,
+                          ),
+                        )
+                        .replace(
+                          "{rejected}",
+                          String(
+                            product.evidence.filter(
+                              (item) => item.reviewStatus === "rejected",
+                            ).length,
+                          ),
+                        )}
+                    </p>
+                  </div>
+                </div>
+                {product.evidence.map((item, evidenceIndex) => {
+                  const reviewStatus: EvidenceReviewStatus =
+                    item.reviewStatus ?? "unreviewed";
+                  const reviewLabel = {
+                    unreviewed: t.evidenceUnreviewed,
+                    accepted: t.evidenceAccepted,
+                    rejected: t.evidenceRejected,
+                  }[reviewStatus];
+                  return (
+                    <article
+                      className={`evidence-review-item ${reviewStatus}`}
+                      key={`${item.originalClaim ?? item.claim}-${item.sourceUrl}`}
+                    >
+                      <header>
+                        <span className={`evidence-badge ${item.level}`}>
+                          {evidenceLabels[item.level]}
+                        </span>
+                        <span className={`review-status ${reviewStatus}`}>
+                          {reviewLabel}
+                        </span>
+                        <a href={item.sourceUrl} target="_blank" rel="noreferrer">
+                          {item.sourceLabel} ↗
+                        </a>
+                      </header>
+                      <label>
+                        <span>{t.evidenceEditClaim}</span>
+                        <textarea
+                          defaultValue={item.claim}
+                          rows={2}
+                          onBlur={(event) =>
+                            updateEvidenceReview(product.name, evidenceIndex, {
+                              claim: event.target.value,
+                            })
+                          }
+                        />
+                      </label>
+                      {item.originalClaim && (
+                        <details>
+                          <summary>{t.evidenceOriginalClaim}</summary>
+                          <p>{item.originalClaim}</p>
+                        </details>
+                      )}
+                      <label>
+                        <span>{t.evidenceReviewNote}</span>
+                        <input
+                          defaultValue={item.reviewNote ?? ""}
+                          onBlur={(event) =>
+                            updateEvidenceReview(product.name, evidenceIndex, {
+                              reviewNote: event.target.value.trim(),
+                            })
+                          }
+                        />
+                      </label>
+                      <footer>
+                        <small>
+                          {item.capturedAt
+                            ? `${t.checked} ${new Date(item.capturedAt).toLocaleDateString(locale)}`
+                            : t.unknownFreshness}
+                        </small>
+                        <div>
+                          <button
+                            type="button"
+                            className="accept"
+                            aria-pressed={reviewStatus === "accepted"}
+                            onClick={() =>
+                              updateEvidenceReview(product.name, evidenceIndex, {
+                                reviewStatus: "accepted",
+                              })
+                            }
+                          >
+                            ✓ {t.evidenceAccept}
+                          </button>
+                          <button
+                            type="button"
+                            className="reject"
+                            aria-pressed={reviewStatus === "rejected"}
+                            onClick={() =>
+                              updateEvidenceReview(product.name, evidenceIndex, {
+                                reviewStatus: "rejected",
+                              })
+                            }
+                          >
+                            × {t.evidenceReject}
+                          </button>
+                          {reviewStatus !== "unreviewed" && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                updateEvidenceReview(product.name, evidenceIndex, {
+                                  reviewStatus: "unreviewed",
+                                })
+                              }
+                            >
+                              {t.evidenceResetReview}
+                            </button>
+                          )}
+                        </div>
+                      </footer>
+                    </article>
+                  );
+                })}
               </div>
               </article>
             );

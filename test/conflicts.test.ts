@@ -77,3 +77,20 @@ test("produces stable identifiers for portable reports", () => {
     detectEvidenceConflicts(input)[0].id,
   );
 });
+
+test("rejected claims cannot create a decision conflict", () => {
+  const rejected = item(
+    "The app requires a subscription.",
+    "verified",
+    "https://docs.test/billing",
+  );
+  rejected.reviewStatus = "rejected";
+  const conflicts = detectEvidenceConflicts(
+    comparison([
+      item("The desktop app is free to use.", "vendor", "https://vendor.test/pricing"),
+      rejected,
+    ]),
+  );
+
+  assert.deepEqual(conflicts, []);
+});

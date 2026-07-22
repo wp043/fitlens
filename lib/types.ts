@@ -1,4 +1,5 @@
 export type EvidenceLevel = "verified" | "vendor" | "inferred";
+export type EvidenceReviewStatus = "unreviewed" | "accepted" | "rejected";
 
 export type PriorityKey = string;
 
@@ -13,11 +14,15 @@ export interface ComparisonCriterion {
 
 export interface Evidence {
   claim: string;
+  originalClaim?: string;
   level: EvidenceLevel;
   sourceLabel: string;
   sourceUrl: string;
   origin?: "collected" | "manual";
   capturedAt?: string;
+  reviewStatus?: EvidenceReviewStatus;
+  reviewNote?: string;
+  reviewedAt?: string;
 }
 
 export type BillingCadence =

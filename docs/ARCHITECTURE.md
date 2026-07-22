@@ -58,7 +58,7 @@ structured response, and returns it.
 | Model prompt, response schema, and response cross-field validation | `lib/analyzer.ts` |
 | Criteria templates and legacy criteria migration | `lib/criteria.ts` |
 | Weighted fit calculation | `lib/scoring.ts` |
-| Manual evidence merge and refresh preservation | `lib/evidence.ts` |
+| Active evidence filtering, manual merge, and review preservation | `lib/evidence.ts` |
 | Evidence age classification | `lib/freshness.ts` |
 | Deterministic confidence calibration | `lib/confidence.ts` |
 | Opposing-claim detection | `lib/conflicts.ts` |
@@ -144,14 +144,18 @@ These are the contracts most likely to cause subtle errors if weakened:
    confidence.
 6. Manual evidence survives refreshes and is never duplicated when the model
    later returns the same claim.
-7. Fit, confidence, and coverage stay separate. Reweighting fit must not change
+7. Rejected evidence stays in the report audit trail but is excluded from
+   confidence, coverage, freshness, conflict detection, and decision Markdown.
+   Edited claims retain their original model wording and review metadata across
+   refreshes.
+8. Fit, confidence, and coverage stay separate. Reweighting fit must not change
    confidence or evidence coverage.
-8. Share-safe exports are derived copies. They do not mutate the local report
+9. Share-safe exports are derived copies. They do not mutate the local report
    and do not contain context, notes, trials, revisions, criterion hints, or
    manual evidence.
-9. API keys, provider names, models, and provider base URLs never enter report
+10. API keys, provider names, models, and provider base URLs never enter report
    history or exports.
-10. Old portable reports are migrated at the schema boundary rather than
+11. Old portable reports are migrated at the schema boundary rather than
     scattered through UI code.
 
 ## Security boundaries
