@@ -48,7 +48,8 @@ structured response, and returns it.
 | Concern | Owner |
 | --- | --- |
 | Page metadata and root document | `app/layout.tsx` |
-| Workbench state and user interactions | `components/compare-workbench.tsx` |
+| Workbench state and report interactions | `components/compare-workbench.tsx` |
+| Candidate capture, filtering, archive, and shortlist interactions | `components/candidate-inbox.tsx` |
 | Public analysis endpoint and status codes | `app/api/analyze/route.ts` |
 | Request schema and URL-list validation | `lib/analyze-request.ts` |
 | URL policy, DNS checks, redirects, byte caps, page/GitHub collection | `lib/source.ts` |
@@ -58,6 +59,7 @@ structured response, and returns it.
 | Model prompt, response schema, and response cross-field validation | `lib/analyzer.ts` |
 | Criteria templates and legacy criteria migration | `lib/criteria.ts` |
 | Candidate URL normalization, deduplication, storage validation, and search | `lib/candidate-inbox.ts` |
+| IndexedDB access, ordered writes, migration, and fallback policy | `lib/persistence.ts` |
 | Weighted fit calculation | `lib/scoring.ts` |
 | Active evidence filtering, manual merge, and review preservation | `lib/evidence.ts` |
 | Evidence age classification | `lib/freshness.ts` |
@@ -195,16 +197,17 @@ other reports.
 
 ### Browser boundary
 
-Keys entered in the UI use `sessionStorage`. Reports, notes, and templates use
-`localStorage`. Neither is a secure secret vault; the boundary is appropriate
+Keys entered in the UI use `sessionStorage`. Reports and candidate links use
+IndexedDB with a recoverable `localStorage` fallback; small preferences remain
+in `localStorage`. None is a secure secret vault; the boundary is appropriate
 for a local single-user tool, not a shared hosted application.
 
 ## Persistence
 
 | Location | Owner | Contents |
 | --- | --- | --- |
-| `fitlens-report-history-v1` in `localStorage` | Workbench | Up to 50 reports, revisions, notes, trials, and manual evidence |
-| `fitlens-candidate-inbox-v1` in `localStorage` | Workbench | Captured product URLs, notes, tags, timestamps, and archive state |
+| `fitlens-report-history-v1` in IndexedDB | Workbench | Up to 50 reports, revisions, notes, trials, and manual evidence |
+| `fitlens-candidate-inbox-v1` in IndexedDB | Candidate inbox | Captured product URLs, notes, tags, timestamps, and archive state |
 | Template storage in `localStorage` | Workbench | User-created criteria templates |
 | Locale storage in `localStorage` | Workbench | Current language preference |
 | API key in `sessionStorage` | Workbench | Current-tab model key override |
@@ -213,14 +216,16 @@ for a local single-user tool, not a shared hosted application.
 
 Browser history deliberately keeps its existing storage key. Schema migration
 happens while loading, so older local reports do not require a separate data
-migration command.
+migration command. Existing localStorage values are removed only after their
+normalized IndexedDB write commits; blocked or unavailable IndexedDB falls back
+to the original localStorage key.
 
 ## Test layers
 
 | Layer | Files | What it proves |
 | --- | --- | --- |
 | Domain | `test/{scoring,evidence,confidence,conflicts,privacy,diff,freshness}.test.ts` | Deterministic decision logic and edge cases |
-| Portable data | `test/{report,redaction,research-library}.test.ts` | Migration, import safety, redaction, local indexing |
+| Portable data | `test/{report,redaction,research-library,persistence,candidate-inbox}.test.ts` | Migration, import safety, redaction, local indexing, and storage fallback |
 | External boundaries | `test/{source,source-adapters,source-diagnostics,model-provider}.test.ts` | URL/DNS/redirect policy, source discovery, optional-page isolation, public errors, provider config without live calls |
 | Product contract | `test/{criteria,i18n}.test.ts` | Stable criteria and bilingual dictionary parity |
 | Build contract | `pnpm lint`, `pnpm exec tsc --noEmit`, `pnpm build` | Static correctness and production compilation |

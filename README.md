@@ -185,8 +185,9 @@ FitLens has no account system and no hosted database.
 
 | Data | Where it lives | How long |
 | --- | --- | --- |
-| Reports, revisions, notes, templates | Browser `localStorage` | Until you clear it |
-| Candidate inbox, notes, tags, archive state | Browser `localStorage` | Until you clear it |
+| Reports, revisions, notes | Browser IndexedDB with `localStorage` fallback | Until you clear it |
+| Candidate inbox, notes, tags, archive state | Browser IndexedDB with `localStorage` fallback | Until you clear it |
+| Criteria templates and locale | Browser `localStorage` | Until you clear it |
 | Key entered in the UI | Browser `sessionStorage` | Current tab session |
 | `.env.local` keys and provider config | Local server environment | Until the file changes |
 | Product source material | Configured model provider | According to that provider |
@@ -234,6 +235,7 @@ app/
   examples/          bundled no-key comparison
 components/
   compare-workbench  local interactive research workspace
+  candidate-inbox    quick capture, filtering, archive, and shortlist UI
 lib/
   source             guarded website and GitHub collection
   source-adapters/   official document discovery and classification
@@ -245,6 +247,7 @@ lib/
   privacy            privacy-risk calibration
   report             portable schema, migration, and coverage
   candidate-inbox    URL capture, normalization, deduplication, and search
+  persistence        IndexedDB adapter and safe localStorage migration
   research-library   local search index and facets
 test/                 deterministic domain and security tests
 docs/                 architecture and worked product research
@@ -276,9 +279,8 @@ diagnostics, and URL/DNS/redirect safety without requiring live network calls.
 - Compatible models must implement the Responses API and JSON Schema structured
   output used by FitLens.
 
-The highest-value next step is splitting the growing workbench into focused
-feature modules and moving larger local datasets from `localStorage` to
-IndexedDB.
+The highest-value next step is a CLI and headless workflow for scripted,
+repeatable comparisons outside the browser.
 
 ## License
 
