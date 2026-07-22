@@ -18,6 +18,18 @@ test("production browser headers deny embedding and ambient capabilities", () =>
   assert.match(headers["Permissions-Policy"], /camera=\(\)/);
   assert.match(headers["Content-Security-Policy"], /frame-ancestors 'none'/);
   assert.match(headers["Content-Security-Policy"], /object-src 'none'/);
+  assert.match(
+    headers["Content-Security-Policy"],
+    /style-src 'self' 'unsafe-inline' https:\/\/fonts\.googleapis\.com(?:;|$)/,
+  );
+  assert.match(
+    headers["Content-Security-Policy"],
+    /font-src 'self' https:\/\/fonts\.gstatic\.com(?:;|$)/,
+  );
+  assert.doesNotMatch(
+    headers["Content-Security-Policy"],
+    /(?:style-src|font-src)[^;]*\shttps:(?:\s|;|$)/,
+  );
   assert.doesNotMatch(headers["Content-Security-Policy"], /unsafe-eval/);
 });
 
