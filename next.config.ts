@@ -3,6 +3,7 @@ import { browserSecurityHeaders } from "./lib/security-headers.ts";
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  turbopack: { root: process.cwd() },
   async headers() {
     return [
       {

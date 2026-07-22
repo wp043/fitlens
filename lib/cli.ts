@@ -3,7 +3,7 @@ import type { Locale } from "./i18n.ts";
 export type CliOutputFormat = "json" | "markdown";
 
 export interface CliOptions {
-  command: "analyze" | "watch" | "help";
+  command: "analyze" | "watch" | "doctor" | "help";
   urls: string[];
   context?: string;
   contextFile?: string;
@@ -16,6 +16,9 @@ export interface CliOptions {
   configFile?: string;
   outputDirectory?: string;
   force: boolean;
+  doctorJson: boolean;
+  checkPlaywright: boolean;
+  probeProvider: boolean;
 }
 
 export function parseCliArguments(args: string[]): CliOptions {
@@ -28,9 +31,12 @@ export function parseCliArguments(args: string[]): CliOptions {
       template: "general",
       allowBundledSample: true,
       force: false,
+      doctorJson: false,
+      checkPlaywright: false,
+      probeProvider: false,
     };
   }
-  if (args[0] !== "analyze" && args[0] !== "watch") {
+  if (args[0] !== "analyze" && args[0] !== "watch" && args[0] !== "doctor") {
     throw new Error(`Unknown command: ${args[0]}`);
   }
 
@@ -42,6 +48,9 @@ export function parseCliArguments(args: string[]): CliOptions {
     template: "general",
     allowBundledSample: true,
     force: false,
+    doctorJson: false,
+    checkPlaywright: false,
+    probeProvider: false,
   };
   for (let index = 1; index < args.length; index += 1) {
     const flag = args[index];
@@ -51,6 +60,18 @@ export function parseCliArguments(args: string[]): CliOptions {
     }
     if (flag === "--force") {
       options.force = true;
+      continue;
+    }
+    if (flag === "--json") {
+      options.doctorJson = true;
+      continue;
+    }
+    if (flag === "--check-playwright") {
+      options.checkPlaywright = true;
+      continue;
+    }
+    if (flag === "--probe-provider") {
+      options.probeProvider = true;
       continue;
     }
     const value = args[index + 1];
@@ -96,6 +117,7 @@ export function parseCliArguments(args: string[]): CliOptions {
         throw new Error(`Unknown option: ${flag}`);
     }
   }
+  if (options.command === "doctor") return options;
   if (options.command === "watch") {
     if (!options.configFile) throw new Error("Watch requires --config");
     options.outputDirectory ??= ".fitlens/snapshots";
@@ -118,6 +140,7 @@ export const cliHelp = `FitLens CLI
 Usage:
   pnpm fitlens analyze --url <url> --url <url> --context <text> [options]
   pnpm fitlens watch --config <path> [--output-dir <path>] [--force]
+  pnpm fitlens doctor [--json] [--output <path>] [--check-playwright] [--probe-provider]
 
 Options:
   --url <url>            Product URL; repeat 2–8 times
@@ -132,5 +155,8 @@ Options:
   --config <path>        Watchlist JSON file
   --output-dir <path>    Snapshot root (default: .fitlens/snapshots)
   --force                Run every watch entry regardless of interval
+  --json                 Print doctor diagnostics as redacted JSON
+  --check-playwright     Check optional Playwright and Chromium readiness
+  --probe-provider       Make one authenticated GET /models health probe
   --help                 Show this help
 `;

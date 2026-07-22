@@ -56,6 +56,7 @@ configured model, validates the structured response, and returns it.
 | Production browser response policy | `lib/security-headers.ts`, `next.config.ts` |
 | Shared browser/CLI orchestration and source failure boundary | `lib/analysis-service.ts` |
 | Headless argument parsing and entry point | `lib/cli.ts`, `scripts/fitlens.ts` |
+| Redacted environment diagnostics | `lib/doctor.ts`, `scripts/fitlens.ts doctor` |
 | Watchlist validation, due scheduling, snapshot trends, and offline chart rendering | `lib/watchlist.ts` |
 | Argument-safe native desktop notifications | `lib/local-notifications.ts` |
 | Request schema and URL-list validation | `lib/analyze-request.ts` |
@@ -194,6 +195,10 @@ key or fetches a submitted URL:
 - Production browser responses use CSP, frame denial, MIME-sniffing protection,
   a no-referrer policy, same-origin opener/resource policies, and a restrictive
   Permissions Policy. HSTS is intentionally absent because local use is HTTP.
+- `FITLENS_DISABLE_LIVE_ANALYSIS=1` is a fail-closed operational switch. The
+  request is schema-validated, then returns the missing-credentials boundary
+  before source collection or provider activity. The production harness uses
+  it so a developer's `.env.local` cannot make the check non-hermetic.
 
 The counters are process-local and are not a distributed rate limiter. Binding
 the server to a non-loopback interface or placing it behind a proxy changes the
@@ -287,6 +292,7 @@ to the original localStorage key.
 | External boundaries | `test/{source,source-adapters,source-diagnostics,model-provider,real-site-fixtures,request-guard,security-headers,analyzer}.test.ts` | URL/DNS/redirect policy, source discovery, prompt-data isolation, loopback request policy, production headers, curated response compatibility, public errors, and provider config without live calls |
 | Product contract | `test/{criteria,i18n}.test.ts` | Stable criteria and bilingual dictionary parity |
 | Browser contract | `e2e/{workflows,security}.spec.ts` | Candidate promotion, evidence review, local API rejection, response headers, WCAG scans, and the full-page visual baseline |
+| Production process | `scripts/production-harness.ts` | Fresh `next build`, real `next start`, local pages, production headers, request guards, and fail-closed no-provider analysis without public network calls |
 | Build contract | `pnpm lint`, `pnpm exec tsc --noEmit`, `pnpm build` | Static correctness and production compilation |
 | Maintenance contract | `.github/workflows/ci.yml`, `.github/workflows/dependabot-maintenance.yml`, `.github/dependabot.yml` | Linux/macOS/Windows quality checks, Linux Chromium coverage and audits, author-and-SHA-verified minor/patch automation, and agent review for major updates |
 
@@ -295,6 +301,12 @@ timestamped excerpts with source URLs; CI never refreshes them or calls those
 sites. The fast suite therefore does not depend on live websites, GitHub, or a
 model provider. Browser tests start the local Next.js app and use the bundled
 report, so they also require no model key.
+
+`fitlens doctor` is a separate diagnostic boundary. It exposes an allowlisted
+runtime summary rather than dumping the environment. The final report is
+recursively scrubbed for secret-like fields and values, bearer/API-key shapes,
+query credentials, and the user home path. Provider reachability and browser
+checks require explicit flags, so a normal doctor run remains offline and fast.
 
 ## Deliberate non-goals
 
