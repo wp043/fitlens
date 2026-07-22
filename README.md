@@ -61,7 +61,7 @@ refresh, and export.
 
 ## Quick start
 
-Requires Node.js 20.9+, pnpm 10, and an API key for live analysis.
+Requires Node.js 20.18.1+, pnpm 10, and an API key for live analysis.
 
 ```bash
 git clone https://github.com/wp043/fitlens.git
@@ -278,6 +278,19 @@ cross-origin redirects, restricts content types, and caps streamed response
 size. This is application-layer SSRF hardening, not a network sandbox; do not
 expose FitLens as a public URL-fetching service.
 
+The browser API is intentionally loopback-only. `/api/analyze` accepts only a
+matching loopback `Host` and `Origin`/`Referer`, requires JSON, streams at most
+64 KB per request, and runs no more than two source/model analyses at once.
+Production responses add CSP, framing, MIME-sniffing, referrer, cross-origin,
+and browser-capability restrictions. These controls protect a local server from
+ambient browser requests; they are not authentication for a hosted service.
+
+Collected pages, documents, repository metadata, and README text are placed in
+an explicit untrusted-data envelope for the model. Provider instructions say
+that embedded commands cannot change scoring, candidate order, rules, or the
+output schema. Adversarial fixtures test that separation, but model prompt
+isolation remains defense in depth rather than a mathematical guarantee.
+
 See [Architecture](docs/ARCHITECTURE.md#security-boundaries) for the exact trust
 boundaries and invariants.
 
@@ -324,6 +337,8 @@ lib/
   model-provider     provider configuration and structured Responses adapter
   analyzer           prompt, response schema, and cross-field validation
   analysis-service   shared browser and headless orchestration
+  request-guard      loopback origin, body-size, media-type, and concurrency policy
+  security-headers   production browser response policy
   cli                deterministic command parsing and help
   markdown-report    portable headless Markdown rendering
   durable-exports    escaped offline HTML and ADR rendering
@@ -368,12 +383,14 @@ pnpm build
 
 The test suite covers scoring, report migration, i18n parity, confidence,
 conflicts, privacy, redaction, research search, provider configuration, source
-diagnostics, and URL/DNS/redirect safety without requiring live network calls.
+diagnostics, prompt isolation, local request guards, production headers, and
+URL/DNS/redirect safety without requiring live network calls.
 Curated npm, PyPI, App Store, Chrome Web Store, cmux, and Otty snapshots keep
 real public response shapes under regression coverage without making CI depend
 on third-party availability.
-Playwright covers candidate capture, evidence review, automated WCAG checks,
-and platform-specific full-page visual contracts. GitHub Actions runs the core
+Playwright covers candidate capture, evidence review, local API rejection,
+browser security headers, automated WCAG checks, and platform-specific
+full-page visual contracts. GitHub Actions runs the core
 quality gate on Linux, macOS, and Windows, with browser contracts and production
 dependency auditing on Linux. Dependabot keeps pnpm and workflow dependencies
 visible. A privileged follow-up workflow never checks out dependency-PR code;

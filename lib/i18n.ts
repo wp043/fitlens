@@ -310,6 +310,11 @@ const zh = {
   invalidImport: "无法导入：这不是有效的 FitLens JSON 报告。",
   analyzeFailed: "分析失败，请稍后再试。",
   invalidKey: "模型 API key 格式不正确。",
+  crossOriginRejected: "请求来源不受信任，已拒绝。",
+  payloadTooLarge: "请求体过大，请精简后重试。",
+  invalidJson: "请求体不是有效的 JSON。",
+  invalidContentType: "请求必须使用 application/json。",
+  analysisBusy: "当前分析任务较多，请稍后重试。",
   missingKey:
     "请在本地 API 设置中临时输入自己的 API key，或在 .env.local 配置模型 provider 凭证。",
   providerUnsupported: "FITLENS_MODEL_PROVIDER 配置无效。",
@@ -657,6 +662,11 @@ const en: Record<MessageKey, string> = {
   invalidImport: "Unable to import: this is not a valid FitLens JSON report.",
   analyzeFailed: "Analysis failed. Please try again.",
   invalidKey: "The model API key format is invalid.",
+  crossOriginRejected: "Untrusted request origin. Rejected.",
+  payloadTooLarge: "Request body is too large. Please shorten it and try again.",
+  invalidJson: "The request body is not valid JSON.",
+  invalidContentType: "Requests must use application/json.",
+  analysisBusy: "FitLens is already analyzing. Please retry shortly.",
   missingKey:
     "Enter an API key in Local API setup, or configure the model provider credentials in .env.local.",
   providerUnsupported: "FITLENS_MODEL_PROVIDER is not supported.",
