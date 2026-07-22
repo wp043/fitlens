@@ -1,10 +1,21 @@
 {
   "name": "fitlens",
   "version": "0.1.0",
-  "private": true,
+  "description": "Compare products by evidence, not feature-count theater. Local-first research CLI.",
   "license": "MIT",
   "type": "module",
   "packageManager": "pnpm@10.22.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wp043/fitlens.git"
+  },
+  "homepage": "https://github.com/wp043/fitlens#readme",
+  "bugs": "https://github.com/wp043/fitlens/issues",
+  "keywords": ["cli", "comparison", "evidence", "research", "local-first"],
+  "bin": {
+    "fitlens": "dist/scripts/fitlens.js"
+  },
+  "files": ["dist", "README.md", "LICENSE", "SECURITY.md"],
   "engines": {
     "node": ">=20.18.1"
   },
@@ -13,6 +24,8 @@
     "build": "next build",
     "start": "next start",
     "fitlens": "node --import tsx scripts/fitlens.ts",
+    "build:cli": "tsc -p tsconfig.cli.json",
+    "prepack": "pnpm build:cli",
     "lint": "eslint .",
     "test": "node --test",
     "test:performance": "node --import tsx scripts/performance-contract.ts",
@@ -26,15 +39,15 @@
   },
   "dependencies": {
     "cheerio": "^1.1.2",
-    "next": "^16.2.11",
     "openai": "^6.48.0",
-    "react": "^19.2.8",
-    "react-dom": "^19.2.8",
-    "sharp": "^0.35.3",
     "undici": "^7.28.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "next": "^16.2.11",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "sharp": "^0.35.3",
     "@axe-core/playwright": "^4.12.1",
     "@playwright/test": "^1.61.1",
     "@types/node": "^26.1.1",

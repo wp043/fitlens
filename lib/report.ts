@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { Locale } from "@/lib/i18n";
+import type { Locale } from "./i18n.ts";
 import type {
   ComparisonCriterion,
   ComparisonResult,
@@ -7,7 +7,7 @@ import type {
   ProductResult,
   TrialResult,
   PairwiseTrialResult,
-} from "@/lib/types";
+} from "./types.ts";
 import { detectEvidenceConflicts, type EvidenceConflict } from "./conflicts.ts";
 import { activeEvidence } from "./evidence.ts";
 import {

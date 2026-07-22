@@ -1,7 +1,7 @@
 import type {
   ComparisonResult,
   PriorityWeights,
-} from "@/lib/types";
+} from "./types.ts";
 
 export function calculateWeightedWinner(
   result: ComparisonResult,

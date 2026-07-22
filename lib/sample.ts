@@ -1,5 +1,5 @@
-import type { ComparisonResult, PriorityWeights } from "@/lib/types";
-import type { Locale } from "@/lib/i18n";
+import type { ComparisonResult, PriorityWeights } from "./types.ts";
+import type { Locale } from "./i18n.ts";
 
 export const defaultPriorities: PriorityWeights = {
   openness: 60,

@@ -62,7 +62,40 @@ refresh, and export.
 
 ## Quick start
 
-Requires Node.js 20.18.1+, pnpm 10, and an API key for live analysis.
+### See a real report first — no key, no signup, no network
+
+```bash
+npx fitlens demo
+```
+
+That renders a complete comparison offline from a bundled sample: scored
+candidates, labeled evidence, calibrated confidence, conflicts, and unknowns.
+Add `--format markdown` for readable output, or `--locale zh-CN` for Chinese.
+Nothing is fetched and no credentials are read, so the output is identical on
+every machine.
+
+### Then run it for real
+
+```bash
+export OPENAI_API_KEY=...
+npx fitlens analyze \
+  --url https://example-a.com \
+  --url https://example-b.com \
+  --context "What you actually need this tool to do, in a sentence or two." \
+  --template developer-tools \
+  --format markdown
+```
+
+`fitlens --help` lists every command: `demo`, `analyze`, `replay`, `watch`,
+and `doctor`. Run `fitlens doctor` if something looks wrong; it prints redacted
+diagnostics.
+
+### Or run the full web workbench
+
+The CLI covers analysis, replay, and watching. The interactive workbench —
+reweighting criteria, reviewing evidence claim by claim, saved research
+library, exports — runs locally from a clone. Requires Node.js 20.18.1+ and
+pnpm 10.
 
 ```bash
 git clone https://github.com/wp043/fitlens.git

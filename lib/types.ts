@@ -213,4 +213,4 @@ export interface AnalyzeRequest {
   criteria: ComparisonCriterion[];
   locale: Locale;
 }
-import type { Locale } from "@/lib/i18n";
+import type { Locale } from "./i18n.ts";

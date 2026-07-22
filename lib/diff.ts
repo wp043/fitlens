@@ -4,7 +4,7 @@ import type {
   ComparisonCriterion,
   ComparisonResult,
   EvidenceLevel,
-} from "@/lib/types";
+} from "./types.ts";
 
 export interface NumericChange {
   before: number;
