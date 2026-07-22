@@ -5,6 +5,7 @@ import {
   collectProductSource,
   fetchRemoteText,
   isPublicIpAddress,
+  needsBrowserRendering,
   SourceError,
   toPublicUrl,
   type SourceNetworkDependencies,
@@ -13,6 +14,44 @@ import { parseAnalyzeRequest } from "../lib/analyze-request.ts";
 
 test("accepts a public product URL", () => {
   assert.equal(toPublicUrl("https://otty.sh/#pricing").toString(), "https://otty.sh/");
+});
+
+test("detects JavaScript application shells without flagging content pages", () => {
+  assert.equal(
+    needsBrowserRendering(
+      '<html><body><div id="root"></div><script src="/app.js"></script><script>boot()</script></body></html>',
+      "",
+    ),
+    true,
+  );
+  assert.equal(
+    needsBrowserRendering(
+      '<html><body><main>Complete product documentation with enough directly readable detail for static collection.</main><script src="/metrics.js"></script></body></html>',
+      "Complete product documentation with enough directly readable detail for static collection.",
+    ),
+    false,
+  );
+});
+
+test("uses an available browser renderer only when it improves a thin page", async () => {
+  let renderCalls = 0;
+  const dependencies: SourceNetworkDependencies = {
+    resolveHostname: async () => ["93.184.216.34"],
+    fetch: async () =>
+      new Response(
+        '<html><head><title>Dynamic Tool</title></head><body><div id="root"></div><script src="/runtime.js"></script><script src="/app.js"></script></body></html>',
+        { headers: { "content-type": "text/html" } },
+      ),
+    async renderHtml() {
+      renderCalls += 1;
+      return '<html><head><title>Dynamic Tool</title><meta name="description" content="Rendered product"></head><body><main>Rendered pricing, workflow, privacy, and product documentation.</main></body></html>';
+    },
+  };
+
+  const source = await collectProductSource("https://dynamic.example", dependencies);
+  assert.equal(renderCalls, 1);
+  assert.match(source.pageText, /Rendered pricing/);
+  assert.equal(source.description, "Rendered product");
 });
 
 test("rejects local and private network targets", () => {

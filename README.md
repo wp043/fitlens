@@ -78,9 +78,24 @@ enter a key for the current browser session or create `.env.local`:
 OPENAI_API_KEY=
 OPENAI_MODEL=gpt-5.6-luna
 GITHUB_TOKEN=
+FITLENS_BROWSER_FALLBACK=0
 ```
 
 `GITHUB_TOKEN` is optional; it only raises GitHub API rate limits.
+`FITLENS_BROWSER_FALLBACK=1` opts into rendering thin JavaScript application
+shells. Install the matching local browser once with:
+
+```bash
+pnpm exec playwright install chromium
+```
+
+Static HTML remains the default. The renderer starts only when the initial page
+has very little readable text and recognizable application-shell markers. It
+blocks media, fonts, WebSockets, service workers, non-GET requests, oversized
+responses, and excessive request counts; scripts and data requests are fetched
+through the same public-address and redirect policy as the static collector.
+If rendering is unavailable or produces less content, FitLens keeps the static
+result.
 
 ## How a decision works
 
@@ -356,7 +371,8 @@ visible.
 - Source collection starts with one official page, follows at most one page per
   supported document kind, and inspects at most one discovered GitHub
   repository plus its latest release per product.
-- JavaScript-heavy pages may expose less text to the HTML collector.
+- The opt-in browser fallback does not bypass logins, CAPTCHAs, consent walls,
+  or content that requires user interaction.
 - Dimension scores are explainable model judgments, not objective measurements.
 - Reports and the 50-item research library stay in one browser unless exported.
 - A report retains at most five prior revisions.
@@ -366,8 +382,7 @@ visible.
   browser does not claim to run reliable background jobs while it is closed.
 
 Further extensions should preserve the local-first boundary. Useful directions
-include a browser-rendered fallback for JavaScript-only sources, optional
-package-registry adapters, and richer trend views across watch snapshots.
+include package-registry adapters and richer trend views across watch snapshots.
 
 ## License
 

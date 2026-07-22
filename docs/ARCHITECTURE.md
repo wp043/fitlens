@@ -57,6 +57,7 @@ configured model, validates the structured response, and returns it.
 | Watchlist validation, due scheduling, and snapshot naming | `lib/watchlist.ts` |
 | Request schema and URL-list validation | `lib/analyze-request.ts` |
 | URL policy, DNS checks, redirects, byte caps, page/GitHub collection | `lib/source.ts` |
+| Opt-in guarded JavaScript rendering for thin application shells | `lib/source.ts` |
 | Official pricing, docs, privacy, security, and changelog discovery | `lib/source-adapters/registry.ts` |
 | Per-candidate collection outcomes and safe public failures | `lib/source-diagnostics.ts` |
 | Provider env resolution, client construction, normalized provider errors | `lib/model-provider.ts` |
@@ -186,6 +187,11 @@ These are the contracts most likely to cause subtle errors if weakened:
 - Supplemental collection is bounded to one page per recognized kind and
   4,000 extracted characters per page. An optional supplemental-page failure
   does not invalidate a successfully collected homepage.
+- Browser rendering is opt-in and only considered for thin application shells.
+  Chromium receives the initial HTML offline; external scripts, styles, and
+  data are re-fetched through the guarded Node transport, while media, fonts,
+  WebSockets, service workers, non-GET requests, and bounded-resource overages
+  are blocked. A rendering failure falls back to the original static page.
 
 The remaining DNS-rebinding gap is explicit: Node's connection lookup happens
 after the policy lookup. FitLens is intended to run as an unprivileged local
