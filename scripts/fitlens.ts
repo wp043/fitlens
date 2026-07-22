@@ -64,7 +64,10 @@ function watchNotificationMessage(
   return `${entryId}: ${scoreChanges} score changes, ${change.dimensionChanges.length} dimension changes, ${change.addedUnknowns.length} new unknowns.`;
 }
 
-async function runWatchlist(options: ReturnType<typeof parseCliArguments>) {
+async function runWatchlist(
+  options: ReturnType<typeof parseCliArguments>,
+  signal: AbortSignal,
+) {
   const configPath = resolve(options.configFile!);
   let watchlist = parseWatchlist(JSON.parse(await readFile(configPath, "utf8")));
   const entries = options.force ? watchlist.entries : dueWatchEntries(watchlist);
@@ -87,7 +90,7 @@ async function runWatchlist(options: ReturnType<typeof parseCliArguments>) {
           criteria,
           locale: entry.locale,
         },
-        { env: process.env },
+        { env: process.env, signal },
       );
       const capturedAt = result.generatedAt;
       const directory = resolve(options.outputDirectory!, entry.id);
@@ -148,13 +151,15 @@ async function runWatchlist(options: ReturnType<typeof parseCliArguments>) {
 }
 
 async function main() {
+  const controller = new AbortController();
+  process.once("SIGINT", () => controller.abort());
   const options = parseCliArguments(process.argv.slice(2));
   if (options.command === "help") {
     process.stdout.write(cliHelp);
     return;
   }
   if (options.command === "watch") {
-    await runWatchlist(options);
+    await runWatchlist(options, controller.signal);
     return;
   }
   if (options.command === "doctor") {
@@ -201,7 +206,11 @@ async function main() {
       )!.criteria;
   const result = await runAnalysis(
     { urls: options.urls, context, criteria, locale: options.locale },
-    { env: process.env, allowBundledSample: options.allowBundledSample },
+    {
+      env: process.env,
+      allowBundledSample: options.allowBundledSample,
+      signal: controller.signal,
+    },
   );
   const output =
     options.format === "markdown"

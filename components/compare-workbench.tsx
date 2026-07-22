@@ -197,9 +197,13 @@ export function CompareWorkbench({
     initialResult,
   );
   const [status, setStatus] = useState<
-    "idle" | "loading" | "refreshing" | "error"
+    "idle" | "loading" | "refreshing" | "cancelling" | "error"
   >("idle");
+  const [analysisProgress, setAnalysisProgress] = useState("");
+  const analysisAbortRef = useRef<AbortController | undefined>(undefined);
   const [error, setError] = useState("");
+
+  useEffect(() => () => analysisAbortRef.current?.abort(), []);
   const [sourceFailures, setSourceFailures] = useState<SourceFailure[]>([]);
   const [sourceRetryMode, setSourceRetryMode] = useState<"analyze" | "refresh">(
     "analyze",
@@ -388,7 +392,7 @@ export function CompareWorkbench({
         criterion.label.trim().length > 0 && criterion.key.trim().length > 0,
     );
 
-  async function requestAnalysis() {
+  async function requestAnalysis(signal: AbortSignal) {
     const response = await fetch("/api/analyze", {
       method: "POST",
       headers: {
@@ -403,6 +407,7 @@ export function CompareWorkbench({
         criteria: cloneCriteria(criteria),
         locale,
       }),
+      signal,
     });
     const payload = await response.json() as Record<string, unknown>;
     if (!response.ok) {
@@ -478,10 +483,19 @@ export function CompareWorkbench({
   }
 
   async function analyze() {
+    const controller = new AbortController();
+    analysisAbortRef.current = controller;
     setStatus("loading");
+    setAnalysisProgress(t.progressSource);
     setError("");
     try {
-      const payload = await requestAnalysis();
+      const progressTimer = window.setTimeout(
+        () => setAnalysisProgress(t.progressModel),
+        1_500,
+      );
+      const payload = await requestAnalysis(controller.signal).finally(() =>
+        clearTimeout(progressTimer),
+      );
       const detectedConflicts = detectEvidenceConflicts(payload);
       setResult(payload);
       setSourceFailures([]);
@@ -529,17 +543,36 @@ export function CompareWorkbench({
         50,
       );
     } catch (caught) {
-      handleAnalysisError(caught, "analyze", t.analyzeFailed);
+      handleAnalysisError(
+        controller.signal.aborted ? new Error(t.analysisCancelled) : caught,
+        "analyze",
+        t.analyzeFailed,
+      );
+    } finally {
+      if (analysisAbortRef.current === controller) {
+        analysisAbortRef.current = undefined;
+      }
+      setAnalysisProgress("");
     }
   }
 
   async function refreshAnalysis() {
     if (!result || !canAnalyze) return;
+    const controller = new AbortController();
+    analysisAbortRef.current = controller;
     setStatus("refreshing");
+    setAnalysisProgress(t.progressSource);
     setError("");
     try {
       const previous = result;
-      const payload = mergeManualEvidence(previous, await requestAnalysis());
+      const progressTimer = window.setTimeout(
+        () => setAnalysisProgress(t.progressModel),
+        1_500,
+      );
+      const refreshed = await requestAnalysis(controller.signal).finally(() =>
+        clearTimeout(progressTimer),
+      );
+      const payload = mergeManualEvidence(previous, refreshed);
       const detectedConflicts = detectEvidenceConflicts(payload);
       const nextDiff = compareResults(previous, payload, criteria);
       const stored = history.find((report) => report.id === currentReportId);
@@ -592,8 +625,23 @@ export function CompareWorkbench({
       void persistBrowserValue(historyKey, nextHistory);
       setStatus("idle");
     } catch (caught) {
-      handleAnalysisError(caught, "refresh", t.refreshFailed);
+      handleAnalysisError(
+        controller.signal.aborted ? new Error(t.analysisCancelled) : caught,
+        "refresh",
+        t.refreshFailed,
+      );
+    } finally {
+      if (analysisAbortRef.current === controller) {
+        analysisAbortRef.current = undefined;
+      }
+      setAnalysisProgress("");
     }
+  }
+
+  function cancelAnalysis() {
+    if (!analysisAbortRef.current) return;
+    setStatus("cancelling");
+    analysisAbortRef.current.abort();
   }
 
   function loadReport(saved: SavedReport) {
@@ -1530,15 +1578,28 @@ export function CompareWorkbench({
             {t.autoDetect}
           </div>
           <button
-            onClick={analyze}
+            onClick={
+              status === "loading" ||
+              status === "refreshing" ||
+              status === "cancelling"
+                ? cancelAnalysis
+                : analyze
+            }
             disabled={
-              status === "loading" || status === "refreshing" || !canAnalyze
+              status === "cancelling" || (status !== "loading" && status !== "refreshing" && !canAnalyze)
             }
           >
-            {status === "loading" ? t.analyzing : t.analyze}
-            {status !== "loading" && <span>↗</span>}
+            {status === "cancelling"
+              ? t.cancellingAnalysis
+              : status === "loading" || status === "refreshing"
+                ? t.cancelAnalysis
+                : t.analyze}
+            {status !== "loading" && status !== "refreshing" && status !== "cancelling" && <span>↗</span>}
           </button>
         </div>
+        {analysisProgress && (
+          <p role="status" aria-live="polite">{analysisProgress}</p>
+        )}
         {error && (
           <div className="error-banner" role="alert">
             {error}
@@ -1565,7 +1626,11 @@ export function CompareWorkbench({
                 if (sourceRetryMode === "refresh") void refreshAnalysis();
                 else void analyze();
               }}
-              disabled={status === "loading" || status === "refreshing"}
+              disabled={
+                status === "loading" ||
+                status === "refreshing" ||
+                status === "cancelling"
+              }
             >
               {t.retrySources} <span aria-hidden="true">↻</span>
             </button>
@@ -1650,7 +1715,10 @@ export function CompareWorkbench({
               className="refresh-report"
               onClick={refreshAnalysis}
               disabled={
-                status === "refreshing" || status === "loading" || !canAnalyze
+                status === "refreshing" ||
+                status === "loading" ||
+                status === "cancelling" ||
+                !canAnalyze
               }
             >
               {status === "refreshing" ? t.refreshing : t.refreshReport}

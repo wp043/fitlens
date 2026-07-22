@@ -1,6 +1,7 @@
 import OpenAI from "openai";
 import { zodTextFormat } from "openai/helpers/zod";
 import type { z } from "zod";
+import { parseRetryAfterMs } from "./retry-after.ts";
 
 export type ModelProviderKind = "openai" | "compatible";
 
@@ -37,10 +38,12 @@ export class ModelProviderConfigError extends Error {
 
 export class ModelProviderRequestError extends Error {
   readonly code: ProviderRequestErrorCode;
+  readonly retryAfterMs?: number;
 
-  constructor(code: ProviderRequestErrorCode) {
+  constructor(code: ProviderRequestErrorCode, retryAfterMs?: number) {
     super(code);
     this.code = code;
+    this.retryAfterMs = retryAfterMs;
     this.name = "ModelProviderRequestError";
   }
 }
@@ -177,6 +180,7 @@ export async function requestStructuredOutput<TSchema extends z.ZodTypeAny>(
     schemaName: string;
     instructions: string;
     input: string;
+    signal?: AbortSignal;
   },
 ): Promise<z.infer<TSchema> | null> {
   const client = new OpenAI({
@@ -195,11 +199,19 @@ export async function requestStructuredOutput<TSchema extends z.ZodTypeAny>(
       text: {
         format: zodTextFormat(options.schema, options.schemaName),
       },
-    });
+    }, { signal: options.signal });
     return response.output_parsed === null
       ? null
       : options.schema.parse(response.output_parsed);
   } catch (error) {
-    throw new ModelProviderRequestError(normalizeProviderError(error));
+    if (options.signal?.aborted) throw error;
+    const record = errorRecord(error);
+    const headers = record.headers as
+      | { get?: (name: string) => string | null }
+      | undefined;
+    throw new ModelProviderRequestError(
+      normalizeProviderError(error),
+      parseRetryAfterMs(headers?.get?.("retry-after")),
+    );
   }
 }
