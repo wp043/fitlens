@@ -27,6 +27,10 @@ import {
   RequestGuardError,
 } from "@/lib/request-guard";
 import { runManifestFromError } from "@/lib/reproducibility";
+import {
+  AnalysisBudgetExceededError,
+  AnalysisCancelledError,
+} from "@/lib/job-control";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -71,11 +75,24 @@ export async function POST(request: Request) {
     const result = await runAnalysis(input, {
       env: process.env,
       sessionApiKey,
+      signal: request.signal,
     });
     return NextResponse.json(result);
   } catch (error) {
     const t = messages[locale];
     const analysisRun = runManifestFromError(error);
+    if (error instanceof AnalysisCancelledError || request.signal.aborted) {
+      return NextResponse.json(
+        { error: t.analysisCancelled, analysisRun },
+        { status: 499 },
+      );
+    }
+    if (error instanceof AnalysisBudgetExceededError) {
+      return NextResponse.json(
+        { error: t.analysisTimedOut, analysisRun },
+        { status: 504 },
+      );
+    }
     if (error instanceof MissingModelCredentialsError) {
       return NextResponse.json({ error: t.missingKey, analysisRun }, { status: 503 });
     }

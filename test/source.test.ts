@@ -235,6 +235,28 @@ test("caps redirect chains", async () => {
   assert.equal(requests, 3);
 });
 
+test("classifies HTTP retryability and parses numeric Retry-After", async () => {
+  const resolver = async () => ["93.184.216.34"];
+  await assert.rejects(
+    fetchRemoteText("https://safe.example/missing", {
+      accept: "text/plain", allowedContentTypes: ["text/plain"], maxBytes: 100,
+    }, network(resolver, async () => new Response("missing", { status: 404 }))),
+    (error) => error instanceof SourceError && error.retryable === false,
+  );
+  await assert.rejects(
+    fetchRemoteText("https://safe.example/busy", {
+      accept: "text/plain", allowedContentTypes: ["text/plain"], maxBytes: 100,
+    }, network(resolver, async () => new Response("busy", {
+      status: 429,
+      headers: { "retry-after": "2" },
+    }))),
+    (error) =>
+      error instanceof SourceError &&
+      error.retryable === true &&
+      error.retryAfterMs === 2_000,
+  );
+});
+
 test("does not forward credentials to a cross-origin redirect", async () => {
   const authorization: Array<string | null> = [];
   const dependencies = network(

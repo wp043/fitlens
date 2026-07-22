@@ -13,6 +13,7 @@ import type {
   CollectedSourceDocument,
   SourceLink,
 } from "./source-adapters/types.ts";
+import { parseRetryAfterMs } from "./retry-after.ts";
 
 export type SourceErrorCode =
   | "invalidUrl"
@@ -27,12 +28,22 @@ export type SourceErrorCode =
 export class SourceError extends Error {
   readonly code: SourceErrorCode;
   readonly detail?: string;
+  readonly retryAfterMs?: number;
+  readonly retryable: boolean;
 
-  constructor(code: SourceErrorCode, detail?: string) {
+  constructor(
+    code: SourceErrorCode,
+    detail?: string,
+    retryAfterMs?: number,
+    retryable?: boolean,
+  ) {
     super(code);
     this.name = "SourceError";
     this.code = code;
     this.detail = detail;
+    this.retryAfterMs = retryAfterMs;
+    this.retryable =
+      retryable ?? (code === "fetchFailed" || code === "githubFailed");
   }
 }
 
@@ -82,6 +93,8 @@ export interface SourceNetworkDependencies {
   ) => Promise<Response>;
   resolveHostname: (hostname: string) => Promise<string[]>;
   renderHtml?: (html: string, pageUrl: string) => Promise<string>;
+  /** Job cancellation only; never changes destination validation. */
+  signal?: AbortSignal;
 }
 
 /** @internal Exported so the DNS-to-socket binding can be contract-tested. */
@@ -315,6 +328,7 @@ interface RemoteTextOptions {
   headers?: Record<string, string>;
   maxRedirects?: number;
   statusError?: "fetchFailed" | "githubFailed";
+  signal?: AbortSignal;
 }
 
 async function readLimitedText(response: Response, maxBytes: number) {
@@ -369,9 +383,15 @@ export async function fetchRemoteText(
       response = await dependencies.fetch(current, {
         headers: requestHeaders,
         redirect: "manual",
-        signal: AbortSignal.timeout(12_000),
+        signal: (options.signal ?? dependencies.signal)
+          ? AbortSignal.any([
+              (options.signal ?? dependencies.signal)!,
+              AbortSignal.timeout(12_000),
+            ])
+          : AbortSignal.timeout(12_000),
       }, validatedAddresses);
-    } catch {
+    } catch (error) {
+      if (options.signal?.aborted) throw error;
       throw new SourceError("fetchFailed", current.hostname);
     }
 
@@ -395,6 +415,8 @@ export async function fetchRemoteText(
       throw new SourceError(
         options.statusError ?? "fetchFailed",
         `${current.hostname} (${response.status})`,
+        parseRetryAfterMs(response.headers.get("retry-after")),
+        [408, 425, 429].includes(response.status) || response.status >= 500,
       );
     }
 
@@ -538,6 +560,10 @@ async function renderHtmlInGuardedBrowser(
 ) {
   const { chromium } = await import("playwright");
   const browser = await chromium.launch({ headless: true });
+  const cancel = () => {
+    void browser.close();
+  };
+  dependencies.signal?.addEventListener("abort", cancel, { once: true });
   let requestCount = 0;
   let totalCharacters = 0;
   try {
@@ -591,6 +617,7 @@ async function renderHtmlInGuardedBrowser(
     if (rendered.length > 1_500_000) throw new SourceError("pageTooLarge");
     return rendered;
   } finally {
+    dependencies.signal?.removeEventListener("abort", cancel);
     await browser.close();
   }
 }
@@ -798,8 +825,12 @@ async function collectGitHub(
 
 export async function collectProductSource(
   rawUrl: string,
-  dependencies: SourceNetworkDependencies = defaultNetworkDependencies,
+  baseDependencies: SourceNetworkDependencies = defaultNetworkDependencies,
+  signal?: AbortSignal,
 ): Promise<CollectedSource> {
+  const dependencies = signal
+    ? { ...baseDependencies, signal }
+    : baseDependencies;
   const input = toPublicUrl(rawUrl);
   const directRepo = githubRepoFromUrl(input.toString());
 

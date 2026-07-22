@@ -16,6 +16,23 @@ import {
   createReplayBundle,
   createRunManifest,
 } from "./reproducibility.ts";
+import {
+  AnalysisCancelledError,
+  type JobClock,
+  PublicSourceCache,
+  systemJobClock,
+  throwIfAborted,
+  withTransientRetry,
+} from "./job-control.ts";
+
+const publicSourceCache = new PublicSourceCache<CollectedSource>({
+  maxEntries: 64,
+  ttlMs: 5 * 60_000,
+});
+
+export function clearPublicSourceCache() {
+  publicSourceCache.clear();
+}
 
 export class MissingModelCredentialsError extends Error {
   constructor() {
@@ -59,18 +76,25 @@ export interface AnalysisServiceOptions {
   sessionApiKey?: string;
   collectSource?: (url: string) => Promise<CollectedSource>;
   allowBundledSample?: boolean;
+  signal?: AbortSignal;
+  clock?: JobClock;
+  budgetMs?: number;
+  onProgress?: (stage: "source" | "model" | "finalize") => void;
 }
 
 export async function runAnalysis(
   input: unknown,
   options: AnalysisServiceOptions,
 ): Promise<ComparisonResult> {
-  const startedAt = new Date();
+  const clock = options.clock ?? systemJobClock;
+  const startedAt = new Date(clock.now());
+  const deadline = clock.now() + (options.budgetMs ?? 55_000);
   const body = parseAnalyzeRequest(input);
   let stage: "source" | "model" | "finalize" = "source";
   let collectedSources: CollectedSource[] = [];
   let provider: ReturnType<typeof resolveModelProviderConfig> | undefined;
   try {
+  throwIfAborted(options.signal);
   if (options.env.FITLENS_DISABLE_LIVE_ANALYSIS === "1") {
     throw new MissingModelCredentialsError();
   }
@@ -85,7 +109,7 @@ export async function runAnalysis(
     const dimensions = new Map(
       sample.dimensions.map((dimension) => [dimension.key, dimension]),
     );
-    const finishedAt = new Date();
+    const finishedAt = new Date(clock.now());
     return {
       ...sample,
       generatedAt: new Date().toISOString(),
@@ -109,19 +133,42 @@ export async function runAnalysis(
     throw new MissingModelCredentialsError();
   }
 
+  options.onProgress?.("source");
+  const cacheEligible = !options.collectSource && !options.env.GITHUB_TOKEN;
+  const collect =
+    options.collectSource ??
+    ((url: string) => collectProductSource(url, undefined, options.signal));
   const collected = await collectCandidateSources(
     body.urls,
-    options.collectSource ?? collectProductSource,
+    async (url) => {
+      throwIfAborted(options.signal);
+      const key = new URL(url).toString();
+      const cached = cacheEligible ? publicSourceCache.get(key) : undefined;
+      if (cached) return cached;
+      const source = await withTransientRetry(() => collect(url), {
+        signal: options.signal,
+        clock,
+        deadline,
+      });
+      if (cacheEligible) publicSourceCache.set(key, source);
+      return source;
+    },
+    { overallConcurrency: 3, perHostConcurrency: 1, signal: options.signal },
   );
   if (!collected.ok) throw new CandidateSourceCollectionError(collected.failures);
   collectedSources = collected.sources;
   stage = "model";
+  options.onProgress?.("model");
   let modelOutput: unknown;
-  const result = await analyzeWithModel(body, collected.sources, provider, (output) => {
-    modelOutput = output;
-    stage = "finalize";
-  });
-  const finishedAt = new Date();
+  const result = await withTransientRetry(
+    () => analyzeWithModel(body, collected.sources, provider!, (output) => {
+      modelOutput = output;
+      stage = "finalize";
+      options.onProgress?.("finalize");
+    }, options.signal),
+    { signal: options.signal, clock, deadline, policy: { attempts: 2 } },
+  );
+  const finishedAt = new Date(clock.now());
   const analysisRun = createRunManifest({
     request: body,
     sources: collected.sources,
@@ -143,9 +190,11 @@ export async function runAnalysis(
     }),
   };
   } catch (error) {
-    const finishedAt = new Date();
+    const finishedAt = new Date(clock.now());
     const code =
-      error instanceof MissingModelCredentialsError
+      error instanceof AnalysisCancelledError || options.signal?.aborted
+        ? "analysis_cancelled"
+        : error instanceof MissingModelCredentialsError
         ? "missing_model_credentials"
         : error instanceof CandidateSourceCollectionError
           ? "candidate_source_collection_failed"

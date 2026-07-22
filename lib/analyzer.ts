@@ -197,12 +197,16 @@ export async function analyzeWithModel(
   sources: CollectedSource[],
   provider: ModelProviderConfig,
   onModelOutput?: (output: unknown) => void,
+  signal?: AbortSignal,
 ): Promise<ComparisonResult> {
+  if (signal?.aborted) throw signal.reason;
   const parsed = await requestStructuredOutput(provider, {
     schema: analysisModelOutputSchema,
     schemaName: "fitlens_comparison",
     ...buildAnalysisModelRequest(request, sources),
+    signal,
   });
+  if (signal?.aborted) throw signal.reason;
 
   if (!parsed) {
     throw new Error(messages[request.locale].modelFailed);

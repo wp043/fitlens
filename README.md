@@ -406,6 +406,10 @@ docs/                 architecture and worked product research
 
 ## Development
 
+Analysis cancellation, retry policy, concurrency/time budgets, and the
+privacy-safe public-source cache are documented in
+[`docs/RESILIENT-JOBS.md`](docs/RESILIENT-JOBS.md).
+
 ```bash
 pnpm check
 pnpm test:production
