@@ -1,7 +1,13 @@
 import * as cheerio from "cheerio";
 import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
+import type { Route } from "playwright";
 import { discoverSourceDocuments } from "./source-adapters/registry.ts";
+import {
+  chromeStoreDocument,
+  identifyMarketplace,
+  parseMarketplaceMetadata,
+} from "./source-adapters/marketplaces.ts";
 import type {
   CollectedSourceDocument,
   SourceLink,
@@ -70,6 +76,7 @@ const PRIVATE_HOST_PATTERNS = [
 export interface SourceNetworkDependencies {
   fetch: typeof globalThis.fetch;
   resolveHostname: (hostname: string) => Promise<string[]>;
+  renderHtml?: (html: string, pageUrl: string) => Promise<string>;
 }
 
 const defaultNetworkDependencies: SourceNetworkDependencies = {
@@ -407,6 +414,129 @@ function extractPage(html: string, pageUrl: string) {
   return { title, description, body, repoUrl, links };
 }
 
+export function needsBrowserRendering(html: string, extractedText: string) {
+  const scriptCount = html.match(/<script\b/gi)?.length ?? 0;
+  const hasApplicationShell =
+    /id=["'](?:__next|__nuxt|root|app)["']/i.test(html) ||
+    /\/(?:_next|_nuxt)\/static\//i.test(html) ||
+    /type=["']module["']/i.test(html);
+  return extractedText.trim().length < 800 && scriptCount >= 2 && hasApplicationShell;
+}
+
+function prepareBrowserDocument(html: string, pageUrl: string) {
+  const $ = cheerio.load(html);
+  $('meta[http-equiv="content-security-policy" i]').remove();
+  $("base").remove();
+  $("head").prepend(`<base href="${pageUrl.replaceAll('"', "&quot;")}">`);
+  return $.html();
+}
+
+function browserResourceOptions(resourceType: string): RemoteTextOptions | undefined {
+  if (resourceType === "script") {
+    return {
+      accept: "text/javascript,application/javascript,*/*;q=0.1",
+      allowedContentTypes: [
+        "text/javascript",
+        "application/javascript",
+        "application/x-javascript",
+        "text/plain",
+      ],
+      maxBytes: 750_000,
+    };
+  }
+  if (resourceType === "stylesheet") {
+    return {
+      accept: "text/css,*/*;q=0.1",
+      allowedContentTypes: ["text/css", "text/plain"],
+      maxBytes: 500_000,
+    };
+  }
+  if (["xhr", "fetch"].includes(resourceType)) {
+    return {
+      accept: "application/json,text/plain,text/html,*/*;q=0.1",
+      allowedContentTypes: [
+        "application/json",
+        "text/plain",
+        "text/html",
+        "application/javascript",
+        "text/javascript",
+      ],
+      maxBytes: 750_000,
+    };
+  }
+  return undefined;
+}
+
+function browserResponseContentType(resourceType: string) {
+  if (resourceType === "script") return "application/javascript";
+  if (resourceType === "stylesheet") return "text/css";
+  return "application/json";
+}
+
+async function renderHtmlInGuardedBrowser(
+  html: string,
+  pageUrl: string,
+  dependencies: SourceNetworkDependencies,
+) {
+  const { chromium } = await import("playwright");
+  const browser = await chromium.launch({ headless: true });
+  let requestCount = 0;
+  let totalCharacters = 0;
+  try {
+    const context = await browser.newContext({
+      javaScriptEnabled: true,
+      serviceWorkers: "block",
+    });
+    const page = await context.newPage();
+    const client = await context.newCDPSession(page);
+    await client.send("Network.enable");
+    await client.send("Network.setBlockedURLs", { urls: ["ws://*", "wss://*"] });
+
+    await page.route("**/*", async (route: Route) => {
+      const request = route.request();
+      const options = browserResourceOptions(request.resourceType());
+      if (
+        request.method() !== "GET" ||
+        !options ||
+        requestCount >= 40 ||
+        totalCharacters >= 3_000_000
+      ) {
+        await route.abort("blockedbyclient");
+        return;
+      }
+      requestCount += 1;
+      try {
+        const response = await fetchRemoteText(
+          request.url(),
+          options,
+          dependencies,
+        );
+        totalCharacters += response.text.length;
+        await route.fulfill({
+          status: 200,
+          contentType: browserResponseContentType(request.resourceType()),
+          headers: { "access-control-allow-origin": "*" },
+          body: response.text,
+        });
+      } catch {
+        await route.abort("blockedbyclient");
+      }
+    });
+
+    await page.setContent(prepareBrowserDocument(html, pageUrl), {
+      waitUntil: "domcontentloaded",
+      timeout: 15_000,
+    });
+    await page.waitForLoadState("networkidle", { timeout: 4_000 }).catch(() => {});
+    await page.waitForTimeout(350);
+    const rendered = await page.content();
+    if (rendered.length > 1_500_000) throw new SourceError("pageTooLarge");
+    return rendered;
+  } finally {
+    await browser.close();
+  }
+}
+
 async function collectSupplementalDocuments(
   homepageUrl: string,
   links: SourceLink[],
@@ -629,17 +759,83 @@ export async function collectProductSource(
     };
   }
 
+  const marketplace = identifyMarketplace(input.toString());
+  if (marketplace?.metadataUrl) {
+    try {
+      const response = await fetchRemoteText(
+        marketplace.metadataUrl,
+        {
+          accept: "application/json,text/javascript",
+          allowedContentTypes: ["application/json", "text/javascript"],
+          maxBytes: 1_500_000,
+        },
+        dependencies,
+      );
+      const metadata = parseMarketplaceMetadata(marketplace, response.text);
+      if (metadata) {
+        const repository = metadata.repositoryUrl
+          ? githubRepoFromUrl(metadata.repositoryUrl)
+          : undefined;
+        const github = repository
+          ? await collectGitHub(repository, dependencies).catch(() => undefined)
+          : undefined;
+        return {
+          inputUrl: input.toString(),
+          homepageUrl: marketplace.pageUrl,
+          name: metadata.name,
+          description: metadata.description,
+          sourceMode: github ? "open-source" : "website-only",
+          pageText: metadata.document.text,
+          documents: [metadata.document, ...(github?.documents ?? [])],
+          repo: github?.repo,
+        };
+      }
+    } catch {
+      // Registry enrichment is optional; the public listing remains collectable.
+    }
+  }
+
   const html = await fetchText(input.toString(), dependencies);
-  const page = extractPage(html.text, html.finalUrl);
+  let page = extractPage(html.text, html.finalUrl);
+  if (needsBrowserRendering(html.text, page.body)) {
+    const renderHtml =
+      dependencies.renderHtml ??
+      (process.env.FITLENS_BROWSER_FALLBACK === "1"
+        ? (markup: string, pageUrl: string) =>
+            renderHtmlInGuardedBrowser(markup, pageUrl, dependencies)
+        : undefined);
+    if (renderHtml) {
+      try {
+        const renderedPage = extractPage(
+          await renderHtml(html.text, html.finalUrl),
+          html.finalUrl,
+        );
+        if (renderedPage.body.length > page.body.length) page = renderedPage;
+      } catch {
+        // Rendering is a best-effort enhancement; guarded static HTML remains usable.
+      }
+    }
+  }
   const discoveredRepo = page.repoUrl
     ? githubRepoFromUrl(page.repoUrl)
     : undefined;
-  const [documents, github] = await Promise.all([
+  const [supplementalDocuments, github] = await Promise.all([
     collectSupplementalDocuments(html.finalUrl, page.links, dependencies),
     discoveredRepo
       ? collectGitHub(discoveredRepo, dependencies).catch(() => undefined)
       : Promise.resolve(undefined),
   ]);
+  const marketplaceDocuments =
+    marketplace?.kind === "chrome-web-store"
+      ? [
+          chromeStoreDocument(
+            marketplace,
+            page.title,
+            page.description,
+            page.body,
+          ),
+        ]
+      : [];
 
   return {
     inputUrl: input.toString(),
@@ -648,7 +844,11 @@ export async function collectProductSource(
     description: page.description,
     sourceMode: github ? "open-source" : "website-only",
     pageText: page.body,
-    documents: [...documents, ...(github?.documents ?? [])],
+    documents: [
+      ...marketplaceDocuments,
+      ...supplementalDocuments,
+      ...(github?.documents ?? []),
+    ],
     repo: github?.repo,
   };
 }

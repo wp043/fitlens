@@ -15,16 +15,51 @@ import {
   ModelProviderRequestError,
 } from "../lib/model-provider.ts";
 import {
+  appendWatchTrend,
+  createWatchTrendPoint,
   dueWatchEntries,
   markWatchEntryRun,
   parseWatchlist,
+  renderWatchTrendHtml,
   snapshotFilename,
+  type WatchTrend,
 } from "../lib/watchlist.ts";
+import { compareResults, type ComparisonDiff } from "../lib/diff.ts";
+import { sendLocalNotification } from "../lib/local-notifications.ts";
+import type { ComparisonResult } from "../lib/types.ts";
 
 async function writeJsonAtomic(path: string, value: unknown) {
   const temporary = `${path}.tmp-${process.pid}`;
   await writeFile(temporary, `${JSON.stringify(value, null, 2)}\n`, "utf8");
   await rename(temporary, path);
+}
+
+async function writeTextAtomic(path: string, value: string) {
+  const temporary = `${path}.tmp-${process.pid}`;
+  await writeFile(temporary, value, "utf8");
+  await rename(temporary, path);
+}
+
+async function readJsonIfPresent<T>(path: string): Promise<T | undefined> {
+  try {
+    return JSON.parse(await readFile(path, "utf8")) as T;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
+    return undefined;
+  }
+}
+
+function watchNotificationMessage(
+  entryId: string,
+  result: ComparisonResult,
+  change?: ComparisonDiff,
+) {
+  if (!change) return `${entryId}: first snapshot captured; winner ${result.recommendation.winner}.`;
+  if (change.winnerChanged) {
+    return `${entryId}: winner changed from ${change.previousWinner ?? "unknown"} to ${change.currentWinner ?? "unknown"}.`;
+  }
+  const scoreChanges = change.scoreChanges.filter((item) => item.delta !== 0).length;
+  return `${entryId}: ${scoreChanges} score changes, ${change.dimensionChanges.length} dimension changes, ${change.addedUnknowns.length} new unknowns.`;
 }
 
 async function runWatchlist(options: ReturnType<typeof parseCliArguments>) {
@@ -53,20 +88,53 @@ async function runWatchlist(options: ReturnType<typeof parseCliArguments>) {
         { env: process.env },
       );
       const capturedAt = result.generatedAt;
+      const directory = resolve(options.outputDirectory!, entry.id);
+      await mkdir(directory, { recursive: true });
+      const previousSnapshot = await readJsonIfPresent<{
+        result?: ComparisonResult;
+      }>(join(directory, "latest.json"));
+      const previousResult = previousSnapshot?.result;
+      const change = previousResult
+        ? compareResults(previousResult, result, criteria)
+        : undefined;
       const snapshot = {
         schemaVersion: 1,
         watchId: entry.id,
         capturedAt,
         result,
+        change,
       };
-      const directory = resolve(options.outputDirectory!, entry.id);
-      await mkdir(directory, { recursive: true });
       await writeJsonAtomic(join(directory, snapshotFilename(capturedAt)), snapshot);
       await writeJsonAtomic(join(directory, "latest.json"), snapshot);
+      const existingTrend = await readJsonIfPresent<WatchTrend>(
+        join(directory, "trend.json"),
+      );
+      const trend = appendWatchTrend(
+        existingTrend,
+        entry.id,
+        createWatchTrendPoint(result, criteria),
+      );
+      await writeJsonAtomic(join(directory, "trend.json"), trend);
+      await writeTextAtomic(join(directory, "trend.html"), renderWatchTrendHtml(trend));
       watchlist = markWatchEntryRun(watchlist, entry.id, capturedAt);
       await mkdir(dirname(configPath), { recursive: true });
       await writeJsonAtomic(configPath, watchlist);
       process.stdout.write(`refreshed ${entry.id} -> ${directory}\n`);
+      const shouldNotify =
+        entry.notifications === "always" ||
+        (entry.notifications === "changes" && Boolean(change?.hasChanges));
+      if (shouldNotify) {
+        try {
+          await sendLocalNotification(
+            "FitLens watch updated",
+            watchNotificationMessage(entry.id, result, change),
+          );
+        } catch (notificationError) {
+          process.stderr.write(
+            `watch ${entry.id} notification unavailable: ${notificationError instanceof Error ? notificationError.message : "unknown error"}\n`,
+          );
+        }
+      }
     } catch (error) {
       failures += 1;
       process.stderr.write(

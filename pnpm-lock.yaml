@@ -61,6 +61,10 @@ importers:
       typescript:
         specifier: ^5.9.0
         version: 5.9.3
+    optionalDependencies:
+      playwright:
+        specifier: ^1.61.1
+        version: 1.61.1
 
 packages:
 
