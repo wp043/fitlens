@@ -52,6 +52,8 @@ configured model, validates the structured response, and returns it.
 | Candidate capture, filtering, archive, and shortlist interactions | `components/candidate-inbox.tsx` |
 | Pairwise trial editing and standings UI | `components/pairwise-trials.tsx` |
 | Public analysis endpoint and status codes | `app/api/analyze/route.ts` |
+| Loopback request, body-size, JSON, and in-flight policy | `lib/request-guard.ts` |
+| Production browser response policy | `lib/security-headers.ts`, `next.config.ts` |
 | Shared browser/CLI orchestration and source failure boundary | `lib/analysis-service.ts` |
 | Headless argument parsing and entry point | `lib/cli.ts`, `scripts/fitlens.ts` |
 | Watchlist validation, due scheduling, snapshot trends, and offline chart rendering | `lib/watchlist.ts` |
@@ -100,6 +102,7 @@ sequenceDiagram
 
     User->>UI: URLs, workflow, criteria, locale
     UI->>API: POST /api/analyze
+    API->>API: Verify loopback origin, JSON size, and an analysis slot
     API->>API: Parse request and provider config
     par Every candidate
         API->>Source: Collect source outcome
@@ -173,6 +176,29 @@ These are the contracts most likely to cause subtle errors if weakened:
 
 ## Security boundaries
 
+### Local analysis endpoint
+
+The Next.js process is a single-user loopback application, not a public API.
+The mutation route enforces that assumption before it spends a configured model
+key or fetches a submitted URL:
+
+- `Host` must be `localhost`, an IPv4 `127/8` address, or IPv6 `::1`.
+- `Origin` (or `Referer` when `Origin` is absent) must use the request scheme and
+  exactly match that loopback authority. Headerless and cross-origin POSTs fail
+  closed; no permissive CORS response is emitted.
+- The body must be `application/json`. Declared and streamed bytes are capped at
+  64 KB before schema validation.
+- At most two source/model analyses may be in flight in one process. A third
+  request receives `429` and `Retry-After`; slot release is guaranteed by the
+  route's `finally` block.
+- Production browser responses use CSP, frame denial, MIME-sniffing protection,
+  a no-referrer policy, same-origin opener/resource policies, and a restrictive
+  Permissions Policy. HSTS is intentionally absent because local use is HTTP.
+
+The counters are process-local and are not a distributed rate limiter. Binding
+the server to a non-loopback interface or placing it behind a proxy changes the
+trust model and is unsupported without real authentication and network policy.
+
 ### Remote source collection
 
 `lib/source.ts` treats every submitted URL and redirect target as hostile.
@@ -212,8 +238,17 @@ loopback. Provider errors are mapped to stable public codes without retaining
 upstream bodies, stack traces, or secret-bearing messages.
 
 The model sees the user's workflow, criteria, and collected public source
-material. It does not receive browser history, saved notes, trial results, or
-other reports.
+material. Collected page text, supplemental documents, repository metadata,
+and README content are serialized only under `UNTRUSTED_SOURCE_DATA`, separate
+from `TRUSTED_USER_REQUIREMENTS`. Provider instructions explicitly forbid those
+values from changing rules, scoring, candidate order, or the response schema,
+and adversarial tests keep embedded page commands out of the instruction
+channel. Structured output and cross-field validation remain the enforcement
+layer after generation. Prompt isolation reduces injection risk but cannot
+guarantee that every model will ignore every adversarial source.
+
+The model does not receive browser history, saved notes, trial results, or other
+reports.
 
 ### Browser boundary
 
@@ -249,9 +284,9 @@ to the original localStorage key.
 | --- | --- | --- |
 | Domain | `test/{scoring,evidence,confidence,conflicts,privacy,diff,freshness,pairwise,decision-profiles}.test.ts` | Deterministic decision logic and edge cases |
 | Portable data | `test/{report,redaction,research-library,persistence,candidate-inbox}.test.ts` | Migration, import safety, redaction, local indexing, and storage fallback |
-| External boundaries | `test/{source,source-adapters,source-diagnostics,model-provider,real-site-fixtures}.test.ts` | URL/DNS/redirect policy, source discovery, optional-page isolation, curated real response compatibility, public errors, and provider config without live calls |
+| External boundaries | `test/{source,source-adapters,source-diagnostics,model-provider,real-site-fixtures,request-guard,security-headers,analyzer}.test.ts` | URL/DNS/redirect policy, source discovery, prompt-data isolation, loopback request policy, production headers, curated response compatibility, public errors, and provider config without live calls |
 | Product contract | `test/{criteria,i18n}.test.ts` | Stable criteria and bilingual dictionary parity |
-| Browser contract | `e2e/workflows.spec.ts` | Candidate promotion, evidence review, WCAG scans, and the full-page visual baseline |
+| Browser contract | `e2e/{workflows,security}.spec.ts` | Candidate promotion, evidence review, local API rejection, response headers, WCAG scans, and the full-page visual baseline |
 | Build contract | `pnpm lint`, `pnpm exec tsc --noEmit`, `pnpm build` | Static correctness and production compilation |
 | Maintenance contract | `.github/workflows/ci.yml`, `.github/workflows/dependabot-maintenance.yml`, `.github/dependabot.yml` | Linux/macOS/Windows quality checks, Linux Chromium coverage and audits, author-and-SHA-verified minor/patch automation, and agent review for major updates |
 

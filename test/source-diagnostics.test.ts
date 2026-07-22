@@ -81,3 +81,11 @@ test("creates a stable localized response without collector details", () => {
   assert.equal(sourceFailureHttpStatus(failures), 502);
   assert.equal(sourceFailureHttpStatus([{ ...failures[0], code: "pageTooLarge" }]), 422);
 });
+
+test("rejects more candidates than the request schema's 8-URL ceiling ever allows through", async () => {
+  const urls = Array.from({ length: 9 }, (_, index) => `https://site-${index}.example/`);
+  await assert.rejects(
+    collectCandidateSources(urls, async (url) => source(url)),
+    RangeError,
+  );
+});
