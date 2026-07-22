@@ -24,6 +24,7 @@ const httpUrlSchema = z
   }, "Only HTTP and HTTPS URLs are allowed");
 
 const prioritySchema = z.record(z.string(), z.number().min(0).max(100));
+const sha256Schema = z.string().regex(/^sha256:[a-f0-9]{64}$/);
 
 const criterionSchema = z
   .object({
@@ -158,11 +159,12 @@ const analysisRunSchema = z.object({
   versions: z.object({
     prompt: z.string(), schema: z.string(), adapter: z.string(), replay: z.string(),
   }),
-  requestHash: z.string(),
+  requestHash: sha256Schema,
+  modelOutputHash: sha256Schema.optional(),
   sources: z.array(z.object({
     inputUrl: httpUrlSchema,
-    contentHash: z.string(),
-    documentHashes: z.array(z.object({ kind: z.string(), url: httpUrlSchema, contentHash: z.string() })),
+    contentHash: sha256Schema,
+    documentHashes: z.array(z.object({ kind: z.string(), url: httpUrlSchema, contentHash: sha256Schema })),
   })),
   timing: z.object({ startedAt: z.string(), finishedAt: z.string(), durationMs: z.number().min(0) }),
   failure: z.object({
@@ -206,7 +208,10 @@ const replayBundleSchema = z.object({
   }),
   sourceSnapshots: z.array(replaySourceSchema).min(2).max(8),
   modelOutput: z.unknown(),
-}).passthrough();
+}).passthrough().refine(
+  (bundle) => Boolean(bundle.manifest.modelOutputHash),
+  "Replay bundle manifest must include a model output hash",
+);
 
 const productSchema = z
   .object({

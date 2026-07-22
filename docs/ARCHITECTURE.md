@@ -184,14 +184,18 @@ These are the contracts most likely to cause subtle errors if weakened:
 
 Every completed live run carries a v1 manifest with stable prompt, response
 schema, source-adapter, and replay identifiers; provider kind/model; canonical
-SHA-256 hashes for the trusted request, source snapshots, and supplemental
-documents; and timing/status metadata. Failures expose only a stage and stable
+SHA-256 hashes for the trusted request, source snapshots, supplemental
+documents, and validated model output; and timing/status metadata. Provider
+identity and the model-output hash are part of the run ID, so two judgments
+over the same sources cannot alias. Failures expose only a stage and stable
 code. Credentials, endpoints, upstream payloads, and exception text are not
-part of this contract.
+part of this contract. Bundled samples and failed runs have no model-output
+hash and cannot be exported as replay bundles.
 
 A complete report may also contain a v1 replay bundle. It includes the parsed
 trusted request, bounded public source snapshots, and the already validated
-model output. `replayAnalysisBundle` verifies hashes and runs the same strict
+model output. `replayAnalysisBundle` verifies request, source, and model-output
+hashes before it runs the same strict
 parser, citation normalization, privacy calibration, and result finalizer used
 by a live run. This is a reproducibility tool, not a fresh research run: it
 cannot discover source changes or regenerate model judgments.

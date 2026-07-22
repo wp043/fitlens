@@ -22,6 +22,7 @@ const MAX_PAGE_TEXT = 120_000;
 const MAX_DOCUMENT_TEXT = 80_000;
 const MAX_REPOSITORY_TEXT = 120_000;
 const MAX_DOCUMENTS = 12;
+const sha256Schema = z.string().regex(/^sha256:[a-f0-9]{64}$/);
 
 function canonical(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
@@ -98,18 +99,30 @@ export function createRunManifest(options: {
   finishedAt: Date;
   status: "complete" | "failed";
   failure?: AnalysisRunFailure;
+  modelOutput?: unknown;
 }): AnalysisRunManifest {
   const snapshots = createSourceSnapshots(options.sources ?? []);
   const requestHash = contentHash(options.request);
   const sources = sourceManifest(snapshots);
-  const identity = contentHash({ requestHash, sources, versions: ANALYSIS_VERSIONS });
+  const modelOutputHash = options.modelOutput === undefined
+    ? undefined
+    : contentHash(options.modelOutput);
+  const provider = { kind: options.provider.kind, model: options.provider.model };
+  const identity = contentHash({
+    requestHash,
+    sources,
+    provider,
+    modelOutputHash,
+    versions: ANALYSIS_VERSIONS,
+  });
   return {
     schemaVersion: 1,
     runId: `run_${identity.slice("sha256:".length, "sha256:".length + 24)}`,
     status: options.status,
-    provider: { kind: options.provider.kind, model: options.provider.model },
+    provider,
     versions: { ...ANALYSIS_VERSIONS },
     requestHash,
+    ...(modelOutputHash ? { modelOutputHash } : {}),
     sources,
     timing: {
       startedAt: options.startedAt.toISOString(),
@@ -127,6 +140,12 @@ export function createReplayBundle(options: {
   manifest: AnalysisRunManifest;
   generatedAt?: string;
 }): AnalysisReplayBundle {
+  if (!options.manifest.modelOutputHash) {
+    throw new Error("replay_model_output_hash_missing");
+  }
+  if (contentHash(options.modelOutput) !== options.manifest.modelOutputHash) {
+    throw new Error("replay_model_output_hash_mismatch");
+  }
   return {
     schemaVersion: 1,
     createdAt: options.manifest.timing.finishedAt,
@@ -157,8 +176,9 @@ const manifestSchema = z.object({
   schemaVersion: z.literal(1), runId: z.string(), status: z.enum(["complete", "failed"]),
   provider: z.object({ kind: z.enum(["openai", "compatible", "bundled-sample", "replay"]), model: z.string() }).strict(),
   versions: z.object({ prompt: z.string(), schema: z.string(), adapter: z.string(), replay: z.string() }).strict(),
-  requestHash: z.string(),
-  sources: z.array(z.object({ inputUrl: z.string().url(), contentHash: z.string(), documentHashes: z.array(z.object({ kind: z.string(), url: z.string().url(), contentHash: z.string() }).strict()) }).strict()),
+  requestHash: sha256Schema,
+  modelOutputHash: sha256Schema.optional(),
+  sources: z.array(z.object({ inputUrl: z.string().url(), contentHash: sha256Schema, documentHashes: z.array(z.object({ kind: z.string(), url: z.string().url(), contentHash: sha256Schema }).strict()) }).strict()),
   timing: z.object({ startedAt: z.string(), finishedAt: z.string(), durationMs: z.number().min(0) }).strict(),
   failure: z.object({ stage: z.enum(["request", "source", "model", "finalize", "replay"]), code: z.string() }).strict().optional(),
 }).strict();
@@ -166,7 +186,10 @@ const replaySchema = z.object({
   schemaVersion: z.literal(1), createdAt: z.string(), generatedAt: z.string(), manifest: manifestSchema,
   trustedRequest: z.object({ urls: z.array(z.string().url()).min(2).max(8), context: z.string().max(20_000), criteria: z.array(criterionSchema).min(2).max(8), locale: z.enum(["zh-CN", "en"]) }).strict(),
   sourceSnapshots: z.array(sourceSchema).min(2).max(8), modelOutput: z.unknown(),
-}).strict();
+}).strict().refine(
+  (bundle) => Boolean(bundle.manifest.modelOutputHash),
+  "Replay bundle manifest must include a model output hash",
+);
 
 export function parseReplayBundle(input: string): AnalysisReplayBundle {
   return replaySchema.parse(JSON.parse(input)) as AnalysisReplayBundle;
@@ -181,6 +204,12 @@ export function replayAnalysisBundle(input: AnalysisReplayBundle): ComparisonRes
   const actualSources = sourceManifest(sources);
   if (contentHash(actualSources) !== contentHash(bundle.manifest.sources)) {
     throw new Error("replay_source_hash_mismatch");
+  }
+  if (!bundle.manifest.modelOutputHash) {
+    throw new Error("replay_model_output_hash_missing");
+  }
+  if (contentHash(bundle.modelOutput) !== bundle.manifest.modelOutputHash) {
+    throw new Error("replay_model_output_hash_mismatch");
   }
   const startedAt = new Date();
   const result = finalizeAnalysisResult(
@@ -199,6 +228,7 @@ export function replayAnalysisBundle(input: AnalysisReplayBundle): ComparisonRes
       startedAt,
       finishedAt,
       status: "complete",
+      modelOutput: bundle.modelOutput,
     }),
     replayBundle: bundle,
   };

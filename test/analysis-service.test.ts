@@ -24,6 +24,9 @@ test("returns the bundled comparison through the shared headless service", async
   );
   assert.equal(result.products.length, 2);
   assert.equal(result.dimensions.length, criteria.length);
+  assert.equal(result.analysisRun?.provider.kind, "bundled-sample");
+  assert.equal(result.analysisRun?.modelOutputHash, undefined);
+  assert.equal(result.replayBundle, undefined);
 });
 
 test("requires credentials for non-sample headless analysis", async () => {
@@ -124,5 +127,6 @@ test("failed analysis exposes only stable non-secret run metadata", async () => 
   assert.equal(manifest?.status, "failed");
   assert.equal(manifest?.failure?.stage, "source");
   assert.equal(manifest?.failure?.code, "candidate_source_collection_failed");
+  assert.equal(manifest?.modelOutputHash, undefined);
   assert.doesNotMatch(JSON.stringify(manifest), /super-secret|upstream body/);
 });

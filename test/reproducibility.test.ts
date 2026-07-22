@@ -75,6 +75,7 @@ function modelOutput() {
 function fixture() {
   const startedAt = new Date("2026-07-22T10:00:00.000Z");
   const finishedAt = new Date("2026-07-22T10:00:01.250Z");
+  const output = modelOutput();
   const manifest = createRunManifest({
     request,
     sources,
@@ -82,8 +83,9 @@ function fixture() {
     startedAt,
     finishedAt,
     status: "complete",
+    modelOutput: output,
   });
-  return createReplayBundle({ request, sources, modelOutput: modelOutput(), manifest });
+  return createReplayBundle({ request, sources, modelOutput: output, manifest });
 }
 
 test("canonical hashes and run identity are deterministic", () => {
@@ -94,6 +96,35 @@ test("canonical hashes and run identity are deterministic", () => {
   assert.deepEqual(first.manifest.sources, second.manifest.sources);
   assert.equal(first.manifest.timing.durationMs, 1_250);
   assert.doesNotMatch(JSON.stringify(first.manifest), /api[_-]?key|secret/i);
+});
+
+test("provider, model, and validated output are part of run identity", () => {
+  const common = {
+    request,
+    sources,
+    startedAt: new Date("2026-07-22T10:00:00.000Z"),
+    finishedAt: new Date("2026-07-22T10:00:01.250Z"),
+    status: "complete" as const,
+  };
+  const output = modelOutput();
+  const openai = createRunManifest({
+    ...common, provider: { kind: "openai", model: "model-a" }, modelOutput: output,
+  });
+  const compatible = createRunManifest({
+    ...common, provider: { kind: "compatible", model: "model-a" }, modelOutput: output,
+  });
+  const otherModel = createRunManifest({
+    ...common, provider: { kind: "openai", model: "model-b" }, modelOutput: output,
+  });
+  const changedOutput = createRunManifest({
+    ...common,
+    provider: { kind: "openai", model: "model-a" },
+    modelOutput: { ...output, title: `${output.title} changed` },
+  });
+  assert.equal(openai.modelOutputHash, contentHash(output));
+  assert.notEqual(openai.runId, compatible.runId);
+  assert.notEqual(openai.runId, otherModel.runId);
+  assert.notEqual(openai.runId, changedOutput.runId);
 });
 
 test("offline replay verifies sources and returns stable decision data", () => {
@@ -115,6 +146,24 @@ test("offline replay rejects a source snapshot changed after capture", () => {
   const bundle = fixture();
   bundle.sourceSnapshots[0].pageText += " tampered";
   assert.throws(() => replayAnalysisBundle(bundle), /replay_source_hash_mismatch/);
+});
+
+test("offline replay rejects a changed validated model payload", () => {
+  const bundle = fixture();
+  (bundle.modelOutput as { title: string }).title += " tampered";
+  assert.throws(
+    () => replayAnalysisBundle(bundle),
+    /replay_model_output_hash_mismatch/,
+  );
+});
+
+test("replay schema requires model-output integrity metadata", () => {
+  const bundle = fixture();
+  delete bundle.manifest.modelOutputHash;
+  assert.throws(
+    () => parseReplayBundle(JSON.stringify(bundle)),
+    /model output hash/i,
+  );
 });
 
 test("share-safe reports remove replay context and source snapshots", () => {

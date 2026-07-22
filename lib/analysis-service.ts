@@ -129,6 +129,7 @@ export async function runAnalysis(
     startedAt,
     finishedAt,
     status: "complete",
+    modelOutput,
   });
   return {
     ...result,

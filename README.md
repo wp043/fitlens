@@ -256,8 +256,9 @@ pnpm fitlens replay \
   --output replayed.md
 ```
 
-Replay verifies the request and source hashes, then reruns the same structured
-parser and deterministic result finalizer. It reproduces the captured decision;
+Replay verifies the request, source, and validated model-output hashes, then
+reruns the same structured parser and deterministic result finalizer. Provider,
+model, and output identity are bound into the run ID. It reproduces the captured decision;
 it does not refresh evidence or ask the model for a new judgment. Replay files
 include your workflow context and public page snapshots, so treat them as
 private complete backups rather than share-safe exports.
