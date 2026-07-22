@@ -196,7 +196,9 @@ export async function requestStructuredOutput<TSchema extends z.ZodTypeAny>(
         format: zodTextFormat(options.schema, options.schemaName),
       },
     });
-    return response.output_parsed;
+    return response.output_parsed === null
+      ? null
+      : options.schema.parse(response.output_parsed);
   } catch (error) {
     throw new ModelProviderRequestError(normalizeProviderError(error));
   }

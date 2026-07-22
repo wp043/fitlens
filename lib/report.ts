@@ -23,7 +23,7 @@ const httpUrlSchema = z
     return protocol === "http:" || protocol === "https:";
   }, "Only HTTP and HTTPS URLs are allowed");
 
-const prioritySchema = z.record(z.number().min(0).max(100));
+const prioritySchema = z.record(z.string(), z.number().min(0).max(100));
 
 const criterionSchema = z
   .object({
@@ -184,7 +184,7 @@ const resultSchema = z
           key: z.string(),
           label: z.string(),
           weight: z.number(),
-          productScores: z.record(z.number()),
+          productScores: z.record(z.string(), z.number()),
           winner: z.string(),
           explanation: z.string(),
         })
