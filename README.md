@@ -56,7 +56,7 @@ refresh, and export.
 | **Reuse how you decide** | Save complete decision profiles with workflow context and criteria, then apply them to the next product category. |
 | **Keep the messy parts visible** | Pricing uncertainty, missing disclosures, conflicting claims, and source failures stay explicit instead of being smoothed into a confident answer. |
 | **Build a local research memory** | Search and filter up to 50 saved reports. Reopen a decision, reuse its inputs, add manual evidence, refresh sources, and review deterministic diffs. |
-| **Share without oversharing** | Export full Markdown/JSON for yourself or create a share-safe copy that removes private context, notes, trials, revisions, and manual evidence. |
+| **Keep a durable decision record** | Export JSON, Markdown, self-contained HTML, an ADR, or a print-optimized PDF; share-safe copies remove private context, notes, trials, revisions, and manual evidence. |
 
 ## Quick start
 
@@ -157,7 +157,8 @@ newer and better supported.
   recommendation, unknown, or note.
 - Capture links in a separate local candidate inbox, deduplicate tracking URLs,
   and build a shortlist only when the comparison is worth running.
-- Export complete Markdown/JSON backups or share-safe copies for someone else.
+- Export complete JSON/Markdown backups, offline HTML, architecture decision
+  records, print/PDF artifacts, or share-safe copies for someone else.
 
 Portable reports are versioned and validated on import. Existing v1, v2, and v3
 reports remain compatible with the current dynamic shortlist and criteria
@@ -303,6 +304,7 @@ lib/
   analysis-service   shared browser and headless orchestration
   cli                deterministic command parsing and help
   markdown-report    portable headless Markdown rendering
+  durable-exports    escaped offline HTML and ADR rendering
   watchlist          schedule validation, due selection, and snapshot naming
   scoring            deterministic preference weighting
   confidence         deterministic evidence confidence
@@ -346,8 +348,8 @@ diagnostics, and URL/DNS/redirect safety without requiring live network calls.
 - Watchlists require an external local scheduler such as cron or launchd; the
   browser does not claim to run reliable background jobs while it is closed.
 
-The highest-value next step is richer HTML, ADR, and PDF exports for durable
-decision records outside FitLens.
+The highest-value next step is browser-level E2E, accessibility, and visual
+regression coverage plus automated dependency maintenance.
 
 ## License
 

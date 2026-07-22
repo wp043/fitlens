@@ -32,6 +32,7 @@ import {
 } from "@/lib/confidence";
 import { calculateWeightedWinner } from "@/lib/scoring";
 import { createRedactedReport } from "@/lib/redaction";
+import { reportToAdr, reportToHtml } from "@/lib/durable-exports";
 import { CandidateInbox } from "@/components/candidate-inbox";
 import { PairwiseTrials } from "@/components/pairwise-trials";
 import {
@@ -999,6 +1000,55 @@ export function CompareWorkbench({
     anchor.download = `${safeFilename(report.title)}.fitlens.json`;
     anchor.click();
     URL.revokeObjectURL(url);
+  }
+
+  function downloadArtifact(content: string, filename: string, type: string) {
+    const url = URL.createObjectURL(new Blob([content], { type }));
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = filename;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function exportHtml() {
+    const report = currentPortableReport();
+    if (!report) return;
+    downloadArtifact(
+      reportToHtml(report),
+      `${safeFilename(report.title)}.html`,
+      "text/html;charset=utf-8",
+    );
+  }
+
+  function exportAdr() {
+    const report = currentPortableReport();
+    if (!report) return;
+    downloadArtifact(
+      reportToAdr(report),
+      `${safeFilename(report.title)}.adr.md`,
+      "text/markdown;charset=utf-8",
+    );
+  }
+
+  function exportPdf() {
+    const report = currentPortableReport();
+    if (!report) return;
+    const url = URL.createObjectURL(
+      new Blob([reportToHtml(report)], { type: "text/html;charset=utf-8" }),
+    );
+    const frame = document.createElement("iframe");
+    frame.hidden = true;
+    frame.src = url;
+    frame.onload = () => {
+      frame.contentWindow?.focus();
+      frame.contentWindow?.print();
+      window.setTimeout(() => {
+        frame.remove();
+        URL.revokeObjectURL(url);
+      }, 1_000);
+    };
+    document.body.appendChild(frame);
   }
 
   function exportRedactedMarkdown() {
@@ -2012,6 +2062,9 @@ export function CompareWorkbench({
             </button>
             <button onClick={exportMarkdown}>{t.exportMarkdown}</button>
             <button onClick={exportJson}>{t.exportJson}</button>
+            <button onClick={exportHtml}>{t.exportHtml}</button>
+            <button onClick={exportAdr}>{t.exportAdr}</button>
+            <button onClick={exportPdf}>{t.exportPdf}</button>
             <details className="share-menu">
               <summary>{t.shareSafeCopy}</summary>
               <div>

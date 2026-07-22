@@ -126,6 +126,9 @@ const zh = {
   copyBrief: "复制摘要",
   exportMarkdown: "导出 .md",
   exportJson: "导出 JSON",
+  exportHtml: "导出 HTML",
+  exportAdr: "导出 ADR",
+  exportPdf: "打印 / PDF",
   shareSafeCopy: "分享安全副本",
   shareSafeTitle: "已移除私人研究内容",
   shareSafeCopyDetail:
@@ -467,6 +470,9 @@ const en: Record<MessageKey, string> = {
   copyBrief: "Copy brief",
   exportMarkdown: "Export .md",
   exportJson: "Export JSON",
+  exportHtml: "Export HTML",
+  exportAdr: "Export ADR",
+  exportPdf: "Print / PDF",
   shareSafeCopy: "Share safe copy",
   shareSafeTitle: "Private research removed",
   shareSafeCopyDetail:

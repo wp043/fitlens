@@ -74,6 +74,7 @@ configured model, validates the structured response, and returns it.
 | Privacy risk calibration | `lib/privacy.ts` |
 | Report-to-report change calculation | `lib/diff.ts` |
 | Share-safe projection | `lib/redaction.ts` |
+| Escaped offline HTML and ADR generation | `lib/durable-exports.ts` |
 | Portable schemas, migrations, and evidence coverage | `lib/report.ts` |
 | Local search index, summaries, and facets | `lib/research-library.ts` |
 | Shared data contracts | `lib/types.ts` |
@@ -220,6 +221,7 @@ for a local single-user tool, not a shared hosted application.
 | API key in `sessionStorage` | Workbench | Current-tab model key override |
 | `.env.local` | Local Next.js server | Provider, model, API key, optional GitHub token |
 | Exported `.json` / `.md` | User | Portable backup or share-safe report |
+| Exported `.html` / `.adr.md` / printed PDF | User | Durable offline decision artifacts |
 | `.fitlens/snapshots/<watch-id>/` | CLI watch runner | Immutable timestamped results and `latest.json` |
 
 Browser history deliberately keeps its existing storage key. Schema migration
