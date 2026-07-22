@@ -58,10 +58,11 @@ refresh, and export.
 | **Keep the messy parts visible** | Pricing uncertainty, missing disclosures, conflicting claims, and source failures stay explicit instead of being smoothed into a confident answer. |
 | **Build a local research memory** | Search and filter up to 50 saved reports. Reopen a decision, reuse its inputs, add manual evidence, refresh sources, and review deterministic diffs. |
 | **Keep a durable decision record** | Export JSON, Markdown, self-contained HTML, an ADR, or a print-optimized PDF; share-safe copies remove private context, notes, trials, revisions, and manual evidence. |
+| **Replay a decision offline** | Every live run records non-secret version/hash provenance. A private bounded replay bundle can rerun validation and deterministic finalization without fetching sources or paying for another model call. |
 
 ## Quick start
 
-Requires Node.js 20.9+, pnpm 10, and an API key for live analysis.
+Requires Node.js 20.18.1+, pnpm 10, and an API key for live analysis.
 
 ```bash
 git clone https://github.com/wp043/fitlens.git
@@ -97,6 +98,26 @@ responses, and excessive request counts; scripts and data requests are fetched
 through the same public-address and redirect policy as the static collector.
 If rendering is unavailable or produces less content, FitLens keeps the static
 result.
+
+### Local diagnostics
+
+Run the cross-platform preflight before reporting an environment problem:
+
+```bash
+pnpm fitlens doctor
+pnpm fitlens doctor --check-playwright
+pnpm fitlens doctor --json --output .fitlens/doctor.json
+```
+
+Doctor checks the supported Node and pnpm versions, the checkout, and model
+provider configuration. Playwright/Chromium readiness is opt-in because the
+browser renderer is optional. A live provider check is also opt-in with
+`--probe-provider`; it makes one five-second `GET /models` request, records only
+the result status, and never stores a credential or response body. Diagnostic
+objects are redacted again before printing or writing: known secret environment
+values, bearer tokens, key-like fields, URL credentials, and the home directory
+are removed. Review any bundle before sharing it, as with every diagnostic
+artifact. See [Troubleshooting](docs/TROUBLESHOOTING.md) for symptom-based fixes.
 
 ## How a decision works
 
@@ -177,9 +198,10 @@ newer and better supported.
 - Export complete JSON/Markdown backups, offline HTML, architecture decision
   records, print/PDF artifacts, or share-safe copies for someone else.
 
-Portable reports are versioned and validated on import. Existing v1, v2, and v3
-reports remain compatible with the current dynamic shortlist and criteria
-models.
+Portable reports are versioned and validated on import. Current complete exports
+use v4; existing v1, v2, and v3 reports remain importable. Complete JSON may
+contain the private decision context and replay snapshots. Share-safe JSON and
+Markdown remove that material while retaining non-secret run provenance.
 
 ## Model providers
 
@@ -198,7 +220,9 @@ FITLENS_MODEL_API_KEY=
 
 Remote compatible endpoints must use HTTPS. Plain HTTP is allowed only for
 loopback addresses. Base URLs containing credentials, query parameters, or
-fragments are rejected, and provider configuration never enters saved reports.
+fragments are rejected. Credentials and provider endpoints never enter saved
+reports; only the non-secret provider kind and model identifier are retained as
+run provenance.
 
 ## CLI and headless use
 
@@ -220,6 +244,24 @@ context.txt` for longer workflows, or `pnpm fitlens --help` for the complete
 command reference. Built-in `general`, `developer-tools`, `privacy-first`, and
 `daily-use` templates are available through `--template`; JSON is the default
 stdout format for scripts.
+
+Live JSON output includes a versioned run manifest and, when real sources were
+collected, a bounded replay bundle. Save or export that bundle and replay it
+later with no network or provider access:
+
+```bash
+pnpm fitlens replay \
+  --bundle comparison.fitlens-replay.json \
+  --format markdown \
+  --output replayed.md
+```
+
+Replay verifies the request, source, and validated model-output hashes, then
+reruns the same structured parser and deterministic result finalizer. Provider,
+model, and output identity are bound into the run ID. It reproduces the captured decision;
+it does not refresh evidence or ask the model for a new judgment. Replay files
+include your workflow context and public page snapshots, so treat them as
+private complete backups rather than share-safe exports.
 
 ### Watchlists and snapshots
 
@@ -278,6 +320,19 @@ cross-origin redirects, restricts content types, and caps streamed response
 size. This is application-layer SSRF hardening, not a network sandbox; do not
 expose FitLens as a public URL-fetching service.
 
+The browser API is intentionally loopback-only. `/api/analyze` accepts only a
+matching loopback `Host` and `Origin`/`Referer`, requires JSON, streams at most
+64 KB per request, and runs no more than two source/model analyses at once.
+Production responses add CSP, framing, MIME-sniffing, referrer, cross-origin,
+and browser-capability restrictions. These controls protect a local server from
+ambient browser requests; they are not authentication for a hosted service.
+
+Collected pages, documents, repository metadata, and README text are placed in
+an explicit untrusted-data envelope for the model. Provider instructions say
+that embedded commands cannot change scoring, candidate order, rules, or the
+output schema. Adversarial fixtures test that separation, but model prompt
+isolation remains defense in depth rather than a mathematical guarantee.
+
 See [Architecture](docs/ARCHITECTURE.md#security-boundaries) for the exact trust
 boundaries and invariants.
 
@@ -314,8 +369,10 @@ app/
   examples/          bundled no-key comparison
 scripts/
   fitlens             headless CLI entry point
+  performance-*       deterministic budget contract, fixtures, and local soak
 components/
-  compare-workbench  local interactive research workspace
+  compare-workbench  stateful research coordinator
+  comparison-*       builder, report, product, and follow-up presentation owners
   candidate-inbox    quick capture, filtering, archive, and shortlist UI
   pairwise-trials    head-to-head trial capture and standings UI
 lib/
@@ -324,6 +381,8 @@ lib/
   model-provider     provider configuration and structured Responses adapter
   analyzer           prompt, response schema, and cross-field validation
   analysis-service   shared browser and headless orchestration
+  request-guard      loopback origin, body-size, media-type, and concurrency policy
+  security-headers   production browser response policy
   cli                deterministic command parsing and help
   markdown-report    portable headless Markdown rendering
   durable-exports    escaped offline HTML and ADR rendering
@@ -339,6 +398,7 @@ lib/
   pairwise           deterministic trial standings
   persistence        IndexedDB adapter and safe localStorage migration
   research-library   local search index and facets
+  workbench-state    pure draft readiness, criteria, and candidate-list transitions
 test/                 deterministic domain and security tests
   fixtures/real-sites curated offline compatibility snapshots
 e2e/                  browser workflows, accessibility, and visual baseline
@@ -349,18 +409,40 @@ docs/                 architecture and worked product research
 
 ## Development
 
+Analysis cancellation, retry policy, concurrency/time budgets, and the
+privacy-safe public-source cache are documented in
+[`docs/RESILIENT-JOBS.md`](docs/RESILIENT-JOBS.md).
+
 ```bash
 pnpm check
+pnpm test:performance
+pnpm test:soak -- --iterations 500
+pnpm test:production
 pnpm exec playwright install chromium
 pnpm test:e2e
 pnpm audit --prod
 ```
 
-`pnpm check` runs the fast deterministic tests, ESLint, TypeScript, and the
-production build. Run those parts individually when iterating:
+`pnpm check` runs the fast deterministic tests, bounded performance contract,
+focused workflow coverage,
+the production file-size ratchet, ESLint, TypeScript, and the production build.
+See [Code-health ratchets](docs/CODE_HEALTH.md) for the 500-line default,
+explicit legacy baselines, coverage thresholds, and update procedure.
+The separate pure-workflow soak repeats migrations, replay validation, diffs,
+watch trends, cache churn, and candidate mutations with explicit-GC heap
+diagnostics. It requires no network or API key. See
+[Performance contracts and soak testing](docs/PERFORMANCE.md) for exact budgets,
+failure meanings, CI schedule, and limitations.
+`pnpm test:production` independently builds the application,
+starts that exact artifact with `next start`, and exercises local pages,
+production headers, and the guarded analysis endpoint without provider or
+public-network access. Run those parts individually when iterating:
 
 ```bash
 pnpm test
+pnpm test:performance
+pnpm test:coverage-ratchet
+pnpm check:code-health
 pnpm lint
 pnpm exec tsc --noEmit
 pnpm build
@@ -368,13 +450,16 @@ pnpm build
 
 The test suite covers scoring, report migration, i18n parity, confidence,
 conflicts, privacy, redaction, research search, provider configuration, source
-diagnostics, and URL/DNS/redirect safety without requiring live network calls.
+diagnostics, prompt isolation, local request guards, production headers, and
+URL/DNS/redirect safety without requiring live network calls.
 Curated npm, PyPI, App Store, Chrome Web Store, cmux, and Otty snapshots keep
 real public response shapes under regression coverage without making CI depend
 on third-party availability.
-Playwright covers candidate capture, evidence review, automated WCAG checks,
-and platform-specific full-page visual contracts. GitHub Actions runs the core
-quality gate on Linux, macOS, and Windows, with browser contracts and production
+Playwright covers candidate capture, evidence review, local API rejection,
+browser security headers, automated WCAG checks, and platform-specific
+full-page visual contracts. GitHub Actions runs the core
+quality gate on Linux, macOS, and Windows, with browser contracts, a hermetic
+production-artifact harness, and production
 dependency auditing on Linux. Dependabot keeps pnpm and workflow dependencies
 visible. A privileged follow-up workflow never checks out dependency-PR code;
 it verifies the Dependabot author and tested head SHA through the GitHub API,
@@ -396,6 +481,8 @@ updates and persistent failures remain open with an agent-review label.
   output used by FitLens.
 - Watchlists require an external local scheduler such as cron or launchd; the
   browser does not claim to run reliable background jobs while it is closed.
+- Provider endpoint probing is diagnostic only; it verifies `/models` reachability
+  but does not prove that the configured model supports FitLens structured output.
 
 Further extensions should preserve the local-first boundary. A useful direction
 is richer trend visualization across watch snapshots.

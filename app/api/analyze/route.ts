@@ -19,14 +19,36 @@ import {
   MissingModelCredentialsError,
   runAnalysis,
 } from "@/lib/analysis-service";
+import {
+  acquireAnalysisSlot,
+  isTrustedOrigin,
+  MAX_ANALYZE_BODY_BYTES,
+  readBoundedJson,
+  RequestGuardError,
+} from "@/lib/request-guard";
+import { runManifestFromError } from "@/lib/reproducibility";
+import {
+  AnalysisBudgetExceededError,
+  AnalysisCancelledError,
+} from "@/lib/job-control";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
 export async function POST(request: Request) {
   let locale: Locale = "zh-CN";
+  let releaseAnalysisSlot: (() => void) | undefined;
   try {
-    const input = (await request.json()) as Record<string, unknown>;
+    if (!isTrustedOrigin(request)) {
+      return NextResponse.json(
+        { error: messages[locale].crossOriginRejected },
+        { status: 403 },
+      );
+    }
+    const input = (await readBoundedJson(
+      request,
+      MAX_ANALYZE_BODY_BYTES,
+    )) as Record<string, unknown>;
     locale = normalizeLocale(
       typeof input.locale === "string" ? input.locale : "zh-CN",
     );
@@ -43,24 +65,51 @@ export async function POST(request: Request) {
         { status: 400 },
       );
     }
+    releaseAnalysisSlot = acquireAnalysisSlot() ?? undefined;
+    if (!releaseAnalysisSlot) {
+      return NextResponse.json(
+        { error: t.analysisBusy },
+        { status: 429, headers: { "retry-after": "5" } },
+      );
+    }
     const result = await runAnalysis(input, {
       env: process.env,
       sessionApiKey,
+      signal: request.signal,
     });
     return NextResponse.json(result);
   } catch (error) {
     const t = messages[locale];
+    const analysisRun = runManifestFromError(error);
+    if (error instanceof AnalysisCancelledError || request.signal.aborted) {
+      return NextResponse.json(
+        { error: t.analysisCancelled, analysisRun },
+        { status: 499 },
+      );
+    }
+    if (error instanceof AnalysisBudgetExceededError) {
+      return NextResponse.json(
+        { error: t.analysisTimedOut, analysisRun },
+        { status: 504 },
+      );
+    }
     if (error instanceof MissingModelCredentialsError) {
-      return NextResponse.json({ error: t.missingKey }, { status: 503 });
+      return NextResponse.json({ error: t.missingKey, analysisRun }, { status: 503 });
     }
     if (error instanceof CandidateSourceCollectionError) {
       return NextResponse.json(
-        createSourceFailureResponse(
+        { ...createSourceFailureResponse(
           error.failures,
           t.sourceCollectionFailed,
           (code) => t[code],
-        ),
+        ), analysisRun },
         { status: sourceFailureHttpStatus(error.failures) },
+      );
+    }
+    if (error instanceof RequestGuardError) {
+      return NextResponse.json(
+        { error: t[error.code] },
+        { status: error.status },
       );
     }
     const message =
@@ -74,6 +123,8 @@ export async function POST(request: Request) {
         : error instanceof Error
           ? error.message
           : t.genericFailure;
-    return NextResponse.json({ error: message }, { status: 400 });
+    return NextResponse.json({ error: message, analysisRun }, { status: 400 });
+  } finally {
+    releaseAnalysisSlot?.();
   }
 }

@@ -1,10 +1,8 @@
 "use client";
-
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  calculateEvidenceCoverage,
-  normalizeSavedReport,
+  MAX_REPORT_REVISIONS,
   parseReport,
   serializeReport,
   type SavedReport,
@@ -14,7 +12,7 @@ import {
   normalizeLocale,
   type Locale,
 } from "@/lib/i18n";
-import { examplePriorities, sampleComparisonForLocale } from "@/lib/sample";
+import { sampleComparisonForLocale } from "@/lib/sample";
 import {
   cloneCriteria,
   criteriaToWeights,
@@ -23,25 +21,20 @@ import {
 } from "@/lib/criteria";
 import { compareResults, type ComparisonDiff } from "@/lib/diff";
 import { mergeManualEvidence } from "@/lib/evidence";
-import { calculateEvidenceFreshness } from "@/lib/freshness";
 import { calibrateComparisonConfidence } from "@/lib/confidence";
 import { calculateWeightedWinner } from "@/lib/scoring";
 import { createRedactedReport } from "@/lib/redaction";
+import { serializeReplayBundle } from "@/lib/reproducibility";
 import { reportToAdr, reportToHtml } from "@/lib/durable-exports";
 import { CandidateInbox } from "@/components/candidate-inbox";
-import { PairwiseTrials } from "@/components/pairwise-trials";
-import { BrandMark, SourcePill } from "@/components/workbench-primitives";
+import { BrandMark } from "@/components/workbench-primitives";
+import { ComparisonProductCard } from "@/components/comparison-product-card";
+import { ComparisonFollowup } from "@/components/comparison-followup";
+import { ComparisonReportSummary } from "@/components/comparison-report-summary";
+import { ComparisonBuilderEditor } from "@/components/comparison-builder-editor";
 import { ResearchLibraryPanel } from "@/components/research-library-panel";
 import {
-  cadenceLabel,
   comparisonAsMarkdown,
-  confidenceBandLabel,
-  confidenceFactorLabel,
-  conflictTopicLabel,
-  formatDelta,
-  privacyCategoryLabel,
-  privacyRiskLabel,
-  privacyStatusLabel,
   safeFilename,
 } from "@/components/compare-workbench-format";
 import {
@@ -66,31 +59,20 @@ import type {
   ComparisonResult,
   Evidence,
   EvidenceLevel,
-  EvidenceReviewStatus,
   TrialResult,
   PairwiseTrialResult,
-  TrialStatus,
   PriorityWeights,
 } from "@/lib/types";
-import type { SourceErrorCode } from "@/lib/source";
-
-interface SourceFailure {
-  index: number;
-  url: string;
-  code: SourceErrorCode;
-  message: string;
-}
-
-const sourceErrorCodes = new Set<SourceErrorCode>([
-  "invalidUrl",
-  "httpOnly",
-  "credentialsNotAllowed",
-  "privateNetwork",
-  "fetchFailed",
-  "unsupportedContentType",
-  "pageTooLarge",
-  "githubFailed",
-]);
+import {
+  MAX_SAVED_REPORTS,
+  canAnalyzeDraft,
+  initialWorkbenchCriteria,
+  isSourceFailure,
+  moveCandidate,
+  normalizeReportHistory,
+  removeCandidate,
+  type SourceFailure,
+} from "@/lib/workbench-state";
 
 class SourceCollectionRequestError extends Error {
   readonly failures: SourceFailure[];
@@ -100,16 +82,6 @@ class SourceCollectionRequestError extends Error {
     this.name = "SourceCollectionRequestError";
     this.failures = failures;
   }
-}
-
-function isSourceFailure(value: unknown): value is SourceFailure {
-  if (!value || typeof value !== "object") return false;
-  const candidate = value as Record<string, unknown>;
-  return Number.isInteger(candidate.index) &&
-    typeof candidate.url === "string" &&
-    typeof candidate.code === "string" &&
-    sourceErrorCodes.has(candidate.code as SourceErrorCode) &&
-    typeof candidate.message === "string";
 }
 
 interface LegacyPreferenceProfile {
@@ -125,36 +97,6 @@ const criteriaTemplatesKey = "fitlens-criteria-templates-v1";
 const localeKey = "fitlens-locale-v1";
 const candidateInboxKey = "fitlens-candidate-inbox-v1";
 const decisionProfilesKey = "fitlens-decision-profiles-v1";
-
-const maxSavedReports = 50;
-const maxRevisions = 5;
-
-function normalizeReportHistory(input: unknown) {
-  if (!Array.isArray(input)) return [];
-  return input
-    .map((report) => {
-      try {
-        return normalizeSavedReport(report);
-      } catch {
-        return undefined;
-      }
-    })
-    .filter((report): report is SavedReport => Boolean(report));
-}
-
-function initialCriteria(exampleMode: boolean, locale: Locale) {
-  const templates = getBuiltInCriteriaTemplates(locale);
-  const template = templates.find(
-    (item) => item.id === (exampleMode ? "developer-tools" : "general"),
-  )!;
-  return template.criteria.map((criterion) => ({
-    ...criterion,
-    weight: exampleMode
-      ? (examplePriorities[criterion.key] ?? criterion.weight)
-      : criterion.weight,
-  }));
-}
-
 
 interface CompareWorkbenchProps {
   exampleMode?: boolean;
@@ -187,7 +129,7 @@ export function CompareWorkbench({
       : "",
   );
   const [criteria, setCriteria] = useState<ComparisonCriterion[]>(
-    initialCriteria(exampleMode, "zh-CN"),
+    initialWorkbenchCriteria(exampleMode, "zh-CN"),
   );
   const priorities = useMemo(() => criteriaToWeights(criteria), [criteria]);
   const [activeTemplateId, setActiveTemplateId] = useState(
@@ -197,9 +139,13 @@ export function CompareWorkbench({
     initialResult,
   );
   const [status, setStatus] = useState<
-    "idle" | "loading" | "refreshing" | "error"
+    "idle" | "loading" | "refreshing" | "cancelling" | "error"
   >("idle");
+  const [analysisProgress, setAnalysisProgress] = useState("");
+  const analysisAbortRef = useRef<AbortController | undefined>(undefined);
   const [error, setError] = useState("");
+
+  useEffect(() => () => analysisAbortRef.current?.abort(), []);
   const [sourceFailures, setSourceFailures] = useState<SourceFailure[]>([]);
   const [sourceRetryMode, setSourceRetryMode] = useState<"analyze" | "refresh">(
     "analyze",
@@ -314,9 +260,9 @@ export function CompareWorkbench({
             setConflicts(
               detectEvidenceConflicts(sampleComparisonForLocale(nextLocale)),
             );
-            setCriteria(initialCriteria(true, nextLocale));
+            setCriteria(initialWorkbenchCriteria(true, nextLocale));
           } else {
-            setCriteria(initialCriteria(false, nextLocale));
+            setCriteria(initialWorkbenchCriteria(false, nextLocale));
           }
         } catch {
           // A malformed or unavailable local store should never block comparing.
@@ -352,7 +298,7 @@ export function CompareWorkbench({
       setConflicts(
         detectEvidenceConflicts(sampleComparisonForLocale(nextLocale)),
       );
-      setCriteria(initialCriteria(true, nextLocale));
+      setCriteria(initialWorkbenchCriteria(true, nextLocale));
     }
   }
 
@@ -376,19 +322,9 @@ export function CompareWorkbench({
   const currentWinner = result?.products.find(
     (product) => product.name === weightedWinner,
   );
-  const canAnalyze =
-    urls.length >= 2 &&
-    urls.length <= 8 &&
-    urls.every((url) => url.trim().length > 0) &&
-    context.trim().length >= 10 &&
-    criteria.length >= 2 &&
-    criteria.length <= 8 &&
-    criteria.every(
-      (criterion) =>
-        criterion.label.trim().length > 0 && criterion.key.trim().length > 0,
-    );
+  const canAnalyze = canAnalyzeDraft(urls, context, criteria);
 
-  async function requestAnalysis() {
+  async function requestAnalysis(signal: AbortSignal) {
     const response = await fetch("/api/analyze", {
       method: "POST",
       headers: {
@@ -403,6 +339,7 @@ export function CompareWorkbench({
         criteria: cloneCriteria(criteria),
         locale,
       }),
+      signal,
     });
     const payload = await response.json() as Record<string, unknown>;
     if (!response.ok) {
@@ -444,44 +381,31 @@ export function CompareWorkbench({
   }
 
   function removeProductUrl(index: number) {
-    if (urls.length <= 2) return;
-    setUrls((current) => current.filter((_, candidate) => candidate !== index));
-    setSourceFailures((current) =>
-      current
-        .filter((failure) => failure.index !== index)
-        .map((failure) => ({
-          ...failure,
-          index: failure.index > index ? failure.index - 1 : failure.index,
-        })),
-    );
+    const next = removeCandidate(urls, sourceFailures, index);
+    setUrls(next.urls);
+    setSourceFailures(next.failures);
   }
 
   function moveProductUrl(index: number, offset: -1 | 1) {
-    const target = index + offset;
-    if (target < 0 || target >= urls.length) return;
-    setUrls((current) => {
-      const next = [...current];
-      [next[index], next[target]] = [next[target], next[index]];
-      return next;
-    });
-    setSourceFailures((current) =>
-      current.map((failure) => ({
-        ...failure,
-        index:
-          failure.index === index
-            ? target
-            : failure.index === target
-              ? index
-              : failure.index,
-      })),
-    );
+    const next = moveCandidate(urls, sourceFailures, index, offset);
+    setUrls(next.urls);
+    setSourceFailures(next.failures);
   }
 
   async function analyze() {
+    const controller = new AbortController();
+    analysisAbortRef.current = controller;
     setStatus("loading");
+    setAnalysisProgress(t.progressSource);
     setError("");
     try {
-      const payload = await requestAnalysis();
+      const progressTimer = window.setTimeout(
+        () => setAnalysisProgress(t.progressModel),
+        1_500,
+      );
+      const payload = await requestAnalysis(controller.signal).finally(() =>
+        clearTimeout(progressTimer),
+      );
       const detectedConflicts = detectEvidenceConflicts(payload);
       setResult(payload);
       setSourceFailures([]);
@@ -515,7 +439,7 @@ export function CompareWorkbench({
           detectedConflicts,
         ),
       };
-      const nextHistory = [saved, ...history].slice(0, maxSavedReports);
+      const nextHistory = [saved, ...history].slice(0, MAX_SAVED_REPORTS);
       setHistory(nextHistory);
       setCurrentReportId(saved.id);
       setNotes("");
@@ -529,17 +453,36 @@ export function CompareWorkbench({
         50,
       );
     } catch (caught) {
-      handleAnalysisError(caught, "analyze", t.analyzeFailed);
+      handleAnalysisError(
+        controller.signal.aborted ? new Error(t.analysisCancelled) : caught,
+        "analyze",
+        t.analyzeFailed,
+      );
+    } finally {
+      if (analysisAbortRef.current === controller) {
+        analysisAbortRef.current = undefined;
+      }
+      setAnalysisProgress("");
     }
   }
 
   async function refreshAnalysis() {
     if (!result || !canAnalyze) return;
+    const controller = new AbortController();
+    analysisAbortRef.current = controller;
     setStatus("refreshing");
+    setAnalysisProgress(t.progressSource);
     setError("");
     try {
       const previous = result;
-      const payload = mergeManualEvidence(previous, await requestAnalysis());
+      const progressTimer = window.setTimeout(
+        () => setAnalysisProgress(t.progressModel),
+        1_500,
+      );
+      const refreshed = await requestAnalysis(controller.signal).finally(() =>
+        clearTimeout(progressTimer),
+      );
+      const payload = mergeManualEvidence(previous, refreshed);
       const detectedConflicts = detectEvidenceConflicts(payload);
       const nextDiff = compareResults(previous, payload, criteria);
       const stored = history.find((report) => report.id === currentReportId);
@@ -555,8 +498,13 @@ export function CompareWorkbench({
         result: payload,
         notes,
         locale,
-        revisions: [...(stored?.revisions ?? []), previous].slice(
-          -maxRevisions,
+        // Keep provenance for revisions without multiplying private source
+        // snapshots in every report refresh.
+        revisions: [
+          ...(stored?.revisions ?? []),
+          { ...previous, replayBundle: undefined },
+        ].slice(
+          -MAX_REPORT_REVISIONS,
         ),
         trialResults: stored?.trialResults ?? trialResults,
         pairwiseTrials: stored?.pairwiseTrials ?? pairwiseTrials,
@@ -568,7 +516,7 @@ export function CompareWorkbench({
       };
       const nextHistory = stored
         ? history.map((report) => (report.id === reportId ? saved : report))
-        : [saved, ...history].slice(0, maxSavedReports);
+        : [saved, ...history].slice(0, MAX_SAVED_REPORTS);
       setResult(payload);
       setSourceFailures([]);
       setConflicts(detectedConflicts);
@@ -587,8 +535,23 @@ export function CompareWorkbench({
       void persistBrowserValue(historyKey, nextHistory);
       setStatus("idle");
     } catch (caught) {
-      handleAnalysisError(caught, "refresh", t.refreshFailed);
+      handleAnalysisError(
+        controller.signal.aborted ? new Error(t.analysisCancelled) : caught,
+        "refresh",
+        t.refreshFailed,
+      );
+    } finally {
+      if (analysisAbortRef.current === controller) {
+        analysisAbortRef.current = undefined;
+      }
+      setAnalysisProgress("");
     }
+  }
+
+  function cancelAnalysis() {
+    if (!analysisAbortRef.current) return;
+    setStatus("cancelling");
+    analysisAbortRef.current.abort();
   }
 
   function loadReport(saved: SavedReport) {
@@ -705,6 +668,15 @@ export function CompareWorkbench({
     URL.revokeObjectURL(url);
   }
 
+  function exportReplayBundle() {
+    if (!result?.replayBundle) return;
+    downloadArtifact(
+      serializeReplayBundle(result.replayBundle),
+      `${safeFilename(result.title)}.fitlens-replay.json`,
+      "application/json;charset=utf-8",
+    );
+  }
+
   function downloadArtifact(content: string, filename: string, type: string) {
     const url = URL.createObjectURL(new Blob([content], { type }));
     const anchor = document.createElement("a");
@@ -807,7 +779,7 @@ export function CompareWorkbench({
         savedAt: new Date().toISOString(),
         notes: imported.notes ?? "",
       };
-      const nextHistory = [saved, ...history].slice(0, maxSavedReports);
+      const nextHistory = [saved, ...history].slice(0, MAX_SAVED_REPORTS);
       setHistory(nextHistory);
       void persistBrowserValue(historyKey, nextHistory);
       loadReport(saved);
@@ -1240,275 +1212,38 @@ export function CompareWorkbench({
           </div>
         )}
 
-        <div className="url-grid">
-          {urls.map((url, index) => {
-            const sourceFailure = sourceFailures.find(
-              (failure) => failure.index === index,
-            );
-            const diagnosticId = `source-failure-${index}`;
-            return (
-              <div
-                className={`url-field${sourceFailure ? " source-failed" : ""}`}
-                key={index}
-              >
-                <span>
-                  {t.product} {String.fromCharCode(65 + index)}
-                </span>
-                <div className="url-input-row">
-                  <svg viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M10 13a5 5 0 0 0 7.1.1l2-2a5 5 0 0 0-7-7.1l-1.1 1" />
-                    <path d="M14 11a5 5 0 0 0-7.1-.1l-2 2a5 5 0 0 0 7 7.1l1.1-1" />
-                  </svg>
-                  <input
-                    value={url}
-                    placeholder={`https://product-${String.fromCharCode(97 + index)}.com`}
-                    onChange={(event) => {
-                      const next = [...urls];
-                      next[index] = event.target.value;
-                      setUrls(next);
-                      setSourceFailures((current) =>
-                        current.filter((failure) => failure.index !== index),
-                      );
-                    }}
-                    aria-label={`${t.product} ${String.fromCharCode(65 + index)} URL`}
-                    aria-invalid={sourceFailure ? true : undefined}
-                    aria-describedby={sourceFailure ? diagnosticId : undefined}
-                  />
-                  <div className="url-actions">
-                    <button
-                      type="button"
-                      disabled={index === 0}
-                      onClick={() => moveProductUrl(index, -1)}
-                      aria-label={`${t.moveProductUp}: ${index + 1}`}
-                    >
-                      ↑
-                    </button>
-                    <button
-                      type="button"
-                      disabled={index === urls.length - 1}
-                      onClick={() => moveProductUrl(index, 1)}
-                      aria-label={`${t.moveProductDown}: ${index + 1}`}
-                    >
-                      ↓
-                    </button>
-                    <button
-                      type="button"
-                      disabled={urls.length <= 2}
-                      onClick={() => removeProductUrl(index)}
-                      aria-label={`${t.removeProduct}: ${index + 1}`}
-                    >
-                      ×
-                    </button>
-                  </div>
-                </div>
-                {sourceFailure && (
-                  <p className="source-failure-detail" id={diagnosticId}>
-                    <strong>{sourceFailure.code}</strong>
-                    {t[sourceFailure.code]}
-                  </p>
-                )}
-              </div>
-            );
-          })}
-          {urls.length < 8 && (
-            <button
-              className="add-product-button"
-              type="button"
-              onClick={addProductUrl}
-            >
-              + {t.addProduct}
-            </button>
-          )}
-        </div>
-
-        <div className="profile-grid">
-          <div className="context-block">
-            <div className="section-label">
-              <span className="step-index">02</span>
-              <h2>{t.scenarioTitle}</h2>
-            </div>
-            <textarea
-              value={context}
-              placeholder={t.scenarioPlaceholder}
-              onChange={(event) => setContext(event.target.value)}
-              rows={7}
-            />
-            <p>{t.scenarioHint}</p>
-          </div>
-
-          <div className="priorities-block">
-            <div className="section-label">
-              <span className="step-index">03</span>
-              <h2>{t.prioritiesTitle}</h2>
-            </div>
-            <div className="preference-profiles">
-              <div className="profile-chips">
-                {[...builtInTemplates, ...customTemplates].map((template) => (
-                  <span
-                    className={`profile-chip ${
-                      activeTemplateId === template.id ? "active" : ""
-                    }`}
-                    key={template.id}
-                  >
-                    <button
-                      type="button"
-                      onClick={() => applyTemplate(template)}
-                    >
-                      {template.name}
-                    </button>
-                    {!template.builtIn && (
-                      <button
-                        type="button"
-                        aria-label={`${t.deleteTemplate}: ${template.name}`}
-                        onClick={() => deleteCriteriaTemplate(template.id)}
-                      >
-                        ×
-                      </button>
-                    )}
-                  </span>
-                ))}
-              </div>
-              <div className="save-profile">
-                <input
-                  value={templateName}
-                  maxLength={32}
-                  placeholder={t.saveTemplatePlaceholder}
-                  aria-label={t.templateNameAria}
-                  onChange={(event) => setTemplateName(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") saveCriteriaTemplate();
-                  }}
-                />
-                <button
-                  type="button"
-                  disabled={!templateName.trim()}
-                  onClick={saveCriteriaTemplate}
-                >
-                  {t.save}
-                </button>
-              </div>
-            </div>
-            <div className="criteria-editor">
-              <p className="criteria-help">{t.criteriaHelp}</p>
-              {criteria.map((criterion, index) => (
-                <div className="criterion-card" key={criterion.key}>
-                  <div className="criterion-fields">
-                    <span className="criterion-index">
-                      {String(index + 1).padStart(2, "0")}
-                    </span>
-                    <label>
-                      <span>{t.criterionName}</span>
-                      <input
-                        value={criterion.label}
-                        maxLength={80}
-                        onChange={(event) =>
-                          updateCriterion(criterion.key, {
-                            label: event.target.value,
-                          })
-                        }
-                      />
-                    </label>
-                    <label>
-                      <span>{t.criterionDescription}</span>
-                      <input
-                        value={criterion.hint}
-                        maxLength={200}
-                        onChange={(event) =>
-                          updateCriterion(criterion.key, {
-                            hint: event.target.value,
-                          })
-                        }
-                      />
-                    </label>
-                    <button
-                      className="remove-criterion"
-                      type="button"
-                      disabled={criteria.length <= 2}
-                      aria-label={`${t.removeCriterion}: ${criterion.label}`}
-                      onClick={() => removeCriterion(criterion.key)}
-                    >
-                      ×
-                    </button>
-                  </div>
-                  <label className="criterion-weight">
-                    <span className="slider-copy">
-                      <span>
-                        <strong>{t.weight}</strong>
-                        <small>{criterion.hint}</small>
-                      </span>
-                      <b>{criterion.weight}</b>
-                    </span>
-                    <input
-                      type="range"
-                      min="0"
-                      max="100"
-                      value={criterion.weight}
-                      onChange={(event) =>
-                        updateCriterion(criterion.key, {
-                          weight: Number(event.target.value),
-                        })
-                      }
-                      style={
-                        {
-                          "--range": `${criterion.weight}%`,
-                        } as React.CSSProperties
-                      }
-                    />
-                  </label>
-                </div>
-              ))}
-              <button
-                className="add-criterion"
-                type="button"
-                disabled={criteria.length >= 8}
-                onClick={addCriterion}
-              >
-                <span>+</span> {t.addCriterion}
-                <small>{criteria.length}/8</small>
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {!exampleMode && (
-          <section className="decision-profiles-card">
-            <div>
-              <p className="eyebrow">{t.decisionProfilesTitle}</p>
-              <h3>{t.decisionProfilesTitle}</h3>
-              <p>{t.decisionProfilesCopy}</p>
-            </div>
-            <div className="decision-profile-list">
-              {decisionProfiles.length > 0 ? (
-                decisionProfiles.map((profile) => (
-                  <span key={profile.id}>
-                    <button type="button" onClick={() => applyDecisionProfile(profile)}>
-                      {profile.name}
-                    </button>
-                    <button type="button" aria-label={`${t.deleteTemplate}: ${profile.name}`} onClick={() => deleteDecisionProfile(profile.id)}>
-                      ×
-                    </button>
-                  </span>
-                ))
-              ) : (
-                <small>{t.noDecisionProfiles}</small>
-              )}
-            </div>
-            <div className="decision-profile-save">
-              <input
-                value={decisionProfileName}
-                placeholder={t.decisionProfileName}
-                onChange={(event) => setDecisionProfileName(event.target.value)}
-              />
-              <button
-                type="button"
-                disabled={!decisionProfileName.trim() || context.trim().length < 10}
-                onClick={saveDecisionProfile}
-              >
-                {t.saveDecisionProfile}
-              </button>
-            </div>
-          </section>
-        )}
+        <ComparisonBuilderEditor
+          urls={urls}
+          failures={sourceFailures}
+          context={context}
+          criteria={criteria}
+          templates={[...builtInTemplates, ...customTemplates]}
+          activeTemplateId={activeTemplateId}
+          templateName={templateName}
+          decisionProfiles={decisionProfiles}
+          decisionProfileName={decisionProfileName}
+          showDecisionProfiles={!exampleMode}
+          messages={t}
+          onUrlsChange={(next, changedIndex) => {
+            setUrls(next);
+            setSourceFailures((current) => current.filter((failure) => failure.index !== changedIndex));
+          }}
+          onMove={moveProductUrl}
+          onRemove={removeProductUrl}
+          onAdd={addProductUrl}
+          onContextChange={setContext}
+          onApplyTemplate={applyTemplate}
+          onDeleteTemplate={deleteCriteriaTemplate}
+          onTemplateNameChange={setTemplateName}
+          onSaveTemplate={saveCriteriaTemplate}
+          onCriterionChange={updateCriterion}
+          onRemoveCriterion={removeCriterion}
+          onAddCriterion={addCriterion}
+          onApplyDecisionProfile={applyDecisionProfile}
+          onDeleteDecisionProfile={deleteDecisionProfile}
+          onDecisionProfileNameChange={setDecisionProfileName}
+          onSaveDecisionProfile={saveDecisionProfile}
+        />
 
         <div className="analyze-row">
           <div>
@@ -1516,15 +1251,28 @@ export function CompareWorkbench({
             {t.autoDetect}
           </div>
           <button
-            onClick={analyze}
+            onClick={
+              status === "loading" ||
+              status === "refreshing" ||
+              status === "cancelling"
+                ? cancelAnalysis
+                : analyze
+            }
             disabled={
-              status === "loading" || status === "refreshing" || !canAnalyze
+              status === "cancelling" || (status !== "loading" && status !== "refreshing" && !canAnalyze)
             }
           >
-            {status === "loading" ? t.analyzing : t.analyze}
-            {status !== "loading" && <span>↗</span>}
+            {status === "cancelling"
+              ? t.cancellingAnalysis
+              : status === "loading" || status === "refreshing"
+                ? t.cancelAnalysis
+                : t.analyze}
+            {status !== "loading" && status !== "refreshing" && status !== "cancelling" && <span>↗</span>}
           </button>
         </div>
+        {analysisProgress && (
+          <p role="status" aria-live="polite">{analysisProgress}</p>
+        )}
         {error && (
           <div className="error-banner" role="alert">
             {error}
@@ -1551,7 +1299,11 @@ export function CompareWorkbench({
                 if (sourceRetryMode === "refresh") void refreshAnalysis();
                 else void analyze();
               }}
-              disabled={status === "loading" || status === "refreshing"}
+              disabled={
+                status === "loading" ||
+                status === "refreshing" ||
+                status === "cancelling"
+              }
             >
               {t.retrySources} <span aria-hidden="true">↻</span>
             </button>
@@ -1623,793 +1375,68 @@ export function CompareWorkbench({
 
       {result && (
       <section className="result shell" id="result">
-        <div className="result-kicker">
-          <span>
-            {t.report} ·{" "}
-            {new Date(result.generatedAt).toLocaleString(locale, {
-              dateStyle: "medium",
-              timeStyle: "short",
-            })}
-          </span>
-          <div className="report-actions">
-            <button
-              className="refresh-report"
-              onClick={refreshAnalysis}
-              disabled={
-                status === "refreshing" || status === "loading" || !canAnalyze
-              }
-            >
-              {status === "refreshing" ? t.refreshing : t.refreshReport}
-            </button>
-            <button onClick={copyBrief}>
-              {copied ? t.copied : t.copyBrief}
-            </button>
-            <button onClick={exportMarkdown}>{t.exportMarkdown}</button>
-            <button onClick={exportJson}>{t.exportJson}</button>
-            <button onClick={exportHtml}>{t.exportHtml}</button>
-            <button onClick={exportAdr}>{t.exportAdr}</button>
-            <button onClick={exportPdf}>{t.exportPdf}</button>
-            <details className="share-menu">
-              <summary>{t.shareSafeCopy}</summary>
-              <div>
-                <strong>{t.shareSafeTitle}</strong>
-                <p>{t.shareSafeCopyDetail}</p>
-                <button onClick={exportRedactedMarkdown}>
-                  {t.shareMarkdown}
-                </button>
-                <button onClick={exportRedactedJson}>{t.shareJson}</button>
-              </div>
-            </details>
-            <button onClick={() => importInputRef.current?.click()}>
-              {t.import}
-            </button>
-            {!exampleMode && (
-              <button onClick={startOver}>{t.newComparison}</button>
-            )}
-          </div>
-        </div>
-        {error && <div className="error-banner report-error">{error}</div>}
-
-        <div className="verdict-card">
-          <div className="verdict-main">
-            <p>{t.forWorkflow}</p>
-            <h2>
-              {t.chooseNow}{" "}
-              <span>{weightedWinner ?? result.recommendation.winner}</span>
-            </h2>
-            <p>
-              {weightedWinner === result.recommendation.winner
-                ? result.recommendation.summary
-                : `${t.weightedSummary.replace("{winner}", weightedWinner ?? "")} ${currentWinner?.verdict ?? ""}`}
-            </p>
-          </div>
-          <div className="score-seal">
-            <span>{t.fitScore}</span>
-            <strong>
-              {weightedDecision.normalized[
-                weightedWinner ?? result.recommendation.winner
-              ] ?? currentWinner?.score ?? result.products[0].score}
-            </strong>
-            <small>/ 100</small>
-          </div>
-        </div>
-
-        <div className="decision-notes">
-          <div>
-            <p className="eyebrow">{t.whyThis}</p>
-            <ul>
-              {result.recommendation.reasons.map((reason) => (
-                <li key={reason}>{reason}</li>
-              ))}
-            </ul>
-          </div>
-          <div>
-            <p className="eyebrow">{t.chooseDifferently}</p>
-            <p>{result.recommendation.switchWhen}</p>
-          </div>
-        </div>
-
-        {conflicts.length > 0 && (
-          <section className="conflict-card" aria-labelledby="conflicts-title">
-            <header>
-              <div>
-                <p className="eyebrow">{t.conflictsEyebrow}</p>
-                <h2 id="conflicts-title">{t.conflictsTitle}</h2>
-                <p>{t.conflictsCopy}</p>
-              </div>
-              <strong>{conflicts.length}</strong>
-            </header>
-            <div className="conflict-list">
-              {conflicts.map((conflict) => (
-                <article key={conflict.id}>
-                  <div className="conflict-heading">
-                    <span className={`conflict-severity ${conflict.severity}`}>
-                      {conflict.severity === "high"
-                        ? t.conflictHigh
-                        : t.conflictMedium}
-                    </span>
-                    <strong>{conflict.product}</strong>
-                    <small>{conflictTopicLabel(conflict.topic, t)}</small>
-                  </div>
-                  <div className="conflict-claims">
-                    {[conflict.first, conflict.second].map((evidence, index) => (
-                      <a
-                        href={evidence.sourceUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        key={`${conflict.id}-${index}`}
-                      >
-                        <span className={`evidence-badge ${evidence.level}`}>
-                          {evidenceLabels[evidence.level]}
-                        </span>
-                        <p>{evidence.claim}</p>
-                        <small>{evidence.sourceLabel} ↗</small>
-                      </a>
-                    ))}
-                  </div>
-                </article>
-              ))}
-            </div>
-          </section>
-        )}
-
-        {comparisonDiff && (
-          <section className="diff-card" aria-labelledby="diff-title">
-            <header>
-              <div>
-                <p className="eyebrow">{t.sinceLastRefresh}</p>
-                <h2 id="diff-title">
-                  {comparisonDiff.hasChanges ? t.whatChanged : t.noChanges}
-                </h2>
-              </div>
-              <span className={comparisonDiff.winnerChanged ? "changed" : ""}>
-                {comparisonDiff.winnerChanged
-                  ? `${comparisonDiff.previousWinner} → ${comparisonDiff.currentWinner}`
-                  : `${t.winnerStable}: ${comparisonDiff.currentWinner}`}
-              </span>
-            </header>
-
-            {comparisonDiff.hasChanges && (
-              <div className="diff-grid">
-                <div>
-                  <h3>{t.fitScoreChanges}</h3>
-                  {comparisonDiff.scoreChanges.map((change) => (
-                    <p key={change.product}>
-                      <strong>{change.product}</strong>
-                      <span>
-                        {change.before} → {change.after}
-                        <b className={change.delta < 0 ? "negative" : ""}>
-                          {formatDelta(change.delta)}
-                        </b>
-                      </span>
-                    </p>
-                  ))}
-                </div>
-                <div>
-                  <h3>{t.evidenceChanges}</h3>
-                  {comparisonDiff.evidenceChanges.map((change) => (
-                    <p key={change.product}>
-                      <strong>{change.product}</strong>
-                      <span>
-                        {change.total.before} → {change.total.after}
-                        <b className={change.total.delta < 0 ? "negative" : ""}>
-                          {formatDelta(change.total.delta)}
-                        </b>
-                      </span>
-                      <small>
-                        {t.verified}{" "}
-                        {formatDelta(change.levels.verified.delta)} · {t.vendor}{" "}
-                        {formatDelta(change.levels.vendor.delta)} · {t.inferred}{" "}
-                        {formatDelta(change.levels.inferred.delta)}
-                      </small>
-                    </p>
-                  ))}
-                </div>
-                <div className="dimension-diffs">
-                  <h3>{t.dimensionChanges}</h3>
-                  {comparisonDiff.dimensionChanges.length > 0 ? (
-                    comparisonDiff.dimensionChanges.map((change) => (
-                      <p key={`${change.key}-${change.product}`}>
-                        <strong>
-                          {change.label} · {change.product}
-                        </strong>
-                        <span>
-                          {change.before} → {change.after}
-                          <b className={change.delta < 0 ? "negative" : ""}>
-                            {formatDelta(change.delta)}
-                          </b>
-                        </span>
-                      </p>
-                    ))
-                  ) : (
-                    <small>{t.none}</small>
-                  )}
-                </div>
-                <div className="unknown-diffs">
-                  <h3>{t.unknownChanges}</h3>
-                  {comparisonDiff.addedUnknowns.map((unknown) => (
-                    <p key={`added-${unknown}`}>
-                      <b>+</b> {unknown}
-                    </p>
-                  ))}
-                  {comparisonDiff.removedUnknowns.map((unknown) => (
-                    <p className="resolved" key={`removed-${unknown}`}>
-                      <b>✓</b> {unknown}
-                    </p>
-                  ))}
-                  {comparisonDiff.addedUnknowns.length === 0 &&
-                    comparisonDiff.removedUnknowns.length === 0 && (
-                      <small>{t.none}</small>
-                    )}
-                </div>
-              </div>
-            )}
-            <footer>
-              {new Date(comparisonDiff.from).toLocaleString(locale)} →{" "}
-              {new Date(comparisonDiff.to).toLocaleString(locale)}
-            </footer>
-          </section>
-        )}
-
-        <div className="product-grid">
-          {result.products.map((product) => {
-            const coverage = calculateEvidenceCoverage(product);
-            const freshness = calculateEvidenceFreshness(product);
-            const calibration = confidenceCalibrations.find(
-              (item) => item.product === product.name,
-            )!;
-            return (
-              <article
-                className={`product-card ${product.name === (weightedWinner ?? result.recommendation.winner) ? "featured" : ""}`}
-                key={product.name}
-              >
-              <header>
-                <div>
-                  <span className="product-letter">
-                    {product.name.slice(0, 1)}
-                  </span>
-                  <div>
-                    <h3>{product.name}</h3>
-                    <p>{product.tagline}</p>
-                  </div>
-                </div>
-                <SourcePill mode={product.sourceMode} t={t} />
-              </header>
-
-              <div className="confidence">
-                <span>{t.confidenceCalibrated}</span>
-                <div>
-                  <i style={{ width: `${calibration.score}%` }} />
-                </div>
-                <b>{calibration.score}%</b>
-              </div>
-
-              <section className={`confidence-calibration ${calibration.band}`}>
-                <header>
-                  <div>
-                    <strong>{confidenceBandLabel(calibration, t)}</strong>
-                    <span>{t.confidenceWhy}</span>
-                  </div>
-                  <p>{t.confidenceMethod}</p>
-                </header>
-                <div className="confidence-evidence-mix">
-                  <span><b>{calibration.verified}</b> {t.verified}</span>
-                  <span><b>{calibration.vendor}</b> {t.vendor}</span>
-                  <span><b>{calibration.inferred}</b> {t.inferred}</span>
-                </div>
-                <ul>
-                  {calibration.factors.map((factor) => (
-                    <li className={factor.effect} key={factor.key}>
-                      <span>{factor.effect === "supporting" ? "+" : "!"}</span>
-                      <div>
-                        <b>{factor.effect === "supporting" ? t.confidenceSupporting : t.confidenceLimiting}</b>
-                        <p>{confidenceFactorLabel(factor, t)}</p>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              </section>
-
-              <div className="coverage-card">
-                <div>
-                  <span>{t.coverage}</span>
-                  <strong>
-                    {
-                      {
-                        Strong: t.coverageStrong,
-                        Moderate: t.coverageModerate,
-                        Limited: t.coverageLimited,
-                      }[coverage.label]
-                    }
-                  </strong>
-                </div>
-                <div
-                  className="coverage-meter"
-                  role="img"
-                  aria-label={`${t.coverage} ${coverage.score}%`}
-                >
-                  <i style={{ width: `${coverage.score}%` }} />
-                </div>
-                <p>
-                  {coverage.verified} {t.verified} · {coverage.vendor} {t.vendor}{" "}
-                  · {coverage.inferred} {t.inferred} · {coverage.sourceCount}{" "}
-                  {t.sources} · {t.sourceFreshness}: {freshness.fresh} {t.freshSources},{" "}
-                  {freshness.aging} {t.agingSources}, {freshness.stale} {t.staleSources},{" "}
-                  {freshness.unknown} {t.unknownFreshness}
-                </p>
-              </div>
-
-              <p className="product-verdict">{product.verdict}</p>
-
-              {product.pricing && (
-                <section
-                  className="pricing-card"
-                  aria-label={`${product.name}: ${t.pricingTitle}`}
-                >
-                  <div className="pricing-heading">
-                    <div>
-                      <h4>{t.pricingTitle}</h4>
-                      <p>{product.pricing.summary}</p>
-                    </div>
-                    <span
-                      className={
-                        product.pricing.hasFreeOption === true
-                          ? "free"
-                          : product.pricing.hasFreeOption === false
-                            ? "paid"
-                            : "unknown"
-                      }
-                    >
-                      {product.pricing.hasFreeOption === true
-                        ? t.pricingFree
-                        : product.pricing.hasFreeOption === false
-                          ? t.pricingNoFree
-                          : t.pricingFreeUnknown}
-                    </span>
-                  </div>
-                  <div className="pricing-plans">
-                    {product.pricing.plans.length > 0 ? (
-                      product.pricing.plans.map((plan) => (
-                        <a
-                          href={plan.sourceUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          key={`${plan.name}-${plan.price}-${plan.sourceUrl}`}
-                        >
-                          <div>
-                            <strong>{plan.name}</strong>
-                            <span className={`evidence-badge ${plan.evidenceLevel}`}>
-                              {evidenceLabels[plan.evidenceLevel]}
-                            </span>
-                          </div>
-                          <p>
-                            <b>{plan.price}</b>
-                            <small>{cadenceLabel(plan.cadence, t)}</small>
-                          </p>
-                          <dl>
-                            <div>
-                              <dt>{t.pricingAudience}</dt>
-                              <dd>{plan.audience}</dd>
-                            </div>
-                            {plan.limits.length > 0 && (
-                              <div>
-                                <dt>{t.pricingLimits}</dt>
-                                <dd>{plan.limits.join(" · ")}</dd>
-                              </div>
-                            )}
-                          </dl>
-                        </a>
-                      ))
-                    ) : (
-                      <p className="pricing-empty">{t.pricingNoPlans}</p>
-                    )}
-                  </div>
-                  <p className="pricing-uncertainty">
-                    <strong>{t.pricingUncertainty}</strong>
-                    {product.pricing.uncertainty}
-                  </p>
-                </section>
-              )}
-
-              {product.privacy && (
-                <section
-                  className="privacy-card"
-                  aria-label={`${product.name}: ${t.privacyTitle}`}
-                >
-                  <header>
-                    <div>
-                      <h4>{t.privacyTitle}</h4>
-                      <p>{t.privacyCopy}</p>
-                    </div>
-                    <span className={`privacy-risk ${product.privacy.riskLevel}`}>
-                      <small>{t.privacyRisk}</small>
-                      {privacyRiskLabel(product.privacy.riskLevel, t)}
-                    </span>
-                  </header>
-                  <p className="privacy-summary">{product.privacy.summary}</p>
-                  <div className="privacy-findings">
-                    {product.privacy.findings.map((finding) => (
-                      <a
-                        href={finding.sourceUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className={finding.status}
-                        key={finding.category}
-                      >
-                        <div>
-                          <strong>{privacyCategoryLabel(finding.category, t)}</strong>
-                          <span>{privacyStatusLabel(finding.status, t)}</span>
-                        </div>
-                        <p>{finding.finding}</p>
-                        <small>
-                          <b className={`evidence-badge ${finding.evidenceLevel}`}>
-                            {evidenceLabels[finding.evidenceLevel]}
-                          </b>
-                          {t.privacyUncertainty}: {finding.uncertainty} ↗
-                        </small>
-                      </a>
-                    ))}
-                  </div>
-                </section>
-              )}
-
-              <div className="pros-cons">
-                <div>
-                  <h4>{t.strengths}</h4>
-                  <ul>
-                    {product.strengths.map((item) => (
-                      <li key={item}>
-                        <span>+</span>
-                        {item}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-                <div>
-                  <h4>{t.tradeoffs}</h4>
-                  <ul>
-                    {product.tradeoffs.map((item) => (
-                      <li key={item}>
-                        <span>–</span>
-                        {item}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
-
-              <div className="evidence-stack">
-                <div className="evidence-review-heading">
-                  <div>
-                    <h4>{t.evidenceReviewTitle}</h4>
-                    <p>
-                      {t.evidenceReviewSummary
-                        .replace(
-                          "{accepted}",
-                          String(
-                            product.evidence.filter(
-                              (item) => item.reviewStatus === "accepted",
-                            ).length,
-                          ),
-                        )
-                        .replace(
-                          "{unreviewed}",
-                          String(
-                            product.evidence.filter(
-                              (item) =>
-                                !item.reviewStatus ||
-                                item.reviewStatus === "unreviewed",
-                            ).length,
-                          ),
-                        )
-                        .replace(
-                          "{rejected}",
-                          String(
-                            product.evidence.filter(
-                              (item) => item.reviewStatus === "rejected",
-                            ).length,
-                          ),
-                        )}
-                    </p>
-                  </div>
-                </div>
-                {product.evidence.map((item, evidenceIndex) => {
-                  const reviewStatus: EvidenceReviewStatus =
-                    item.reviewStatus ?? "unreviewed";
-                  const reviewLabel = {
-                    unreviewed: t.evidenceUnreviewed,
-                    accepted: t.evidenceAccepted,
-                    rejected: t.evidenceRejected,
-                  }[reviewStatus];
-                  return (
-                    <article
-                      className={`evidence-review-item ${reviewStatus}`}
-                      key={`${item.originalClaim ?? item.claim}-${item.sourceUrl}`}
-                    >
-                      <header>
-                        <span className={`evidence-badge ${item.level}`}>
-                          {evidenceLabels[item.level]}
-                        </span>
-                        <span className={`review-status ${reviewStatus}`}>
-                          {reviewLabel}
-                        </span>
-                        <a href={item.sourceUrl} target="_blank" rel="noreferrer">
-                          {item.sourceLabel} ↗
-                        </a>
-                      </header>
-                      <label>
-                        <span>{t.evidenceEditClaim}</span>
-                        <textarea
-                          defaultValue={item.claim}
-                          rows={2}
-                          onBlur={(event) =>
-                            updateEvidenceReview(product.name, evidenceIndex, {
-                              claim: event.target.value,
-                            })
-                          }
-                        />
-                      </label>
-                      {item.originalClaim && (
-                        <details>
-                          <summary>{t.evidenceOriginalClaim}</summary>
-                          <p>{item.originalClaim}</p>
-                        </details>
-                      )}
-                      <label>
-                        <span>{t.evidenceReviewNote}</span>
-                        <input
-                          defaultValue={item.reviewNote ?? ""}
-                          onBlur={(event) =>
-                            updateEvidenceReview(product.name, evidenceIndex, {
-                              reviewNote: event.target.value.trim(),
-                            })
-                          }
-                        />
-                      </label>
-                      <footer>
-                        <small>
-                          {item.capturedAt
-                            ? `${t.checked} ${new Date(item.capturedAt).toLocaleDateString(locale)}`
-                            : t.unknownFreshness}
-                        </small>
-                        <div>
-                          <button
-                            type="button"
-                            className="accept"
-                            aria-pressed={reviewStatus === "accepted"}
-                            onClick={() =>
-                              updateEvidenceReview(product.name, evidenceIndex, {
-                                reviewStatus: "accepted",
-                              })
-                            }
-                          >
-                            ✓ {t.evidenceAccept}
-                          </button>
-                          <button
-                            type="button"
-                            className="reject"
-                            aria-pressed={reviewStatus === "rejected"}
-                            onClick={() =>
-                              updateEvidenceReview(product.name, evidenceIndex, {
-                                reviewStatus: "rejected",
-                              })
-                            }
-                          >
-                            × {t.evidenceReject}
-                          </button>
-                          {reviewStatus !== "unreviewed" && (
-                            <button
-                              type="button"
-                              onClick={() =>
-                                updateEvidenceReview(product.name, evidenceIndex, {
-                                  reviewStatus: "unreviewed",
-                                })
-                              }
-                            >
-                              {t.evidenceResetReview}
-                            </button>
-                          )}
-                        </div>
-                      </footer>
-                    </article>
-                  );
-                })}
-              </div>
-              </article>
-            );
-          })}
-        </div>
-
-        <section className="manual-evidence-card" aria-labelledby="manual-evidence-title">
-          <div className="manual-evidence-intro">
-            <p className="eyebrow">{t.manualEvidenceTitle}</p>
-            <h2 id="manual-evidence-title">{t.manualEvidenceTitle}</h2>
-            <p>{t.manualEvidenceCopy}</p>
-          </div>
-          <form
-            className="manual-evidence-form"
-            onSubmit={(event) => {
-              event.preventDefault();
-              addManualEvidence();
-            }}
-          >
-            <label>
-              <span>{t.manualEvidenceProduct}</span>
-              <select
-                value={manualEvidenceProduct || result.products[0]?.name || ""}
-                onChange={(event) => setManualEvidenceProduct(event.target.value)}
-              >
-                {result.products.map((product) => (
-                  <option key={product.name} value={product.name}>
-                    {product.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="manual-evidence-wide">
-              <span>{t.manualEvidenceClaim}</span>
-              <input
-                value={manualEvidenceClaim}
-                placeholder={t.manualEvidenceClaim}
-                onChange={(event) => setManualEvidenceClaim(event.target.value)}
-              />
-            </label>
-            <label>
-              <span>{t.manualEvidenceLevel}</span>
-              <select
-                value={manualEvidenceLevel}
-                onChange={(event) =>
-                  setManualEvidenceLevel(event.target.value as Evidence["level"])
-                }
-              >
-                <option value="verified">{t.verified}</option>
-                <option value="vendor">{t.vendor}</option>
-                <option value="inferred">{t.inferred}</option>
-              </select>
-            </label>
-            <label>
-              <span>{t.manualEvidenceSource}</span>
-              <input
-                value={manualEvidenceSource}
-                placeholder={t.manualEvidenceSource}
-                onChange={(event) => setManualEvidenceSource(event.target.value)}
-              />
-            </label>
-            <label>
-              <span>{t.manualEvidenceUrl}</span>
-              <input
-                type="url"
-                required
-                value={manualEvidenceUrl}
-                placeholder="https://…"
-                onChange={(event) => setManualEvidenceUrl(event.target.value)}
-              />
-            </label>
-            <button
-              type="submit"
-              disabled={
-                !manualEvidenceClaim.trim() ||
-                !manualEvidenceSource.trim() ||
-                !manualEvidenceUrl.trim()
-              }
-            >
-              + {t.addManualEvidence}
-            </button>
-          </form>
-        </section>
-
-        <div className="matrix-card">
-          <header>
-            <div>
-              <span className="step-index">04</span>
-              <h2>{t.matrixTitle}</h2>
-            </div>
-            <p>{t.matrixHint}</p>
-          </header>
-          <div className="matrix">
-            {result.dimensions.map((dimension) => {
-              const entries = Object.entries(dimension.productScores);
-              return (
-                <div className="matrix-row" key={dimension.key}>
-                  <div className="matrix-label">
-                    <strong>{dimension.label}</strong>
-                    <small>
-                      {t.weight} {priorities[dimension.key] ?? 0}
-                    </small>
-                  </div>
-                  <div className="matrix-bars">
-                    {entries.map(([product, score]) => (
-                      <div key={product}>
-                        <span>{product}</span>
-                        <i>
-                          <b style={{ width: `${score}%` }} />
-                        </i>
-                        <strong>{score}</strong>
-                      </div>
-                    ))}
-                  </div>
-                  <p>{dimension.explanation}</p>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        <div className="bottom-grid">
-          <div className="unknown-card">
-            <p className="eyebrow">{t.unknownEyebrow}</p>
-            <h2>{t.unknownTitle}</h2>
-            <ol>
-              {result.unknowns.map((unknown) => (
-                <li key={unknown}>{unknown}</li>
-              ))}
-            </ol>
-          </div>
-          <div className="trial-card">
-            <p className="eyebrow">{t.trialEyebrow}</p>
-            <h2>{t.trialTitle}</h2>
-            {result.trialPlan.map((item, index) => (
-              <div key={item.task}>
-                <span>0{index + 1}</span>
-                <p>
-                  <strong>{item.task}</strong>
-                  <small>{item.reason}</small>
-                  <select
-                    aria-label={`${t.trialStatus}: ${item.task}`}
-                    value={trialResults[index]?.status ?? "untested"}
-                    onChange={(event) =>
-                      updateTrialResult(index, {
-                        status: event.target.value as TrialStatus,
-                      })
-                    }
-                  >
-                    <option value="untested">{t.trialUntested}</option>
-                    <option value="passed">{t.trialPassed}</option>
-                    <option value="failed">{t.trialFailed}</option>
-                    <option value="skipped">{t.trialSkipped}</option>
-                  </select>
-                  <textarea
-                    rows={2}
-                    value={trialResults[index]?.note ?? ""}
-                    placeholder={t.trialNotePlaceholder}
-                    onChange={(event) =>
-                      updateTrialResult(index, { note: event.target.value })
-                    }
-                  />
-                </p>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <PairwiseTrials
-          products={result.products.map((product) => product.name)}
-          trials={pairwiseTrials}
+        <ComparisonReportSummary
+          result={result}
+          locale={locale}
           messages={t}
-          onChange={updatePairwiseTrials}
+          status={status}
+          canAnalyze={canAnalyze}
+          copied={copied}
+          exampleMode={exampleMode}
+          error={error}
+          weightedWinner={weightedWinner}
+          weightedScores={weightedDecision.normalized}
+          currentWinner={currentWinner}
+          conflicts={conflicts}
+          comparisonDiff={comparisonDiff}
+          evidenceLabels={evidenceLabels}
+          actions={{
+            refresh: () => void refreshAnalysis(), copy: () => void copyBrief(),
+            markdown: exportMarkdown, json: exportJson, replay: exportReplayBundle,
+            html: exportHtml, adr: exportAdr, pdf: exportPdf,
+            redactedMarkdown: exportRedactedMarkdown, redactedJson: exportRedactedJson,
+            import: () => importInputRef.current?.click(), startOver,
+          }}
         />
 
-        <div className="research-notes-card">
-          <div>
-            <p className="eyebrow">{t.notesEyebrow}</p>
-            <h2>{t.notesTitle}</h2>
-            <p>{t.notesCopy}</p>
-          </div>
-          <div>
-            <textarea
-              value={notes}
-              rows={7}
-              placeholder={t.notesPlaceholder}
-              onChange={(event) => setNotes(event.target.value)}
-              onBlur={saveNotes}
+        <div className="product-grid">
+          {result.products.map((product) => (
+            <ComparisonProductCard
+              key={product.name}
+              product={product}
+              calibration={confidenceCalibrations.find((item) => item.product === product.name)!}
+              featured={product.name === (weightedWinner ?? result.recommendation.winner)}
+              locale={locale}
+              messages={t}
+              evidenceLabels={evidenceLabels}
+              onReview={updateEvidenceReview}
             />
-            <span>
-              {currentReportId
-                ? t.notesSaved
-                : t.notesExported}
-            </span>
-          </div>
+          ))}
         </div>
+
+        <ComparisonFollowup
+          result={result}
+          priorities={priorities}
+          locale={locale}
+          messages={t}
+          manualEvidence={{ product: manualEvidenceProduct, claim: manualEvidenceClaim, level: manualEvidenceLevel, source: manualEvidenceSource, url: manualEvidenceUrl }}
+          onManualEvidenceChange={(update) => {
+            if (update.product !== undefined) setManualEvidenceProduct(update.product);
+            if (update.claim !== undefined) setManualEvidenceClaim(update.claim);
+            if (update.level !== undefined) setManualEvidenceLevel(update.level);
+            if (update.source !== undefined) setManualEvidenceSource(update.source);
+            if (update.url !== undefined) setManualEvidenceUrl(update.url);
+          }}
+          onAddManualEvidence={addManualEvidence}
+          trialResults={trialResults}
+          onTrialChange={updateTrialResult}
+          pairwiseTrials={pairwiseTrials}
+          onPairwiseChange={updatePairwiseTrials}
+          notes={notes}
+          notesSaved={Boolean(currentReportId)}
+          onNotesChange={setNotes}
+          onSaveNotes={saveNotes}
+        />
       </section>
       )}
 

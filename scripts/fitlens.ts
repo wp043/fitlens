@@ -27,6 +27,8 @@ import {
 import { compareResults, type ComparisonDiff } from "../lib/diff.ts";
 import { sendLocalNotification } from "../lib/local-notifications.ts";
 import type { ComparisonResult } from "../lib/types.ts";
+import { createDoctorReport, formatDoctorReport } from "../lib/doctor.ts";
+import { parseReplayBundle, replayAnalysisBundle } from "../lib/reproducibility.ts";
 
 async function writeJsonAtomic(path: string, value: unknown) {
   const temporary = `${path}.tmp-${process.pid}`;
@@ -62,7 +64,10 @@ function watchNotificationMessage(
   return `${entryId}: ${scoreChanges} score changes, ${change.dimensionChanges.length} dimension changes, ${change.addedUnknowns.length} new unknowns.`;
 }
 
-async function runWatchlist(options: ReturnType<typeof parseCliArguments>) {
+async function runWatchlist(
+  options: ReturnType<typeof parseCliArguments>,
+  signal: AbortSignal,
+) {
   const configPath = resolve(options.configFile!);
   let watchlist = parseWatchlist(JSON.parse(await readFile(configPath, "utf8")));
   const entries = options.force ? watchlist.entries : dueWatchEntries(watchlist);
@@ -85,7 +90,7 @@ async function runWatchlist(options: ReturnType<typeof parseCliArguments>) {
           criteria,
           locale: entry.locale,
         },
-        { env: process.env },
+        { env: process.env, signal },
       );
       const capturedAt = result.generatedAt;
       const directory = resolve(options.outputDirectory!, entry.id);
@@ -146,13 +151,48 @@ async function runWatchlist(options: ReturnType<typeof parseCliArguments>) {
 }
 
 async function main() {
+  const controller = new AbortController();
+  process.once("SIGINT", () => controller.abort());
   const options = parseCliArguments(process.argv.slice(2));
   if (options.command === "help") {
     process.stdout.write(cliHelp);
     return;
   }
   if (options.command === "watch") {
-    await runWatchlist(options);
+    await runWatchlist(options, controller.signal);
+    return;
+  }
+  if (options.command === "doctor") {
+    const report = await createDoctorReport({
+      checkPlaywright: options.checkPlaywright,
+      probeProvider: options.probeProvider,
+    });
+    const output = options.doctorJson
+      ? `${JSON.stringify(report, null, 2)}\n`
+      : formatDoctorReport(report);
+    if (options.outputFile) {
+      const outputPath = resolve(options.outputFile);
+      await mkdir(dirname(outputPath), { recursive: true });
+      await writeFile(outputPath, output, "utf8");
+      process.stdout.write(`Redacted diagnostics written to ${outputPath}\n`);
+    } else {
+      process.stdout.write(output);
+    }
+    if (!report.healthy) process.exitCode = 1;
+    return;
+  }
+
+  if (options.command === "replay") {
+    const bundle = parseReplayBundle(await readFile(resolve(options.replayFile!), "utf8"));
+    const result = replayAnalysisBundle(bundle);
+    const output = options.format === "markdown"
+      ? comparisonToMarkdown(result)
+      : `${JSON.stringify(result, null, 2)}\n`;
+    if (options.outputFile) {
+      await writeFile(resolve(options.outputFile), output, "utf8");
+    } else {
+      process.stdout.write(output);
+    }
     return;
   }
 
@@ -166,7 +206,11 @@ async function main() {
       )!.criteria;
   const result = await runAnalysis(
     { urls: options.urls, context, criteria, locale: options.locale },
-    { env: process.env, allowBundledSample: options.allowBundledSample },
+    {
+      env: process.env,
+      allowBundledSample: options.allowBundledSample,
+      signal: controller.signal,
+    },
   );
   const output =
     options.format === "markdown"

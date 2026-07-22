@@ -48,12 +48,20 @@ configured model, validates the structured response, and returns it.
 | Concern | Owner |
 | --- | --- |
 | Page metadata and root document | `app/layout.tsx` |
-| Workbench state and report interactions | `components/compare-workbench.tsx` |
+| Workbench orchestration and browser-owned state | `components/compare-workbench.tsx` |
+| Candidate, criteria, and decision-profile editor | `components/comparison-builder-editor.tsx` |
+| Report actions, recommendation, conflicts, and refresh diff | `components/comparison-report-summary.tsx` |
+| Per-product confidence, pricing, privacy, and evidence review | `components/comparison-product-card.tsx` |
+| Manual evidence, score matrix, trials, and notes | `components/comparison-followup.tsx` |
+| Pure draft readiness and candidate-list transitions | `lib/workbench-state.ts` |
 | Candidate capture, filtering, archive, and shortlist interactions | `components/candidate-inbox.tsx` |
 | Pairwise trial editing and standings UI | `components/pairwise-trials.tsx` |
 | Public analysis endpoint and status codes | `app/api/analyze/route.ts` |
+| Loopback request, body-size, JSON, and in-flight policy | `lib/request-guard.ts` |
+| Production browser response policy | `lib/security-headers.ts`, `next.config.ts` |
 | Shared browser/CLI orchestration and source failure boundary | `lib/analysis-service.ts` |
 | Headless argument parsing and entry point | `lib/cli.ts`, `scripts/fitlens.ts` |
+| Redacted environment diagnostics | `lib/doctor.ts`, `scripts/fitlens.ts doctor` |
 | Watchlist validation, due scheduling, snapshot trends, and offline chart rendering | `lib/watchlist.ts` |
 | Argument-safe native desktop notifications | `lib/local-notifications.ts` |
 | Request schema and URL-list validation | `lib/analyze-request.ts` |
@@ -64,6 +72,7 @@ configured model, validates the structured response, and returns it.
 | Per-candidate collection outcomes and safe public failures | `lib/source-diagnostics.ts` |
 | Provider env resolution, client construction, normalized provider errors | `lib/model-provider.ts` |
 | Model prompt, response schema, and response cross-field validation | `lib/analyzer.ts` |
+| Run manifests, bounded snapshots, hashing, and offline replay | `lib/reproducibility.ts` |
 | Criteria templates and legacy criteria migration | `lib/criteria.ts` |
 | Candidate URL normalization, deduplication, storage validation, and search | `lib/candidate-inbox.ts` |
 | Decision profile validation | `lib/decision-profiles.ts` |
@@ -100,6 +109,7 @@ sequenceDiagram
 
     User->>UI: URLs, workflow, criteria, locale
     UI->>API: POST /api/analyze
+    API->>API: Verify loopback origin, JSON size, and an analysis slot
     API->>API: Parse request and provider config
     par Every candidate
         API->>Source: Collect source outcome
@@ -166,12 +176,68 @@ These are the contracts most likely to cause subtle errors if weakened:
 9. Share-safe exports are derived copies. They do not mutate the local report
    and do not contain context, notes, trials, revisions, criterion hints, or
    manual evidence.
-10. API keys, provider names, models, and provider base URLs never enter report
-   history or exports.
+10. API keys, provider base URLs, provider responses, and raw failure messages
+   never enter report history or exports. Provider kind and model identifier are
+   retained deliberately as non-secret provenance.
 11. Old portable reports are migrated at the schema boundary rather than
     scattered through UI code.
+12. Replay verifies the trusted request and every bounded source snapshot
+    against its manifest before deterministic finalization. It never fetches a
+    URL or calls a model.
+
+## Reproducibility boundary
+
+Every completed live run carries a v1 manifest with stable prompt, response
+schema, source-adapter, and replay identifiers; provider kind/model; canonical
+SHA-256 hashes for the trusted request, source snapshots, supplemental
+documents, and validated model output; and timing/status metadata. Provider
+identity and the model-output hash are part of the run ID, so two judgments
+over the same sources cannot alias. Failures expose only a stage and stable
+code. Credentials, endpoints, upstream payloads, and exception text are not
+part of this contract. Bundled samples and failed runs have no model-output
+hash and cannot be exported as replay bundles.
+
+A complete report may also contain a v1 replay bundle. It includes the parsed
+trusted request, bounded public source snapshots, and the already validated
+model output. `replayAnalysisBundle` verifies request, source, and model-output
+hashes before it runs the same strict
+parser, citation normalization, privacy calibration, and result finalizer used
+by a live run. This is a reproducibility tool, not a fresh research run: it
+cannot discover source changes or regenerate model judgments.
+
+Replay bundles are private local artifacts because the trusted request can
+contain a sensitive workflow. Share-safe projection always drops the entire
+bundle while retaining the non-secret manifest. Portable report v4 accepts
+v1–v3 imports and bounds replay text and document counts during import.
 
 ## Security boundaries
+
+### Local analysis endpoint
+
+The Next.js process is a single-user loopback application, not a public API.
+The mutation route enforces that assumption before it spends a configured model
+key or fetches a submitted URL:
+
+- `Host` must be `localhost`, an IPv4 `127/8` address, or IPv6 `::1`.
+- `Origin` (or `Referer` when `Origin` is absent) must use the request scheme and
+  exactly match that loopback authority. Headerless and cross-origin POSTs fail
+  closed; no permissive CORS response is emitted.
+- The body must be `application/json`. Declared and streamed bytes are capped at
+  64 KB before schema validation.
+- At most two source/model analyses may be in flight in one process. A third
+  request receives `429` and `Retry-After`; slot release is guaranteed by the
+  route's `finally` block.
+- Production browser responses use CSP, frame denial, MIME-sniffing protection,
+  a no-referrer policy, same-origin opener/resource policies, and a restrictive
+  Permissions Policy. HSTS is intentionally absent because local use is HTTP.
+- `FITLENS_DISABLE_LIVE_ANALYSIS=1` is a fail-closed operational switch. The
+  request is schema-validated, then returns the missing-credentials boundary
+  before source collection or provider activity. The production harness uses
+  it so a developer's `.env.local` cannot make the check non-hermetic.
+
+The counters are process-local and are not a distributed rate limiter. Binding
+the server to a non-loopback interface or placing it behind a proxy changes the
+trust model and is unsupported without real authentication and network policy.
 
 ### Remote source collection
 
@@ -212,8 +278,17 @@ loopback. Provider errors are mapped to stable public codes without retaining
 upstream bodies, stack traces, or secret-bearing messages.
 
 The model sees the user's workflow, criteria, and collected public source
-material. It does not receive browser history, saved notes, trial results, or
-other reports.
+material. Collected page text, supplemental documents, repository metadata,
+and README content are serialized only under `UNTRUSTED_SOURCE_DATA`, separate
+from `TRUSTED_USER_REQUIREMENTS`. Provider instructions explicitly forbid those
+values from changing rules, scoring, candidate order, or the response schema,
+and adversarial tests keep embedded page commands out of the instruction
+channel. Structured output and cross-field validation remain the enforcement
+layer after generation. Prompt isolation reduces injection risk but cannot
+guarantee that every model will ignore every adversarial source.
+
+The model does not receive browser history, saved notes, trial results, or other
+reports.
 
 ### Browser boundary
 
@@ -233,7 +308,8 @@ for a local single-user tool, not a shared hosted application.
 | Locale storage in `localStorage` | Workbench | Current language preference |
 | API key in `sessionStorage` | Workbench | Current-tab model key override |
 | `.env.local` | Local Next.js server | Provider, model, API key, optional GitHub token |
-| Exported `.json` / `.md` | User | Portable backup or share-safe report |
+| Exported `.json` / `.md` | User | Portable v4 backup or share-safe report |
+| Exported `.fitlens-replay.json` | User | Private bounded source snapshots and trusted request for offline replay |
 | Exported `.html` / `.adr.md` / printed PDF | User | Durable offline decision artifacts |
 | `.fitlens/snapshots/<watch-id>/` | CLI watch runner | Immutable results, `latest.json`, deterministic changes, `trend.json`, and `trend.html` |
 
@@ -249,10 +325,15 @@ to the original localStorage key.
 | --- | --- | --- |
 | Domain | `test/{scoring,evidence,confidence,conflicts,privacy,diff,freshness,pairwise,decision-profiles}.test.ts` | Deterministic decision logic and edge cases |
 | Portable data | `test/{report,redaction,research-library,persistence,candidate-inbox}.test.ts` | Migration, import safety, redaction, local indexing, and storage fallback |
-| External boundaries | `test/{source,source-adapters,source-diagnostics,model-provider,real-site-fixtures}.test.ts` | URL/DNS/redirect policy, source discovery, optional-page isolation, curated real response compatibility, public errors, and provider config without live calls |
+| External boundaries | `test/{source,source-adapters,source-diagnostics,model-provider,real-site-fixtures,request-guard,security-headers,analyzer}.test.ts` | URL/DNS/redirect policy, source discovery, prompt-data isolation, loopback request policy, production headers, curated response compatibility, public errors, and provider config without live calls |
 | Product contract | `test/{criteria,i18n}.test.ts` | Stable criteria and bilingual dictionary parity |
-| Browser contract | `e2e/workflows.spec.ts` | Candidate promotion, evidence review, WCAG scans, and the full-page visual baseline |
+| Workbench workflow | `test/workbench-state.test.ts` | Pure draft validation, source diagnostics, candidate reordering, criteria initialization, plus a focused built-in coverage ratchet |
+| Browser contract | `e2e/{workflows,security}.spec.ts` | Candidate promotion, evidence review, local API rejection, response headers, WCAG scans, and the full-page visual baseline |
+| Production process | `scripts/production-harness.ts` | Fresh `next build`, real `next start`, local pages, production headers, request guards, and fail-closed no-provider analysis without public network calls |
+| Performance contract | `scripts/performance-contract.ts` | Deterministic concurrency, attempts, cache, history, revision, replay/report byte, watch, and candidate-operation budgets without wall-clock thresholds |
+| Pure workflow soak | `scripts/performance-soak.ts`, `.github/workflows/soak.yml` | Repeated migrations, replay validation/finalization, diffs, trends, cache churn, candidate transitions, retained-count invariants, and explicit-GC heap diagnostics |
 | Build contract | `pnpm lint`, `pnpm exec tsc --noEmit`, `pnpm build` | Static correctness and production compilation |
+| Code-health contract | `scripts/check-code-health.mjs`, `config/code-health-baseline.json` | 500-line default for production files, non-growing documented legacy exceptions, and a required workbench reduction |
 | Maintenance contract | `.github/workflows/ci.yml`, `.github/workflows/dependabot-maintenance.yml`, `.github/dependabot.yml` | Linux/macOS/Windows quality checks, Linux Chromium coverage and audits, author-and-SHA-verified minor/patch automation, and agent review for major updates |
 
 Network tests use injected DNS/fetch behavior. Real-site fixtures are curated,
@@ -260,6 +341,12 @@ timestamped excerpts with source URLs; CI never refreshes them or calls those
 sites. The fast suite therefore does not depend on live websites, GitHub, or a
 model provider. Browser tests start the local Next.js app and use the bundled
 report, so they also require no model key.
+
+`fitlens doctor` is a separate diagnostic boundary. It exposes an allowlisted
+runtime summary rather than dumping the environment. The final report is
+recursively scrubbed for secret-like fields and values, bearer/API-key shapes,
+query credentials, and the user home path. Provider reachability and browser
+checks require explicit flags, so a normal doctor run remains offline and fast.
 
 ## Deliberate non-goals
 

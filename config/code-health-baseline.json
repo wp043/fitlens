@@ -1,0 +1,18 @@
+{
+  "defaultMaxLines": 500,
+  "exceptions": {
+    "components/compare-workbench.tsx": {
+      "maxLines": 1453,
+      "previousLines": 2519,
+      "reason": "Legacy workbench coordinator; this sprint removes 1,066 lines and the baseline cannot grow."
+    },
+    "lib/i18n.ts": {
+      "maxLines": 731,
+      "reason": "Bilingual message catalog kept together for compile-time key parity."
+    },
+    "lib/source.ts": {
+      "maxLines": 945,
+      "reason": "Legacy guarded collection pipeline; extraction requires a dedicated security review."
+    }
+  }
+}

@@ -1946,6 +1946,24 @@ body {
   gap: 7px;
 }
 
+.run-provenance {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.55rem;
+  margin: 0.75rem 0 1.25rem;
+  color: var(--muted, #666);
+  font-size: 0.78rem;
+}
+
+.run-provenance code {
+  padding: 0.2rem 0.4rem;
+  border: 1px solid currentColor;
+  border-radius: 0.35rem;
+}
+
+.run-provenance small { flex-basis: 100%; }
+
 .share-menu {
   position: relative;
 }

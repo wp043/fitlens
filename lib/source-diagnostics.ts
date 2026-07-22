@@ -1,5 +1,10 @@
 import type { CollectedSource } from "./source.ts";
 import { SourceError, type SourceErrorCode } from "./source.ts";
+import {
+  AnalysisBudgetExceededError,
+  mapWithHostLimits,
+  throwIfAborted,
+} from "./job-control.ts";
 
 export const sourceCollectionErrorCode = "source_collection_failed" as const;
 
@@ -21,12 +26,38 @@ export type CandidateSourceCollection =
 
 type SourceCollector = (url: string) => Promise<CollectedSource>;
 
+/**
+ * `analyzeRequestSchema` and the CLI both cap `urls` at 8 before this runs, so
+ * unbounded `Promise.allSettled` fan-out only ever means 8 concurrent outbound
+ * fetches per request. This is a defense-in-depth ceiling, not the primary
+ * enforcement point: it protects this shared collector if a future caller
+ * forgets to validate first.
+ */
+const MAX_CANDIDATE_SOURCES = 8;
+
 /** Collect every candidate so the caller can identify all rows that need attention. */
 export async function collectCandidateSources(
   urls: string[],
   collect: SourceCollector,
+  options: { overallConcurrency?: number; perHostConcurrency?: number; signal?: AbortSignal } = {},
 ): Promise<CandidateSourceCollection> {
-  const outcomes = await Promise.allSettled(urls.map((url) => collect(url)));
+  if (urls.length > MAX_CANDIDATE_SOURCES) {
+    throw new RangeError(
+      `collectCandidateSources supports at most ${MAX_CANDIDATE_SOURCES} URLs, got ${urls.length}.`,
+    );
+  }
+  const outcomes = await mapWithHostLimits(urls, collect, {
+    overall: options.overallConcurrency,
+    perHost: options.perHostConcurrency,
+    signal: options.signal,
+  });
+  throwIfAborted(options.signal);
+  const budgetFailure = outcomes.find(
+    (outcome) =>
+      outcome.status === "rejected" &&
+      outcome.reason instanceof AnalysisBudgetExceededError,
+  );
+  if (budgetFailure?.status === "rejected") throw budgetFailure.reason;
   const failures = outcomes.flatMap((outcome, index) => {
     if (outcome.status === "fulfilled") return [];
     return [{
