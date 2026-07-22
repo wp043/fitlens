@@ -12,6 +12,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "fitlens": "node --import tsx scripts/fitlens.ts",
     "lint": "eslint .",
     "test": "node --test"
   },
@@ -29,6 +30,7 @@
     "@types/react-dom": "^19.0.0",
     "eslint": "^9.0.0",
     "eslint-config-next": "^16.0.0",
+    "tsx": "^4.23.1",
     "typescript": "^5.9.0"
   }
 }

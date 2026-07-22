@@ -179,6 +179,27 @@ Remote compatible endpoints must use HTTPS. Plain HTTP is allowed only for
 loopback addresses. Base URLs containing credentials, query parameters, or
 fragments are rejected, and provider configuration never enters saved reports.
 
+## CLI and headless use
+
+The CLI runs the same validation, guarded source collector, provider adapter,
+and structured analysis service as the browser route:
+
+```bash
+pnpm fitlens analyze \
+  --url https://product-a.example \
+  --url https://product-b.example \
+  --context "I need a local-first tool for daily agent workflows." \
+  --format markdown \
+  --output comparison.md
+```
+
+It reads provider credentials from the same environment variables described
+above. Use `--criteria criteria.json` for custom criteria, `--context-file
+context.txt` for longer workflows, or `pnpm fitlens --help` for the complete
+command reference. Built-in `general`, `developer-tools`, `privacy-first`, and
+`daily-use` templates are available through `--template`; JSON is the default
+stdout format for scripts.
+
 ## Local by design
 
 FitLens has no account system and no hosted database.
@@ -233,6 +254,8 @@ flows, invariants, persistence, test layers, and deliberate non-goals.
 app/
   api/analyze/       request orchestration and public error responses
   examples/          bundled no-key comparison
+scripts/
+  fitlens             headless CLI entry point
 components/
   compare-workbench  local interactive research workspace
   candidate-inbox    quick capture, filtering, archive, and shortlist UI
@@ -241,6 +264,9 @@ lib/
   source-adapters/   official document discovery and classification
   model-provider     provider configuration and structured Responses adapter
   analyzer           prompt, response schema, and cross-field validation
+  analysis-service   shared browser and headless orchestration
+  cli                deterministic command parsing and help
+  markdown-report    portable headless Markdown rendering
   scoring            deterministic preference weighting
   confidence         deterministic evidence confidence
   conflicts          opposing-claim detection
@@ -279,8 +305,8 @@ diagnostics, and URL/DNS/redirect safety without requiring live network calls.
 - Compatible models must implement the Responses API and JSON Schema structured
   output used by FitLens.
 
-The highest-value next step is a CLI and headless workflow for scripted,
-repeatable comparisons outside the browser.
+The highest-value next step is local watchlists with scheduled refreshes and
+source snapshots for decisions that need to stay current.
 
 ## License
 

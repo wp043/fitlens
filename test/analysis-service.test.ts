@@ -1,0 +1,70 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import {
+  CandidateSourceCollectionError,
+  MissingModelCredentialsError,
+  runAnalysis,
+} from "../lib/analysis-service.ts";
+import { getBuiltInCriteriaTemplates } from "../lib/criteria.ts";
+import { SourceError } from "../lib/source.ts";
+
+test("returns the bundled comparison through the shared headless service", async () => {
+  const criteria = getBuiltInCriteriaTemplates("en").find(
+    (template) => template.id === "developer-tools",
+  )!.criteria;
+  const result = await runAnalysis(
+    {
+      urls: ["https://cmux.com/", "https://otty.sh/"],
+      context: "I compare local agent terminals on macOS.",
+      criteria,
+      locale: "en",
+    },
+    { env: {} },
+  );
+  assert.equal(result.products.length, 2);
+  assert.equal(result.dimensions.length, criteria.length);
+});
+
+test("requires credentials for non-sample headless analysis", async () => {
+  const criteria = getBuiltInCriteriaTemplates("en").find(
+    (template) => template.id === "general",
+  )!.criteria;
+  await assert.rejects(
+    runAnalysis(
+      {
+        urls: ["https://one.test/", "https://two.test/"],
+        context: "A sufficiently detailed comparison workflow.",
+        criteria,
+        locale: "en",
+      },
+      { env: {} },
+    ),
+    MissingModelCredentialsError,
+  );
+});
+
+test("returns ordered source diagnostics before any model request", async () => {
+  const criteria = getBuiltInCriteriaTemplates("en").find(
+    (template) => template.id === "general",
+  )!.criteria;
+  await assert.rejects(
+    runAnalysis(
+      {
+        urls: ["https://one.test/", "https://two.test/"],
+        context: "A sufficiently detailed comparison workflow.",
+        criteria,
+        locale: "en",
+      },
+      {
+        env: { OPENAI_API_KEY: "sk-test-key-that-is-long-enough" },
+        collectSource: async (url) => {
+          throw new SourceError(url.includes("one") ? "privateNetwork" : "fetchFailed");
+        },
+      },
+    ),
+    (error: unknown) =>
+      error instanceof CandidateSourceCollectionError &&
+      error.failures[0].code === "privateNetwork" &&
+      error.failures[1].code === "fetchFailed",
+  );
+});

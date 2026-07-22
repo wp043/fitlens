@@ -26,7 +26,7 @@ domain modules do not import the UI or route.
 │ app/page.tsx · components/compare-workbench.tsx              │
 ├──────────────────────────────────────────────────────────────┤
 │ Request orchestration                                        │
-│ app/api/analyze/route.ts · lib/analyze-request.ts             │
+│ route.ts · analysis-service.ts · analyze-request.ts · CLI     │
 ├──────────────────────────────────────────────────────────────┤
 │ External adapters                                             │
 │ lib/source.ts · lib/source-adapters/* · source-diagnostics.ts │
@@ -39,9 +39,9 @@ domain modules do not import the UI or route.
 ```
 
 The browser is intentionally stateful: it owns draft criteria, local history,
-notes, trial results, and reweighting. The server is intentionally narrow: it
-validates a request, collects sources, calls the configured model, validates the
-structured response, and returns it.
+notes, trial results, and reweighting. The server and CLI share a narrow
+analysis service that validates a request, collects sources, calls the
+configured model, validates the structured response, and returns it.
 
 ## Module ownership
 
@@ -51,6 +51,8 @@ structured response, and returns it.
 | Workbench state and report interactions | `components/compare-workbench.tsx` |
 | Candidate capture, filtering, archive, and shortlist interactions | `components/candidate-inbox.tsx` |
 | Public analysis endpoint and status codes | `app/api/analyze/route.ts` |
+| Shared browser/CLI orchestration and source failure boundary | `lib/analysis-service.ts` |
+| Headless argument parsing and entry point | `lib/cli.ts`, `scripts/fitlens.ts` |
 | Request schema and URL-list validation | `lib/analyze-request.ts` |
 | URL policy, DNS checks, redirects, byte caps, page/GitHub collection | `lib/source.ts` |
 | Official pricing, docs, privacy, security, and changelog discovery | `lib/source-adapters/registry.ts` |

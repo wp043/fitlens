@@ -1,12 +1,12 @@
 import { z } from "zod";
-import { messages } from "@/lib/i18n";
+import { messages } from "./i18n.ts";
 import {
   requestStructuredOutput,
   type ModelProviderConfig,
-} from "@/lib/model-provider";
-import type { AnalyzeRequest, ComparisonResult } from "@/lib/types";
-import type { CollectedSource } from "@/lib/source";
-import { calibratePrivacyRisk } from "@/lib/privacy";
+} from "./model-provider.ts";
+import type { AnalyzeRequest, ComparisonResult } from "./types.ts";
+import type { CollectedSource } from "./source.ts";
+import { calibratePrivacyRisk } from "./privacy.ts";
 
 const evidenceSchema = z
   .object({
