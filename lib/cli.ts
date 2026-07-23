@@ -1,4 +1,5 @@
 import type { Locale } from "./i18n.ts";
+import { parseAlertConditions, type WatchAlertCondition } from "./watch-alerts.ts";
 
 export type CliOutputFormat = "json" | "markdown" | "text";
 
@@ -24,6 +25,8 @@ export interface CliOptions {
   replayOut?: string;
   /** Exit non-zero when the winner's confidence is below this percentage. */
   minConfidence?: number;
+  /** Watch alert conditions, e.g. "winner,confidence,unknowns". */
+  alertOn?: WatchAlertCondition[];
 }
 
 /** Analyze accepts 2–8 candidate URLs, whether from --url or piped stdin. */
@@ -145,6 +148,9 @@ export function parseCliArguments(
         options.minConfidence = parsed;
         break;
       }
+      case "--alert-on":
+        options.alertOn = parseAlertConditions(value);
+        break;
       default:
         throw new Error(`Unknown option: ${flag}`);
     }
@@ -192,6 +198,7 @@ Usage:
   fitlens analyze --url <url> --url <url> --context <text> [options]
   fitlens replay --bundle <path> [--format text|markdown|json] [--output <path>]
   fitlens watch --config <path> [--output-dir <path>] [--force]
+                [--alert-on winner,confidence,unknowns] [--min-confidence <n>]
   fitlens doctor [--json] [--output <path>] [--check-playwright] [--probe-provider]
 
 Run "fitlens demo" first: it renders a complete bundled comparison report
@@ -213,6 +220,8 @@ Options:
   --output <path>        Write output to a file instead of stdout
   --replay-out <path>    Write this run's offline replay bundle to a file
   --min-confidence <n>   Exit 2 if the winner's confidence is below n (0-100)
+  --alert-on <list>      Watch: exit 2 and write alerts.json on any of
+                         winner, confidence, unknowns, any (comma-separated)
   --no-sample            Require a configured provider for bundled examples
   --bundle <path>        Replay bundle to verify and rerun offline
   --config <path>        Watchlist JSON file

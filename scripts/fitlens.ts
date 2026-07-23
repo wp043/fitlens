@@ -9,6 +9,12 @@ import {
   type CliOutputFormat,
 } from "../lib/cli.ts";
 import { VERSION } from "../lib/version.ts";
+import {
+  evaluateWatchAlert,
+  formatWatchAlerts,
+  type WatchAlert,
+  type WatchAlertReport,
+} from "../lib/watch-alerts.ts";
 import { getBuiltInCriteriaTemplates } from "../lib/criteria.ts";
 import { comparisonToMarkdown } from "../lib/markdown-report.ts";
 import { comparisonToTerminal } from "../lib/terminal-report.ts";
@@ -86,6 +92,12 @@ async function runWatchlist(
     process.stdout.write("No watch entries are due.\n");
     return;
   }
+  // Alerting is opt-in: only --alert-on or --min-confidence turns a change into
+  // a non-zero exit and an alerts.json for a scheduler to act on.
+  const alertConditions = options.alertOn ?? [];
+  const alertingEnabled =
+    alertConditions.length > 0 || options.minConfidence !== undefined;
+  const alerts: WatchAlert[] = [];
   let failures = 0;
   for (const entry of entries) {
     try {
@@ -151,11 +163,37 @@ async function runWatchlist(
           );
         }
       }
+      if (alertingEnabled) {
+        const alert = evaluateWatchAlert({
+          entryId: entry.id,
+          result,
+          change,
+          conditions: alertConditions,
+          minConfidence: options.minConfidence,
+        });
+        if (alert) alerts.push(alert);
+      }
     } catch (error) {
       failures += 1;
       process.stderr.write(
         `watch ${entry.id} failed: ${error instanceof Error ? error.message : "unknown error"}\n`,
       );
+    }
+  }
+  if (alertingEnabled) {
+    const report: WatchAlertReport = {
+      generatedAt: new Date().toISOString(),
+      alerts,
+    };
+    await writeJsonAtomic(
+      resolve(options.outputDirectory!, "alerts.json"),
+      report,
+    );
+    if (alerts.length > 0) {
+      process.stdout.write(`${formatWatchAlerts(alerts)}\n`);
+      // Exit 2 (threshold gate), distinct from 1 (a run failed), so a scheduler
+      // can tell "something changed" from "the tool broke".
+      if (failures === 0) process.exitCode = 2;
     }
   }
   if (failures > 0) process.exitCode = 1;

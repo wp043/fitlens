@@ -363,6 +363,43 @@ invalidates a successful refresh. Use `--force` to refresh everything regardless
 of interval. `.fitlens/` is ignored by Git so research snapshots are not
 published accidentally.
 
+#### Alerting from a scheduler
+
+Desktop notifications need a session, which cron and CI do not have. `--alert-on`
+and `--min-confidence` turn a watched change into a **non-zero exit (code 2)** and
+an `alerts.json` summary, so any scheduler can act on the result:
+
+```bash
+fitlens watch --config fitlens.watch.json \
+  --alert-on winner,unknowns --min-confidence 65
+```
+
+Conditions: `winner` (the recommendation flipped), `confidence` (winner below
+`--min-confidence`), `unknowns` (new unknowns appeared), `any` (anything changed).
+Exit codes stay consistent with the rest of the CLI: `0` nothing to report, `1` a
+run failed, `2` an alert fired. `alerts.json` lands in the output directory:
+
+```json
+{
+  "generatedAt": "2026-07-23T09:00:00.000Z",
+  "alerts": [
+    { "entryId": "terminal-tools", "winner": "product-b", "confidence": 58,
+      "reasons": ["winner changed from product-a to product-b",
+                  "winner confidence 58% is below 65%"] }
+  ]
+}
+```
+
+A weekly cron entry that emails on an alert:
+
+```cron
+0 9 * * 1  cd ~/research && fitlens watch --config fitlens.watch.json \
+  --alert-on winner --min-confidence 65 | mail -s "FitLens alert" you@example.com
+```
+
+Because the alert is an exit code, a GitHub Actions or systemd wrapper can just
+let the step fail to trigger its own notification path.
+
 ## Local by design
 
 FitLens has no account system and no hosted database.
