@@ -74,6 +74,39 @@ jobs:
           node dist/scripts/fitlens.js demo --format json --output demo.json
           node -e "JSON.parse(require('fs').readFileSync('demo.json','utf8'))"
 
+  # Pack the real tarball and run the CLI from a clean install, so the published
+  # artifact is tested end to end: the `files` allowlist, the `bin` mapping, the
+  # prepack build, and the trimmed dependency set. Uses npm (not pnpm) for the
+  # consumer install to mirror how a stranger runs `npm install fitlens`.
+  package-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6
+        with:
+          version: 10.22.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 22.22.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Pack the tarball
+        run: pnpm pack --pack-destination "$RUNNER_TEMP/pack"
+      - name: Install the tarball into a clean project
+        working-directory: ${{ runner.temp }}
+        run: |
+          mkdir consumer && cd consumer
+          npm init -y >/dev/null
+          npm install "$RUNNER_TEMP"/pack/fitlens-*.tgz
+      - name: Run the CLI from the installed package
+        working-directory: ${{ runner.temp }}/consumer
+        run: |
+          ./node_modules/.bin/fitlens --version
+          ./node_modules/.bin/fitlens demo --format text </dev/null
+          ./node_modules/.bin/fitlens demo --format json </dev/null > demo.json
+          node -e "JSON.parse(require('fs').readFileSync('demo.json','utf8'))"
+
   browser:
     runs-on: ubuntu-latest
     timeout-minutes: 20

@@ -54,6 +54,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   non-erasable syntax in the entry script cannot ship green. A separate
   `cli-engines-floor` job runs the compiled CLI on Node 20.18.1 to test the
   advertised `engines` floor, since the dev toolchain itself requires Node 22.
+- A `package-smoke` CI job packs the real tarball, installs it into a clean
+  project with npm (as a consumer would), and runs the CLI from the installed
+  `bin`. This tests the `files` allowlist, the `bin` mapping, the prepack build,
+  and the trimmed dependency set end to end, catching packaging regressions that
+  `build:cli` alone cannot.
 
 ### Fixed
 
