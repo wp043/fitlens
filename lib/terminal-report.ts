@@ -58,7 +58,6 @@ function isWide(code: number) {
 }
 
 function stripAnsi(input: string) {
-  // eslint-disable-next-line no-control-regex
   return input.replace(/\u001b\[[0-9;]*m/g, "");
 }
 

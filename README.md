@@ -530,6 +530,21 @@ requests rebases for outdated branches, retries one failed CI attempt, and
 merges minor or patch updates only after the complete CI matrix passes. Major
 updates and persistent failures remain open with an agent-review label.
 
+### Releasing
+
+`pnpm release <version>` cuts a release in one command: it checks the tree is
+clean and on `main`, that the tag does not exist, and that `CHANGELOG.md`
+documents the version; syncs `package.json` and `lib/version.ts`; runs the full
+gate; then publishes to npm, tags, and creates the GitHub release. Preview it
+first with `pnpm release <version> --dry-run`, which runs the read-only checks
+and prints, without executing, the commands that would mutate anything.
+
+```bash
+# 1. Add a "## [x.y.z] - <date>" section to CHANGELOG.md
+pnpm release 0.2.0 --dry-run   # preview
+pnpm release 0.2.0             # publish + tag + GitHub release
+```
+
 ## Current limits
 
 - Source collection starts with one official page, follows at most one page per

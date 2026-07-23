@@ -46,7 +46,8 @@
     "test:e2e:update": "playwright test --update-snapshots",
     "test:production": "node --import tsx scripts/production-harness.ts",
     "check:code-health": "node scripts/check-code-health.mjs",
-    "check": "pnpm test && pnpm test:performance && pnpm test:coverage-ratchet && pnpm check:code-health && pnpm lint && pnpm exec tsc --noEmit && pnpm build"
+    "check": "pnpm test && pnpm test:performance && pnpm test:coverage-ratchet && pnpm check:code-health && pnpm lint && pnpm exec tsc --noEmit && pnpm build",
+    "release": "node scripts/release.mjs"
   },
   "dependencies": {
     "cheerio": "^1.1.2",
