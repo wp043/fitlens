@@ -106,3 +106,62 @@ test("output format defaults to the caller's choice and accepts text", () => {
     /json, markdown, or text/,
   );
 });
+
+test("version is requested before command validation", () => {
+  assert.equal(parseCliArguments(["--version"]).command, "version");
+  assert.equal(parseCliArguments(["-v"]).command, "version");
+  // --version wins even alongside an otherwise-unknown command.
+  assert.equal(parseCliArguments(["bogus", "--version"]).command, "version");
+});
+
+test("analyze accepts replay-out and a validated min-confidence", () => {
+  const options = parseCliArguments([
+    "analyze",
+    "--url", "https://one.test",
+    "--url", "https://two.test",
+    "--context", "A detailed workflow context.",
+    "--replay-out", "bundle.json",
+    "--min-confidence", "70",
+  ]);
+  assert.equal(options.replayOut, "bundle.json");
+  assert.equal(options.minConfidence, 70);
+
+  for (const bad of ["-1", "101", "abc"]) {
+    assert.throws(
+      () => parseCliArguments([
+        "analyze",
+        "--url", "https://one.test",
+        "--url", "https://two.test",
+        "--context", "A detailed workflow context.",
+        "--min-confidence", bad,
+      ]),
+      /min-confidence/,
+    );
+  }
+});
+
+test("demo rejects replay-out because it has no bundle", () => {
+  assert.throws(
+    () => parseCliArguments(["demo", "--replay-out", "bundle.json"]),
+    /produces no replay bundle/,
+  );
+});
+
+test("analyze defers URL validation when stdin is piped", () => {
+  // With a pipe and no --url, parsing succeeds; the runtime supplies URLs.
+  const piped = parseCliArguments(
+    ["analyze", "--context", "A detailed workflow context."],
+    "json",
+    true,
+  );
+  assert.deepEqual(piped.urls, []);
+  // Without a pipe, the same arguments fail fast.
+  assert.throws(
+    () => parseCliArguments(
+      ["analyze", "--context", "A detailed workflow context."],
+      "json",
+      false,
+    ),
+    /2–8 URLs/,
+  );
+});

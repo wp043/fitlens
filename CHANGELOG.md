@@ -24,6 +24,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   written to a file, and `NO_COLOR` is honored. Zero new dependencies.
   Widths are measured in terminal cells, so East Asian text stays aligned, and
   Chinese line-breaking rules keep punctuation off the start of a line.
+- `fitlens --version` (`-v`) prints the CLI version. A test asserts the exported
+  constant matches `package.json` so it cannot drift.
+- `analyze` reads candidate URLs from piped stdin, one per line, so
+  `cat urls.txt | fitlens analyze --context "..."` works. Blank lines and `#`
+  comments are ignored.
+- `analyze --replay-out <path>` writes the run's offline replay bundle for later
+  `fitlens replay`.
+- `analyze --min-confidence <n>` exits `2` when the winner's confidence is below
+  `n`, so a scheduled job can gate on a shaky recommendation. Exit codes are now
+  `0` success, `1` error, `2` threshold not met.
 
 ### Changed
 
@@ -39,6 +49,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `erasableSyntaxOnly` is enabled. `pnpm test` runs under Node's strip-only
   TypeScript mode, which rejects syntax `tsc` accepts, so the typecheck now
   catches that class of error instead of the test run.
+- CI builds and smoke-tests the compiled CLI on every OS (`build:cli`, then
+  `demo` in text and JSON, and `--version`), so a broken import path or
+  non-erasable syntax in the entry script cannot ship green. A separate
+  `cli-engines-floor` job runs the compiled CLI on Node 20.18.1 to test the
+  advertised `engines` floor, since the dev toolchain itself requires Node 22.
 
 ### Fixed
 

@@ -28,9 +28,51 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm check
+      # The published CLI is the compiled dist/, not the tsx dev entry. Build it
+      # and run it on every OS so a broken import path or a strip-only syntax
+      # error cannot ship green. Demo is hermetic: no key, no network.
+      - name: Build and smoke-test the CLI
+        run: pnpm build:cli
+      - name: Demo renders styled text
+        run: node dist/scripts/fitlens.js demo --format text
+      - name: Demo emits parseable JSON
+        run: |
+          node dist/scripts/fitlens.js demo --format json --output demo.json
+          node -e "JSON.parse(require('fs').readFileSync('demo.json','utf8'))"
+      - name: CLI reports its version
+        run: node dist/scripts/fitlens.js --version
       - if: runner.os == 'Linux'
         name: Audit production dependencies
         run: pnpm audit --prod
+
+  # The dev toolchain needs Node 22 (node --test strips TypeScript), but the
+  # published package ships compiled JS and declares engines >=20.18.1. This job
+  # builds on 22, then runs the compiled CLI on the engines floor so the
+  # advertised support is actually tested, not assumed.
+  cli-engines-floor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6
+        with:
+          version: 10.22.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 22.22.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build:cli
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 20.18.1
+      - name: Compiled CLI runs on the engines floor
+        run: |
+          node --version
+          node dist/scripts/fitlens.js --version
+          node dist/scripts/fitlens.js demo --format text
+          node dist/scripts/fitlens.js demo --format json --output demo.json
+          node -e "JSON.parse(require('fs').readFileSync('demo.json','utf8'))"
 
   browser:
     runs-on: ubuntu-latest

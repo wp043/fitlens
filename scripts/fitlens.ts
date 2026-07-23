@@ -2,7 +2,13 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { z } from "zod";
-import { parseCliArguments, cliHelp, type CliOutputFormat } from "../lib/cli.ts";
+import {
+  parseCliArguments,
+  cliHelp,
+  validateAnalyzeUrls,
+  type CliOutputFormat,
+} from "../lib/cli.ts";
+import { VERSION } from "../lib/version.ts";
 import { getBuiltInCriteriaTemplates } from "../lib/criteria.ts";
 import { comparisonToMarkdown } from "../lib/markdown-report.ts";
 import { comparisonToTerminal } from "../lib/terminal-report.ts";
@@ -29,7 +35,11 @@ import { compareResults, type ComparisonDiff } from "../lib/diff.ts";
 import { sendLocalNotification } from "../lib/local-notifications.ts";
 import type { ComparisonResult } from "../lib/types.ts";
 import { createDoctorReport, formatDoctorReport } from "../lib/doctor.ts";
-import { parseReplayBundle, replayAnalysisBundle } from "../lib/reproducibility.ts";
+import {
+  parseReplayBundle,
+  replayAnalysisBundle,
+  serializeReplayBundle,
+} from "../lib/reproducibility.ts";
 
 async function writeJsonAtomic(path: string, value: unknown) {
   const temporary = `${path}.tmp-${process.pid}`;
@@ -185,13 +195,50 @@ function renderResult(
   return `${JSON.stringify(result, null, 2)}\n`;
 }
 
+async function readStdin() {
+  const chunks: Buffer[] = [];
+  for await (const chunk of process.stdin) chunks.push(chunk as Buffer);
+  return Buffer.concat(chunks).toString("utf8");
+}
+
+/** One URL per line; blank lines and `#` comments are ignored. */
+function parseUrlLines(input: string) {
+  return input
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0 && !line.startsWith("#"));
+}
+
+/**
+ * Exit codes: 0 success, 1 error, 2 a threshold gate was not met. Distinct so a
+ * CI job can tell "the tool failed" from "the winner is not confident enough".
+ */
+function applyConfidenceGate(result: ComparisonResult, minConfidence?: number) {
+  if (minConfidence === undefined) return;
+  const winner = result.products.find(
+    (product) => product.name === result.recommendation.winner,
+  );
+  if (winner && winner.confidence < minConfidence) {
+    process.stderr.write(
+      `winner confidence ${winner.confidence}% is below the required ${minConfidence}%\n`,
+    );
+    process.exitCode = 2;
+  }
+}
+
 async function main() {
   const controller = new AbortController();
   process.once("SIGINT", () => controller.abort());
+  const stdinIsPipe = !process.stdin.isTTY;
   const options = parseCliArguments(
     process.argv.slice(2),
     process.stdout.isTTY ? "text" : "json",
+    stdinIsPipe,
   );
+  if (options.command === "version") {
+    process.stdout.write(`${VERSION}\n`);
+    return;
+  }
   if (options.command === "help") {
     process.stdout.write(cliHelp);
     return;
@@ -229,6 +276,7 @@ async function main() {
     } else {
       process.stdout.write(output);
     }
+    applyConfidenceGate(result, options.minConfidence);
     return;
   }
 
@@ -237,6 +285,10 @@ async function main() {
   // provider, and it hides any ambient credentials so the output stays
   // identical on a configured machine.
   const demo = options.command === "demo";
+  if (!demo && options.urls.length === 0 && stdinIsPipe) {
+    options.urls = parseUrlLines(await readStdin());
+    validateAnalyzeUrls(options.urls);
+  }
   const context = demo
     ? DEMO_CONTEXT
     : options.contextFile
@@ -270,6 +322,19 @@ async function main() {
   } else {
     process.stdout.write(output);
   }
+  if (options.replayOut) {
+    if (!result.replayBundle) {
+      process.stderr.write("No replay bundle was produced for this run.\n");
+      process.exitCode = 1;
+    } else {
+      await writeFile(
+        resolve(options.replayOut),
+        serializeReplayBundle(result.replayBundle),
+        "utf8",
+      );
+    }
+  }
+  applyConfidenceGate(result, options.minConfidence);
 }
 
 main().catch((error: unknown) => {

@@ -100,6 +100,25 @@ npx fitlens analyze \
 and `doctor`. Run `fitlens doctor` if something looks wrong; it prints redacted
 diagnostics.
 
+Candidate URLs can be piped instead of repeated as flags:
+
+```bash
+cat urls.txt | fitlens analyze --context "..."   # one URL per line
+```
+
+Two flags make `analyze` usable in a pipeline. `--replay-out <path>` writes the
+run's offline replay bundle so the exact decision can be re-derived later with
+`fitlens replay --bundle <path>`, no network or model call. `--min-confidence
+<n>` exits with code `2` when the winning candidate's confidence is below `n`,
+so a scheduled job can flag a shaky recommendation:
+
+```bash
+fitlens analyze --url ... --url ... --context "..." --min-confidence 70 \
+  || echo "recommendation is not confident enough to act on"
+```
+
+Exit codes: `0` success, `1` error, `2` a threshold gate was not met.
+
 ### Or run the full web workbench
 
 The CLI covers analysis, replay, and watching. The interactive workbench —
