@@ -5,6 +5,12 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    ignore:
+      # undici 8 requires Node >=22.19.0 and drops the Node 20 engines floor
+      # this package supports. Stay on 7.x until the floor is intentionally
+      # raised. See the cli-engines-floor CI job.
+      - dependency-name: undici
+        update-types: [version-update:semver-major]
     groups:
       production:
         dependency-type: production
