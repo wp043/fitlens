@@ -95,7 +95,20 @@ const dimensionSchema = z
     key: z.string(),
     label: z.string(),
     weight: z.number().int().min(0).max(100),
-    productScores: z.record(z.string(), z.number().int().min(0).max(100)),
+    // A fixed-shape array, not a z.record: dynamic map keys compile to JSON
+    // Schema `propertyNames`, which strict structured output rejects on both
+    // OpenAI and Anthropic. Converted back to a keyed record after parsing.
+    productScores: z
+      .array(
+        z
+          .object({
+            name: z.string(),
+            score: z.number().int().min(0).max(100),
+          })
+          .strict(),
+      )
+      .min(2)
+      .max(8),
     winner: z.string(),
     explanation: z.string(),
   })
@@ -230,8 +243,19 @@ export function finalizeAnalysisResult(
   if (new Set(productNames).size !== productNames.length) {
     throw new Error(messages[request.locale].modelFailed);
   }
+  // Convert each dimension's productScores array back to the keyed record the
+  // rest of the pipeline expects. Duplicate names collapse, which the count
+  // check below then rejects.
   const returnedDimensions = new Map(
-    parsed.dimensions.map((dimension) => [dimension.key, dimension]),
+    parsed.dimensions.map((dimension) => [
+      dimension.key,
+      {
+        ...dimension,
+        productScores: Object.fromEntries(
+          dimension.productScores.map((entry) => [entry.name, entry.score]),
+        ) as Record<string, number>,
+      },
+    ]),
   );
   if (
     returnedDimensions.size !== request.criteria.length ||

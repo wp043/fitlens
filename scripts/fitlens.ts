@@ -113,7 +113,11 @@ async function runWatchlist(
           criteria,
           locale: entry.locale,
         },
-        { env: process.env, signal },
+        {
+          env: process.env,
+          signal,
+          budgetMs: options.budgetMs ?? CLI_ANALYSIS_BUDGET_MS,
+        },
       );
       const capturedAt = result.generatedAt;
       const directory = resolve(options.outputDirectory!, entry.id);
@@ -198,6 +202,14 @@ async function runWatchlist(
   }
   if (failures > 0) process.exitCode = 1;
 }
+
+/**
+ * Headless analysis budget. Longer than the web app's 55s default because no
+ * user is waiting on a spinner, and slower providers (Anthropic Sonnet 5 runs
+ * roughly 3x slower than gpt-5.6-luna here) need room for a retry. `--timeout`
+ * overrides it in either direction.
+ */
+const CLI_ANALYSIS_BUDGET_MS = 180_000;
 
 /**
  * Inputs the bundled sample recognizes. Keep in sync with
@@ -352,6 +364,7 @@ async function main() {
       env: demo ? {} : process.env,
       allowBundledSample: demo ? true : options.allowBundledSample,
       signal: controller.signal,
+      budgetMs: options.budgetMs ?? CLI_ANALYSIS_BUDGET_MS,
     },
   );
   const output = renderResult(result, options.format, Boolean(options.outputFile));

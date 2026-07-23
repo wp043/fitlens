@@ -122,9 +122,10 @@ function modelOutput(
       key: criterion.key,
       label: criterion.label,
       weight: criterion.weight,
-      productScores: Object.fromEntries(
-        names.map((name, productIndex) => [name, 90 - productIndex - criterionIndex]),
-      ),
+      productScores: names.map((name, productIndex) => ({
+        name,
+        score: 90 - productIndex - criterionIndex,
+      })),
       winner: names[0],
       explanation: "Deterministic dimension fixture.",
     })),

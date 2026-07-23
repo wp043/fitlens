@@ -165,3 +165,26 @@ test("analyze defers URL validation when stdin is piped", () => {
     /2–8 URLs/,
   );
 });
+
+test("timeout is parsed into a millisecond budget and range-checked", () => {
+  const options = parseCliArguments([
+    "analyze",
+    "--url", "https://one.test",
+    "--url", "https://two.test",
+    "--context", "A detailed workflow context.",
+    "--timeout", "120",
+  ]);
+  assert.equal(options.budgetMs, 120_000);
+  for (const bad of ["4", "601", "abc"]) {
+    assert.throws(
+      () => parseCliArguments([
+        "analyze",
+        "--url", "https://one.test",
+        "--url", "https://two.test",
+        "--context", "A detailed workflow context.",
+        "--timeout", bad,
+      ]),
+      /timeout must be between/,
+    );
+  }
+});

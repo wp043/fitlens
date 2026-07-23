@@ -137,11 +137,16 @@ pnpm dev
 Open `http://localhost:3000`.
 
 The bundled cmux/Otty report works without an API key. For a live comparison,
-enter a key for the current browser session or create `.env.local`:
+enter a key for the current browser session or create `.env.local` with an
+OpenAI **or** Anthropic key:
 
 ```dotenv
+# One of these two providers:
 OPENAI_API_KEY=
 OPENAI_MODEL=gpt-5.6-luna
+# ANTHROPIC_API_KEY=
+# ANTHROPIC_MODEL=claude-sonnet-5
+
 GITHUB_TOKEN=
 FITLENS_BROWSER_FALLBACK=0
 ```
@@ -268,8 +273,45 @@ Markdown remove that material while retaining non-secret run provenance.
 
 ## Model providers
 
-OpenAI is the default. A session key entered in the UI stays in
-`sessionStorage`; a key in `.env.local` stays on the local Next.js server.
+FitLens works with **OpenAI or Anthropic**, one provider per run. Set whichever
+key you have; if only one is present, that provider is used automatically. A
+session key entered in the UI stays in `sessionStorage`; a key in `.env.local`
+stays on the local Next.js server.
+
+```dotenv
+# OpenAI (default when its key is set)
+OPENAI_API_KEY=
+OPENAI_MODEL=gpt-5.6-luna
+
+# Anthropic (used automatically when only this key is set)
+ANTHROPIC_API_KEY=
+ANTHROPIC_MODEL=claude-sonnet-5
+```
+
+When both keys are present, OpenAI is chosen unless you set
+`FITLENS_MODEL_PROVIDER=anthropic`.
+
+The two providers reach structured output differently. OpenAI uses strict
+JSON-Schema structured output, which the full comparison schema compiles to
+cleanly. Anthropic's strict grammar rejects a schema this large ("compiled
+grammar is too large"), so the Anthropic path uses a forced tool call whose
+input is validated with the same schema. That is guidance, not a grammar, so an
+occasional response violates a constraint and is retried. Both paths disable
+extended thinking — this is structured extraction, not open reasoning.
+
+**Practical differences, measured on a 2-product comparison:**
+
+| | `gpt-5.6-luna` (OpenAI) | `claude-sonnet-5` (Anthropic) |
+| --- | --- | --- |
+| Latency | ~20s | ~75s (about 3× slower) |
+| Reliability | strict grammar, consistent | ~70–80%; occasional schema-violation retry |
+| Cost / comparison | ~$0.05 | ~$0.10 |
+
+Because Anthropic runs longer and may retry, the CLI's default analysis budget
+is 180s (the web app stays at 55s); raise or lower it with `--timeout <seconds>`.
+For FitLens's structured, latency-sensitive workload, `gpt-5.6-luna` is the
+stronger default; Anthropic is a good option when you specifically want Claude's
+judgment and can absorb the extra latency.
 
 FitLens can also use a compatible Responses API with JSON Schema structured
 output:

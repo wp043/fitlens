@@ -161,7 +161,7 @@ export interface AnalysisRunManifest {
   schemaVersion: 1;
   runId: string;
   status: "complete" | "failed";
-  provider: { kind: "openai" | "compatible" | "bundled-sample" | "replay"; model: string };
+  provider: { kind: "openai" | "compatible" | "anthropic" | "bundled-sample" | "replay"; model: string };
   versions: { prompt: string; schema: string; adapter: string; replay: string };
   requestHash: string;
   /** Present when a validated model payload exists (live or replay runs). */

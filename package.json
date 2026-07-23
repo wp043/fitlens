@@ -50,6 +50,7 @@
     "release": "node scripts/release.mjs"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.113.0",
     "cheerio": "^1.1.2",
     "openai": "^6.48.0",
     "undici": "^7.28.0",

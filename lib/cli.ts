@@ -27,6 +27,8 @@ export interface CliOptions {
   minConfidence?: number;
   /** Watch alert conditions, e.g. "winner,confidence,unknowns". */
   alertOn?: WatchAlertCondition[];
+  /** Analysis deadline in milliseconds; overrides the default budget. */
+  budgetMs?: number;
 }
 
 /** Analyze accepts 2–8 candidate URLs, whether from --url or piped stdin. */
@@ -151,6 +153,14 @@ export function parseCliArguments(
       case "--alert-on":
         options.alertOn = parseAlertConditions(value);
         break;
+      case "--timeout": {
+        const seconds = Number(value);
+        if (!Number.isFinite(seconds) || seconds < 5 || seconds > 600) {
+          throw new Error("--timeout must be between 5 and 600 seconds");
+        }
+        options.budgetMs = Math.round(seconds * 1000);
+        break;
+      }
       default:
         throw new Error(`Unknown option: ${flag}`);
     }
@@ -220,6 +230,7 @@ Options:
   --output <path>        Write output to a file instead of stdout
   --replay-out <path>    Write this run's offline replay bundle to a file
   --min-confidence <n>   Exit 2 if the winner's confidence is below n (0-100)
+  --timeout <seconds>    Analysis deadline, 5-600 (default 55)
   --alert-on <list>      Watch: exit 2 and write alerts.json on any of
                          winner, confidence, unknowns, any (comma-separated)
   --no-sample            Require a configured provider for bundled examples

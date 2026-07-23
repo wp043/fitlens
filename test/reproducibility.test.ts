@@ -66,7 +66,15 @@ function modelOutput() {
       pricing: product.pricing,
       privacy: product.privacy,
     })),
-    dimensions: structuredClone(sampleComparison.dimensions),
+    // The model contract expresses productScores as a fixed [{name, score}]
+    // array (strict structured output forbids the dynamic-key record shape the
+    // final ComparisonResult uses).
+    dimensions: sampleComparison.dimensions.map((dimension) => ({
+      ...structuredClone(dimension),
+      productScores: Object.entries(dimension.productScores).map(
+        ([name, score]) => ({ name, score }),
+      ),
+    })),
     unknowns: sampleComparison.unknowns,
     trialPlan: sampleComparison.trialPlan,
   };

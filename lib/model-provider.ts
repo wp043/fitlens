@@ -1,9 +1,13 @@
 import OpenAI from "openai";
 import { zodTextFormat } from "openai/helpers/zod";
-import type { z } from "zod";
+import Anthropic from "@anthropic-ai/sdk";
+import { z } from "zod";
 import { parseRetryAfterMs } from "./retry-after.ts";
 
-export type ModelProviderKind = "openai" | "compatible";
+export type ModelProviderKind = "openai" | "compatible" | "anthropic";
+
+/** Output-token ceiling for the structured comparison. Ample for 2–8 products. */
+const ANTHROPIC_MAX_TOKENS = 16_000;
 
 export type ModelProviderConfig = {
   kind: ModelProviderKind;
@@ -99,15 +103,27 @@ export function resolveModelProviderConfig(
   env: Record<string, string | undefined>,
   sessionApiKey?: string,
 ): ModelProviderConfig {
-  const provider = cleanValue(env.FITLENS_MODEL_PROVIDER) || "openai";
-  if (provider !== "openai" && provider !== "compatible") {
+  // Default to Anthropic when only its key is present, so a fresh install with
+  // just ANTHROPIC_API_KEY works without also setting FITLENS_MODEL_PROVIDER.
+  const defaultProvider =
+    !cleanValue(env.OPENAI_API_KEY) && cleanValue(env.ANTHROPIC_API_KEY)
+      ? "anthropic"
+      : "openai";
+  const provider = cleanValue(env.FITLENS_MODEL_PROVIDER) || defaultProvider;
+  if (
+    provider !== "openai" &&
+    provider !== "compatible" &&
+    provider !== "anthropic"
+  ) {
     throw new ModelProviderConfigError("providerUnsupported");
   }
 
   const model =
     provider === "openai"
       ? cleanValue(env.OPENAI_MODEL) || "gpt-5.6-luna"
-      : cleanValue(env.FITLENS_MODEL_MODEL);
+      : provider === "anthropic"
+        ? cleanValue(env.ANTHROPIC_MODEL) || "claude-sonnet-5"
+        : cleanValue(env.FITLENS_MODEL_MODEL);
   if (!model || model.length > 200 || /[\u0000-\u001f\u007f]/.test(model)) {
     throw new ModelProviderConfigError("providerModelInvalid");
   }
@@ -116,9 +132,11 @@ export function resolveModelProviderConfig(
     cleanValue(sessionApiKey) ||
     (provider === "openai"
       ? cleanValue(env.OPENAI_API_KEY)
-      : cleanValue(env.FITLENS_MODEL_API_KEY));
+      : provider === "anthropic"
+        ? cleanValue(env.ANTHROPIC_API_KEY)
+        : cleanValue(env.FITLENS_MODEL_API_KEY));
 
-  if (provider === "openai") {
+  if (provider === "openai" || provider === "anthropic") {
     return { kind: provider, model, apiKey, isLoopback: false };
   }
 
@@ -183,6 +201,9 @@ export async function requestStructuredOutput<TSchema extends z.ZodTypeAny>(
     signal?: AbortSignal;
   },
 ): Promise<z.infer<TSchema> | null> {
+  if (config.kind === "anthropic") {
+    return requestAnthropicStructuredOutput(config, options);
+  }
   const client = new OpenAI({
     apiKey: config.apiKey || "fitlens-local-provider",
     ...(config.baseURL ? { baseURL: config.baseURL } : {}),
@@ -203,6 +224,69 @@ export async function requestStructuredOutput<TSchema extends z.ZodTypeAny>(
     return response.output_parsed === null
       ? null
       : options.schema.parse(response.output_parsed);
+  } catch (error) {
+    if (options.signal?.aborted) throw error;
+    const record = errorRecord(error);
+    const headers = record.headers as
+      | { get?: (name: string) => string | null }
+      | undefined;
+    throw new ModelProviderRequestError(
+      normalizeProviderError(error),
+      parseRetryAfterMs(headers?.get?.("retry-after")),
+    );
+  }
+}
+
+/**
+ * Anthropic path. FitLens's output schema exceeds Anthropic's strict
+ * structured-output grammar-size limit (the OpenAI strict path handles it,
+ * Anthropic returns "compiled grammar is too large"), so structure is obtained
+ * through a forced tool call instead: the model must emit exactly one tool_use
+ * whose input matches the schema. Tool inputs are never wrapped in prose or
+ * markdown, unlike a free-text JSON response. The same Zod schema the rest of
+ * the pipeline enforces validates the result. Thinking is disabled: this is
+ * structured extraction, mirroring the OpenAI path's `effort: "low"`.
+ */
+async function requestAnthropicStructuredOutput<TSchema extends z.ZodTypeAny>(
+  config: ModelProviderConfig,
+  options: {
+    schema: TSchema;
+    schemaName: string;
+    instructions: string;
+    input: string;
+    signal?: AbortSignal;
+  },
+): Promise<z.infer<TSchema> | null> {
+  const client = new Anthropic({
+    apiKey: config.apiKey || "fitlens-local-provider",
+  });
+  const jsonSchema = z.toJSONSchema(options.schema) as Record<string, unknown>;
+  delete jsonSchema.$schema;
+
+  try {
+    const response = await client.messages.create(
+      {
+        model: config.model,
+        max_tokens: ANTHROPIC_MAX_TOKENS,
+        thinking: { type: "disabled" },
+        system: options.instructions,
+        messages: [{ role: "user", content: options.input }],
+        tools: [
+          {
+            name: options.schemaName,
+            description: "Return the completed comparison as structured data.",
+            input_schema: jsonSchema as Anthropic.Tool.InputSchema,
+          },
+        ],
+        tool_choice: { type: "tool", name: options.schemaName },
+      },
+      { signal: options.signal },
+    );
+    const toolUse = response.content.find(
+      (block): block is Anthropic.ToolUseBlock => block.type === "tool_use",
+    );
+    if (!toolUse) return null;
+    return options.schema.parse(toolUse.input);
   } catch (error) {
     if (options.signal?.aborted) throw error;
     const record = errorRecord(error);

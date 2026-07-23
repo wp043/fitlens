@@ -126,6 +126,37 @@ test("OpenAI remains the default and a session key takes precedence", () => {
   assert.equal(modelProviderCanRun(config), true);
 });
 
+test("Anthropic is selected explicitly with its default model and key", () => {
+  const config = resolveModelProviderConfig({
+    FITLENS_MODEL_PROVIDER: "anthropic",
+    ANTHROPIC_API_KEY: "anthropic-secret",
+  });
+  assert.deepEqual(config, {
+    kind: "anthropic",
+    model: "claude-sonnet-5",
+    apiKey: "anthropic-secret",
+    isLoopback: false,
+  });
+  assert.equal(modelProviderCanRun(config), true);
+});
+
+test("Anthropic is auto-selected when only its key is present", () => {
+  const config = resolveModelProviderConfig({
+    ANTHROPIC_API_KEY: "anthropic-secret",
+    ANTHROPIC_MODEL: "claude-haiku-4-5",
+  });
+  assert.equal(config.kind, "anthropic");
+  assert.equal(config.model, "claude-haiku-4-5");
+});
+
+test("OpenAI wins the default when both keys are present", () => {
+  const config = resolveModelProviderConfig({
+    OPENAI_API_KEY: "openai-secret",
+    ANTHROPIC_API_KEY: "anthropic-secret",
+  });
+  assert.equal(config.kind, "openai");
+});
+
 test("compatible provider accepts a keyless loopback Responses base URL", () => {
   const config = resolveModelProviderConfig({
     FITLENS_MODEL_PROVIDER: "compatible",

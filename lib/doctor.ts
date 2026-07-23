@@ -137,15 +137,23 @@ async function providerProbe(
   baseURL: string,
   apiKey: string | undefined,
   fetchImplementation: typeof globalThis.fetch,
+  kind: string,
 ) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 5_000);
+  // Anthropic authenticates with x-api-key and requires a version header;
+  // OpenAI and compatible endpoints use a Bearer token.
+  const headers: Record<string, string> = apiKey
+    ? kind === "anthropic"
+      ? { "x-api-key": apiKey, "anthropic-version": "2023-06-01" }
+      : { authorization: `Bearer ${apiKey}` }
+    : {};
   try {
     const response = await fetchImplementation(`${baseURL.replace(/\/$/, "")}/models`, {
       method: "GET",
       redirect: "error",
       signal: controller.signal,
-      headers: apiKey ? { authorization: `Bearer ${apiKey}` } : undefined,
+      headers,
     });
     return response.status;
   } finally {
@@ -208,12 +216,16 @@ export async function createDoctorReport(
         detail: provider.baseURL ? `Endpoint: ${safeEndpoint(provider.baseURL)}` : undefined,
       });
       if (options.probeProvider) {
-        const baseURL = provider.baseURL ?? "https://api.openai.com/v1";
+        const baseURL =
+          provider.baseURL ??
+          (provider.kind === "anthropic"
+            ? "https://api.anthropic.com/v1"
+            : "https://api.openai.com/v1");
         if (!configured) {
           checks.push({ id: "provider-endpoint", status: "skip", summary: "Provider probe skipped because credentials are unavailable." });
         } else {
           try {
-            const status = await providerProbe(baseURL, provider.apiKey, options.fetch ?? globalThis.fetch);
+            const status = await providerProbe(baseURL, provider.apiKey, options.fetch ?? globalThis.fetch, provider.kind);
             checks.push({
               id: "provider-endpoint",
               status: status >= 200 && status < 300 ? "pass" : "fail",

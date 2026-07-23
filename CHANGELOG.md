@@ -9,6 +9,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Anthropic is now a first-class model provider alongside OpenAI. Set
+  `ANTHROPIC_API_KEY` (default model `claude-sonnet-5`); if only that key is
+  present it is selected automatically, otherwise `FITLENS_MODEL_PROVIDER=anthropic`
+  forces it. Because the comparison schema exceeds Anthropic's strict-grammar
+  size limit, the Anthropic path obtains structure through a forced tool call
+  validated with the same schema, with extended thinking disabled. OpenAI keeps
+  its strict JSON-Schema structured output and remains the default, unchanged.
+  `fitlens doctor --probe-provider` authenticates Anthropic correctly
+  (`x-api-key` + version header). On a 2-product comparison Anthropic Sonnet 5
+  runs about 3x slower than `gpt-5.6-luna` and occasionally retries a
+  schema-violating response.
+- `fitlens analyze --timeout <seconds>` overrides the analysis deadline (5–600).
+  The CLI defaults to a 180s budget (the web app stays at 55s) so the slower
+  Anthropic path completes headless.
+- `fitlens doctor` and the CLI now report the active provider kind.
+
+### Fixed
+
+- The model output schema used a dynamic `z.record` for per-dimension product
+  scores, which compiles to JSON-Schema `propertyNames` and is rejected by
+  strict structured output on **both** OpenAI (`'propertyNames' is not
+  permitted`) and Anthropic. Live analysis therefore failed against real models
+  regardless of provider. Scores are now a fixed `[{name, score}]` array in the
+  model contract, converted back to a keyed record after parsing so nothing
+  downstream changes.
+
 - `fitlens watch` can alert for a scheduler. `--alert-on winner,confidence,unknowns,any`
   and `--min-confidence <n>` turn a watched comparison's change into a non-zero
   exit (code 2) and an `alerts.json` summary in the output directory. Desktop
