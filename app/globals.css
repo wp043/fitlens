@@ -1,16 +1,7 @@
 @import url("https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap");
 
-:root {
-  --ink: #141714;
-  --paper: #f4f0e8;
-  --surface: #fbf8f2;
-  --line: #cbc5b9;
-  --muted: #696b65;
-  --accent: #ff5b35;
-  --green: #1f6b4f;
-  --soft-green: #dce9df;
-  --soft-orange: #f9dfd4;
-}
+/* Theme variables are defined by the Catppuccin :root block further down,
+ * which fully overrides an earlier light palette that used to live here. */
 
 * {
   box-sizing: border-box;
@@ -3048,6 +3039,7 @@ footer {
 .add-criterion small {
   margin-left: auto;
   color: #9a8791;
+  font-size: 12px;
 }
 
 .add-criterion:disabled {
