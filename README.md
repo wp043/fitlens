@@ -16,6 +16,7 @@
 </p>
 
 <p align="center">
+  <a href="https://www.npmjs.com/package/fitlens"><img alt="npm version" src="https://img.shields.io/npm/v/fitlens?style=flat-square&labelColor=1e1e2e&color=f38ba8" /></a>
   <img alt="Local first" src="https://img.shields.io/badge/local--first-yes-a6e3a1?style=flat-square&labelColor=1e1e2e" />
   <img alt="Next.js" src="https://img.shields.io/badge/Next.js-16-cba6f7?style=flat-square&labelColor=1e1e2e" />
   <img alt="pnpm" src="https://img.shields.io/badge/pnpm-10-fab387?style=flat-square&labelColor=1e1e2e" />
