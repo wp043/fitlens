@@ -89,7 +89,7 @@ a {
   gap: 9px;
   color: var(--muted);
   font-family: "DM Mono", monospace;
-  font-size: 11px;
+  font-size: 14px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
@@ -112,7 +112,7 @@ a {
   margin: 0 0 20px;
   color: var(--green);
   font-family: "DM Mono", monospace;
-  font-size: 11px;
+  font-size: 14px;
   font-weight: 500;
   letter-spacing: 0.12em;
 }
@@ -173,7 +173,7 @@ a {
 .step-index {
   font-family: "DM Mono", monospace;
   color: var(--accent);
-  font-size: 12px;
+  font-size: 14px;
 }
 
 .sample-tag {
@@ -182,7 +182,7 @@ a {
   background: var(--soft-green);
   color: var(--green);
   font-family: "DM Mono", monospace;
-  font-size: 10px;
+  font-size: 14px;
   text-transform: uppercase;
 }
 
@@ -198,7 +198,7 @@ a {
   margin-bottom: 9px;
   font-family: "DM Mono", monospace;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 14px;
   text-transform: uppercase;
 }
 
@@ -232,7 +232,7 @@ a {
   background: transparent;
   color: var(--ink);
   font-family: "DM Mono", monospace;
-  font-size: 13px;
+  font-size: 15px;
 }
 
 .url-actions {
@@ -303,7 +303,7 @@ a {
 .matrix-card > header > p {
   margin: 10px 0 0;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 14px;
 }
 
 .sliders {
@@ -326,18 +326,18 @@ a {
 }
 
 .slider-copy strong {
-  font-size: 13px;
+  font-size: 15px;
 }
 
 .slider-copy small {
   color: var(--muted);
-  font-size: 10px;
+  font-size: 14px;
 }
 
 .slider-copy b {
   color: var(--accent);
   font-family: "DM Mono", monospace;
-  font-size: 12px;
+  font-size: 14px;
 }
 
 .sliders input {
@@ -403,7 +403,7 @@ a {
   border-top: 1px solid #d89986;
   background: var(--soft-orange);
   color: #7c2c1b;
-  font-size: 12px;
+  font-size: 14px;
 }
 
 .result {
@@ -416,7 +416,7 @@ a {
   justify-content: space-between;
   border-top: 1px solid var(--ink);
   font-family: "DM Mono", monospace;
-  font-size: 10px;
+  font-size: 14px;
   text-transform: uppercase;
 }
 
@@ -496,7 +496,7 @@ a {
 .score-seal span,
 .score-seal small {
   font-family: "DM Mono", monospace;
-  font-size: 9px;
+  font-size: 14px;
   letter-spacing: 0.12em;
 }
 
@@ -559,7 +559,7 @@ a {
 .product-card header p {
   margin: 3px 0 0;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 14px;
 }
 
 .source-pill {
@@ -570,7 +570,7 @@ a {
   border: 1px solid var(--line);
   color: var(--muted);
   font-family: "DM Mono", monospace;
-  font-size: 9px;
+  font-size: 14px;
   white-space: nowrap;
 }
 
@@ -593,7 +593,7 @@ a {
   grid-template-columns: auto 1fr auto;
   align-items: center;
   gap: 12px;
-  font-size: 10px;
+  font-size: 14px;
 }
 
 .confidence > span {
@@ -644,7 +644,7 @@ a {
 
 .confidence-calibration > header strong {
   color: var(--green);
-  font-size: 11px;
+  font-size: 14px;
 }
 
 .confidence-calibration.moderate > header strong {
@@ -658,7 +658,7 @@ a {
 .confidence-calibration > header span,
 .confidence-calibration li b {
   color: var(--muted);
-  font-size: 8px;
+  font-size: 13px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
@@ -666,7 +666,7 @@ a {
 .confidence-calibration > header p {
   margin: 8px 0 0;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 14px;
   line-height: 1.55;
 }
 
@@ -680,7 +680,7 @@ a {
   padding: 10px 6px;
   border-right: 1px solid #ded8cc;
   color: var(--muted);
-  font-size: 8px;
+  font-size: 13px;
   text-align: center;
 }
 
@@ -691,7 +691,7 @@ a {
 .confidence-evidence-mix b {
   color: var(--ink);
   font-family: "DM Mono", monospace;
-  font-size: 11px;
+  font-size: 14px;
 }
 
 .confidence-calibration ul {
@@ -718,7 +718,7 @@ a {
   background: var(--soft-green);
   color: var(--green);
   font-family: "DM Mono", monospace;
-  font-size: 10px;
+  font-size: 14px;
 }
 
 .confidence-calibration li.limiting > span {
@@ -728,7 +728,7 @@ a {
 
 .confidence-calibration li p {
   margin: 2px 0 0;
-  font-size: 10px;
+  font-size: 14px;
   line-height: 1.45;
 }
 
@@ -738,7 +738,7 @@ a {
   padding: 15px;
   border-left: 3px solid var(--accent);
   background: #ece7dd;
-  font-size: 13px;
+  font-size: 15px;
   line-height: 1.6;
 }
 
@@ -752,7 +752,7 @@ a {
 .evidence-stack h4 {
   margin: 0 0 13px;
   font-family: "DM Mono", monospace;
-  font-size: 10px;
+  font-size: 14px;
   text-transform: uppercase;
 }
 
@@ -769,7 +769,7 @@ a {
   grid-template-columns: 14px 1fr;
   gap: 6px;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 14px;
   line-height: 1.5;
 }
 
@@ -804,7 +804,7 @@ a {
 
 .evidence-stack p {
   margin: 0;
-  font-size: 11px;
+  font-size: 14px;
   line-height: 1.5;
 }
 
@@ -812,14 +812,14 @@ a {
   grid-column: 2;
   margin-top: -5px;
   color: var(--muted);
-  font-size: 9px;
+  font-size: 14px;
 }
 
 .evidence-badge {
   padding: 3px 5px;
   border: 1px solid var(--line);
   font-family: "DM Mono", monospace;
-  font-size: 8px;
+  font-size: 13px;
   white-space: nowrap;
 }
 
@@ -867,13 +867,13 @@ a {
 }
 
 .matrix-label strong {
-  font-size: 13px;
+  font-size: 15px;
 }
 
 .matrix-label small {
   color: var(--accent);
   font-family: "DM Mono", monospace;
-  font-size: 9px;
+  font-size: 14px;
 }
 
 .matrix-bars {
@@ -886,7 +886,7 @@ a {
   grid-template-columns: 52px 1fr 25px;
   align-items: center;
   gap: 10px;
-  font-size: 10px;
+  font-size: 14px;
 }
 
 .matrix-bars span {
@@ -915,7 +915,7 @@ a {
 .matrix-row > p {
   margin: 0;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 14px;
   line-height: 1.6;
 }
 
@@ -952,7 +952,7 @@ a {
   position: relative;
   border-top: 1px solid var(--line);
   color: var(--muted);
-  font-size: 12px;
+  font-size: 14px;
   line-height: 1.55;
 }
 
@@ -969,7 +969,7 @@ a {
   border-radius: 50%;
   color: var(--accent);
   font-family: "DM Mono", monospace;
-  font-size: 9px;
+  font-size: 14px;
 }
 
 .trial-card {
@@ -992,7 +992,7 @@ a {
 .trial-card > div > span {
   color: var(--accent);
   font-family: "DM Mono", monospace;
-  font-size: 10px;
+  font-size: 14px;
 }
 
 .trial-card p {
@@ -1003,13 +1003,13 @@ a {
 }
 
 .trial-card strong {
-  font-size: 12px;
+  font-size: 14px;
   line-height: 1.5;
 }
 
 .trial-card small {
   color: #aeb1ab;
-  font-size: 10px;
+  font-size: 14px;
   line-height: 1.5;
 }
 
@@ -1027,7 +1027,7 @@ footer p,
 footer > span {
   color: var(--muted);
   font-family: "DM Mono", monospace;
-  font-size: 9px;
+  font-size: 14px;
 }
 
 footer > span {
@@ -1267,7 +1267,7 @@ body {
   padding: 9px 13px;
   border-radius: 999px;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 14px;
   transition:
     color 160ms ease,
     background 160ms ease;
@@ -1281,7 +1281,7 @@ body {
   color: var(--pink);
   cursor: pointer;
   font-family: "DM Mono", monospace;
-  font-size: 10px;
+  font-size: 14px;
 }
 
 .nav-links a:hover,
@@ -1354,7 +1354,7 @@ body {
   display: inline-flex;
   color: var(--pink);
   font-family: "DM Mono", monospace;
-  font-size: 11px;
+  font-size: 14px;
 }
 
 .compare-builder {
@@ -1549,7 +1549,7 @@ body {
 .method-cards article > span {
   color: var(--muted);
   font-family: "DM Mono", monospace;
-  font-size: 10px;
+  font-size: 14px;
 }
 
 .method-icon {
@@ -1577,7 +1577,7 @@ body {
 .method-cards p {
   margin: 0;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 14px;
   line-height: 1.65;
 }
 
@@ -1594,7 +1594,7 @@ body {
   border: 1px solid var(--line);
   border-radius: 18px;
   color: var(--pink);
-  font-size: 13px;
+  font-size: 15px;
   transition:
     background 160ms ease,
     transform 160ms ease;
@@ -1639,7 +1639,7 @@ body {
   color: var(--muted);
   cursor: pointer;
   font-family: "DM Mono", monospace;
-  font-size: 9px;
+  font-size: 14px;
 }
 
 .history-head button:hover,
@@ -1676,13 +1676,13 @@ body {
 }
 
 .history-list span {
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 700;
 }
 
 .history-list small {
   color: var(--muted);
-  font-size: 9px;
+  font-size: 14px;
 }
 
 .history-list b {
@@ -1691,14 +1691,14 @@ body {
   align-self: center;
   color: var(--pink);
   font-family: "DM Mono", monospace;
-  font-size: 9px;
+  font-size: 14px;
 }
 
 .library-panel .history-head > div:first-child > small {
   display: block;
   max-width: 560px;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 14px;
   line-height: 1.55;
 }
 
@@ -1732,7 +1732,7 @@ body {
   outline: 0;
   background: transparent;
   color: var(--ink);
-  font: 11px/1.4 "DM Mono", monospace;
+  font: 13px/1.4 "DM Mono", monospace;
 }
 
 .library-search input::placeholder {
@@ -1753,7 +1753,7 @@ body {
   background: #1e1e2e;
   color: var(--muted);
   font-family: "DM Mono", monospace;
-  font-size: 9px;
+  font-size: 14px;
 }
 
 .library-summary {
@@ -1762,7 +1762,7 @@ body {
   background: rgba(17, 17, 27, 0.24);
   color: #817888;
   font-family: "DM Mono", monospace;
-  font-size: 8px;
+  font-size: 13px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
@@ -1804,7 +1804,7 @@ body {
 .library-card-top span {
   overflow: hidden;
   color: var(--ink);
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 700;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1812,7 +1812,7 @@ body {
 
 .library-card-top small {
   color: var(--muted);
-  font-size: 9px;
+  font-size: 14px;
 }
 
 .library-card-top i {
@@ -1823,7 +1823,7 @@ body {
   background: rgba(166, 227, 161, 0.06);
   color: var(--green);
   font-family: "DM Mono", monospace;
-  font-size: 7px;
+  font-size: 13px;
   font-style: normal;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -1850,7 +1850,7 @@ body {
   background: rgba(137, 180, 250, 0.06);
   color: var(--blue);
   font-family: "DM Mono", monospace;
-  font-size: 8px;
+  font-size: 13px;
 }
 
 .library-decision {
@@ -1861,7 +1861,7 @@ body {
 .library-decision small {
   color: #817888;
   font-family: "DM Mono", monospace;
-  font-size: 7px;
+  font-size: 13px;
   letter-spacing: 0.1em;
   text-transform: uppercase;
 }
@@ -1877,7 +1877,7 @@ body {
 .library-metrics span {
   color: var(--muted);
   font-family: "DM Mono", monospace;
-  font-size: 8px;
+  font-size: 13px;
 }
 
 .library-metrics span + span::before {
@@ -1898,7 +1898,7 @@ body {
   color: var(--muted);
   cursor: pointer;
   font-family: "DM Mono", monospace;
-  font-size: 8px;
+  font-size: 13px;
 }
 
 .library-card-actions button:first-child {
@@ -1927,11 +1927,11 @@ body {
 
 .library-empty strong {
   color: var(--ink);
-  font-size: 12px;
+  font-size: 14px;
 }
 
 .library-empty small {
-  font-size: 9px;
+  font-size: 14px;
 }
 
 .result-kicker {
@@ -1976,7 +1976,7 @@ body {
   color: var(--blue);
   cursor: pointer;
   font-family: "DM Mono", monospace;
-  font-size: 9px;
+  font-size: 14px;
   text-align: center;
   white-space: nowrap;
 }
@@ -2007,13 +2007,13 @@ body {
 .share-menu strong {
   display: block;
   color: var(--ink);
-  font-size: 12px;
+  font-size: 14px;
 }
 
 .share-menu p {
   margin: 7px 0 13px;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 14px;
   line-height: 1.55;
 }
 
@@ -2021,6 +2021,93 @@ body {
   margin-right: 6px;
   border-color: rgba(137, 180, 250, 0.3);
   color: var(--blue);
+}
+
+.export-menu {
+  position: relative;
+}
+
+.export-menu > summary {
+  padding: 7px 12px;
+  list-style: none;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+  font-family: "DM Mono", monospace;
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.export-menu > summary::-webkit-details-marker {
+  display: none;
+}
+
+.export-menu > summary:hover,
+.export-menu[open] > summary {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.export-menu > div {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 8px);
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  width: min(260px, calc(100vw - 36px));
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow: 0 18px 50px rgba(20, 23, 20, 0.18);
+}
+
+.export-menu > div button {
+  width: 100%;
+  margin: 0;
+  padding: 9px 11px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+  font-family: "DM Mono", monospace;
+  font-size: 14px;
+  text-align: left;
+}
+
+.export-menu > div button:hover {
+  border-color: var(--line);
+  background: var(--soft-orange);
+  color: var(--ink);
+}
+
+.export-menu-group {
+  margin-top: 6px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.export-menu-group strong {
+  display: block;
+  color: var(--ink);
+  font-size: 14px;
+}
+
+.export-menu-group p {
+  margin: 4px 0 8px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.report-actions .action-secondary {
+  color: var(--muted);
+  border-style: dashed;
 }
 
 .decision-notes {
@@ -2058,7 +2145,7 @@ body {
   padding-left: 17px;
   position: relative;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 14px;
   line-height: 1.55;
 }
 
@@ -2072,7 +2159,7 @@ body {
 .decision-notes > div:last-child > p:last-child {
   margin: 0;
   color: #d9d1e4;
-  font-size: 12px;
+  font-size: 14px;
   line-height: 1.65;
 }
 
@@ -2109,7 +2196,7 @@ body {
   max-width: 620px;
   margin: 8px 0 0;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 14px;
   line-height: 1.6;
 }
 
@@ -2142,12 +2229,12 @@ body {
 
 .conflict-heading strong {
   color: var(--ink);
-  font-size: 11px;
+  font-size: 14px;
 }
 
 .conflict-heading small {
   color: var(--muted);
-  font-size: 9px;
+  font-size: 14px;
 }
 
 .conflict-severity {
@@ -2156,7 +2243,7 @@ body {
   border-radius: 999px;
   color: var(--peach);
   font-family: "DM Mono", monospace;
-  font-size: 7px;
+  font-size: 13px;
   text-transform: uppercase;
 }
 
@@ -2189,14 +2276,14 @@ body {
 .conflict-claims p {
   margin: 8px 0;
   color: #d9d1e4;
-  font-size: 10px;
+  font-size: 14px;
   line-height: 1.55;
 }
 
 .conflict-claims small {
   color: var(--muted);
   font-family: "DM Mono", monospace;
-  font-size: 7px;
+  font-size: 13px;
 }
 
 .verdict-card {
@@ -2448,7 +2535,7 @@ body {
   outline: 0;
   background: rgba(17, 17, 27, 0.32);
   color: var(--ink);
-  font-size: 9px;
+  font-size: 14px;
 }
 
 .trial-card select {
@@ -2500,12 +2587,12 @@ footer {
 
   .nav-links a {
     padding: 8px 10px;
-    font-size: 10px;
+    font-size: 14px;
   }
 
   .language-switch {
     padding: 7px 9px;
-    font-size: 9px;
+    font-size: 14px;
   }
 
   .hero {
@@ -2615,7 +2702,7 @@ footer {
   align-items: baseline;
   gap: 8px;
   color: #8e4058;
-  font-size: 12px;
+  font-size: 14px;
   line-height: 1.45;
 }
 
@@ -2625,7 +2712,7 @@ footer {
   border-radius: 999px;
   background: rgba(243, 139, 168, 0.16);
   font-family: "DM Mono", monospace;
-  font-size: 9px;
+  font-size: 14px;
   font-weight: 600;
   text-transform: uppercase;
 }
@@ -2649,11 +2736,11 @@ footer {
 
 .source-failure-summary strong {
   margin-bottom: 4px;
-  font-size: 13px;
+  font-size: 15px;
 }
 
 .source-failure-summary span {
-  font-size: 12px;
+  font-size: 14px;
   line-height: 1.5;
 }
 
@@ -2706,13 +2793,13 @@ footer {
 }
 
 .local-api-copy strong {
-  font-size: 12px;
+  font-size: 14px;
 }
 
 .local-api-copy small,
 .local-api-setup > p {
   color: #786c73;
-  font-size: 9px;
+  font-size: 14px;
 }
 
 .local-api-setup > p {
@@ -2745,7 +2832,7 @@ footer {
   background: transparent;
   color: var(--coffee);
   font-family: "DM Mono", monospace;
-  font-size: 10px;
+  font-size: 14px;
 }
 
 .api-key-field button,
@@ -2757,7 +2844,7 @@ footer {
   color: #695d64;
   cursor: pointer;
   font-family: "DM Mono", monospace;
-  font-size: 8px;
+  font-size: 13px;
 }
 
 .preference-profiles {
@@ -2785,7 +2872,7 @@ footer {
   color: #6f6269;
   cursor: pointer;
   font-family: "DM Mono", monospace;
-  font-size: 8px;
+  font-size: 13px;
 }
 
 .profile-chip button:hover {
@@ -2820,7 +2907,7 @@ footer {
   outline: 0;
   background: rgba(255, 255, 255, 0.5);
   color: var(--coffee);
-  font-size: 9px;
+  font-size: 14px;
 }
 
 .save-profile button:disabled {
@@ -2837,7 +2924,7 @@ footer {
 .criteria-help {
   margin: 0 0 2px;
   color: #786a71;
-  font-size: 9px;
+  font-size: 14px;
   line-height: 1.55;
 }
 
@@ -2859,7 +2946,7 @@ footer {
   padding-bottom: 8px;
   color: #a08894;
   font-family: "DM Mono", monospace;
-  font-size: 8px;
+  font-size: 13px;
 }
 
 .criterion-fields label {
@@ -2871,7 +2958,7 @@ footer {
 .criterion-fields label > span {
   color: #8b7882;
   font-family: "DM Mono", monospace;
-  font-size: 7px;
+  font-size: 13px;
   text-transform: uppercase;
 }
 
@@ -2885,7 +2972,7 @@ footer {
   outline: 0;
   background: rgba(255, 250, 246, 0.7);
   color: var(--coffee);
-  font-size: 9px;
+  font-size: 14px;
 }
 
 .criterion-fields input:focus {
@@ -2951,7 +3038,7 @@ footer {
   color: #6e5d66;
   cursor: pointer;
   font-family: "DM Mono", monospace;
-  font-size: 8px;
+  font-size: 13px;
 }
 
 .add-criterion span {
@@ -3016,7 +3103,7 @@ footer {
   border-radius: 999px;
   color: var(--green);
   font-family: "DM Mono", monospace;
-  font-size: 8px;
+  font-size: 13px;
 }
 
 .diff-card > header > span.changed {
@@ -3043,7 +3130,7 @@ footer {
 .diff-grid h3 {
   margin: 0 0 12px;
   color: var(--pink);
-  font-size: 10px;
+  font-size: 14px;
   text-transform: uppercase;
 }
 
@@ -3054,7 +3141,7 @@ footer {
   justify-content: space-between;
   gap: 12px;
   color: var(--muted);
-  font-size: 9px;
+  font-size: 14px;
   flex-wrap: wrap;
 }
 
@@ -3074,7 +3161,7 @@ footer {
   width: 100%;
   color: #817889;
   font-family: "DM Mono", monospace;
-  font-size: 7px;
+  font-size: 13px;
   text-align: right;
 }
 
@@ -3097,14 +3184,14 @@ footer {
 
 .diff-grid small {
   color: var(--muted);
-  font-size: 9px;
+  font-size: 14px;
 }
 
 .diff-card > footer {
   padding: 10px 24px;
   color: var(--muted);
   font-family: "DM Mono", monospace;
-  font-size: 7px;
+  font-size: 13px;
   text-align: right;
 }
 
@@ -3133,7 +3220,7 @@ footer {
 .manual-evidence-intro p:last-child {
   margin: 0;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 14px;
   line-height: 1.65;
 }
 
@@ -3153,7 +3240,7 @@ footer {
 .manual-evidence-form label > span {
   color: var(--muted);
   font-family: "DM Mono", monospace;
-  font-size: 8px;
+  font-size: 13px;
   text-transform: uppercase;
 }
 
@@ -3168,7 +3255,7 @@ footer {
   outline: 0;
   background: rgba(17, 17, 27, 0.28);
   color: var(--ink);
-  font-size: 9px;
+  font-size: 14px;
 }
 
 .manual-evidence-form input:focus,
@@ -3189,7 +3276,7 @@ footer {
   color: var(--green);
   cursor: pointer;
   font-family: "DM Mono", monospace;
-  font-size: 9px;
+  font-size: 14px;
 }
 
 .manual-evidence-form button:disabled {
@@ -3207,7 +3294,7 @@ footer {
 
 .evidence-review-heading p {
   color: var(--muted);
-  font: 9px/1.5 "DM Mono", monospace;
+  font: 13px/1.5 "DM Mono", monospace;
 }
 
 .evidence-review-item {
@@ -3240,7 +3327,7 @@ footer {
 .evidence-review-item > header a {
   margin-left: auto;
   color: var(--blue);
-  font: 9px "DM Mono", monospace;
+  font: 13px "DM Mono", monospace;
 }
 
 .review-status {
@@ -3248,7 +3335,7 @@ footer {
   border-radius: 999px;
   background: rgba(205, 214, 244, 0.08);
   color: var(--muted);
-  font: 8px "DM Mono", monospace;
+  font: 13px "DM Mono", monospace;
 }
 
 .review-status.accepted {
@@ -3269,7 +3356,7 @@ footer {
 .evidence-review-item label > span,
 .evidence-review-item details summary {
   color: var(--muted);
-  font: 8px "DM Mono", monospace;
+  font: 13px "DM Mono", monospace;
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
@@ -3306,7 +3393,7 @@ footer {
   padding-left: 10px;
   border-left: 2px solid var(--line);
   color: var(--muted);
-  font-size: 10px;
+  font-size: 14px;
 }
 
 .evidence-review-item > footer {
@@ -3316,7 +3403,7 @@ footer {
 
 .evidence-review-item > footer small {
   color: var(--muted);
-  font: 8px "DM Mono", monospace;
+  font: 13px "DM Mono", monospace;
 }
 
 .evidence-review-item > footer div {
@@ -3330,7 +3417,7 @@ footer {
   border-radius: 7px;
   background: rgba(205, 214, 244, 0.05);
   color: var(--muted);
-  font: 8px "DM Mono", monospace;
+  font: 13px "DM Mono", monospace;
   cursor: pointer;
 }
 
@@ -3371,7 +3458,7 @@ footer {
   max-width: 560px;
   margin: 0;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 14px;
   line-height: 1.65;
 }
 
@@ -3389,7 +3476,7 @@ footer {
   outline: 0;
   background: rgba(17, 17, 27, 0.34);
   color: var(--ink);
-  font: 10px/1.55 "DM Mono", monospace;
+  font: 13px/1.55 "DM Mono", monospace;
   resize: vertical;
 }
 
@@ -3404,7 +3491,7 @@ footer {
   border-radius: 10px;
   background: rgba(166, 227, 161, 0.1);
   color: var(--green);
-  font: 9px "DM Mono", monospace;
+  font: 13px "DM Mono", monospace;
   cursor: pointer;
 }
 
@@ -3417,7 +3504,7 @@ footer {
 .candidate-capture small {
   grid-column: 1 / -1;
   color: var(--muted);
-  font: 8px "DM Mono", monospace;
+  font: 13px "DM Mono", monospace;
 }
 
 .candidate-inbox-toolbar {
@@ -3438,7 +3525,7 @@ footer {
   outline: 0;
   background: rgba(17, 17, 27, 0.28);
   color: var(--ink);
-  font-size: 9px;
+  font-size: 14px;
 }
 
 .candidate-inbox-toolbar > label,
@@ -3447,7 +3534,7 @@ footer {
   align-items: center;
   gap: 6px;
   color: var(--muted);
-  font: 8px "DM Mono", monospace;
+  font: 13px "DM Mono", monospace;
 }
 
 .candidate-inbox-toolbar > button {
@@ -3521,14 +3608,14 @@ footer {
 
 .candidate-inbox-grid article > header strong {
   color: var(--cream);
-  font-size: 11px;
+  font-size: 14px;
   text-transform: capitalize;
 }
 
 .candidate-inbox-grid article > header a {
   overflow: hidden;
   color: var(--blue);
-  font: 8px "DM Mono", monospace;
+  font: 13px "DM Mono", monospace;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -3540,7 +3627,7 @@ footer {
 
 .candidate-inbox-grid article > label span {
   color: var(--muted);
-  font: 8px "DM Mono", monospace;
+  font: 13px "DM Mono", monospace;
   text-transform: uppercase;
 }
 
@@ -3553,7 +3640,7 @@ footer {
   outline: 0;
   background: rgba(17, 17, 27, 0.25);
   color: var(--ink);
-  font-size: 9px;
+  font-size: 14px;
 }
 
 .candidate-inbox-grid article > footer {
@@ -3565,7 +3652,7 @@ footer {
 .candidate-inbox-grid article > footer time {
   margin-right: auto;
   color: var(--muted);
-  font: 8px "DM Mono", monospace;
+  font: 13px "DM Mono", monospace;
 }
 
 .candidate-inbox-grid article > footer button {
@@ -3574,7 +3661,7 @@ footer {
   border-radius: 6px;
   background: transparent;
   color: var(--muted);
-  font: 8px "DM Mono", monospace;
+  font: 13px "DM Mono", monospace;
   cursor: pointer;
 }
 
@@ -3588,12 +3675,12 @@ footer {
 
 .candidate-inbox-empty strong {
   color: var(--cream);
-  font-size: 12px;
+  font-size: 14px;
 }
 
 .candidate-inbox-empty p {
   margin: 6px 0 0;
-  font-size: 9px;
+  font-size: 14px;
 }
 
 .decision-profiles-card {
@@ -3611,14 +3698,14 @@ footer {
 .decision-profiles-card h3 {
   margin: 3px 0 5px;
   color: var(--cream);
-  font-size: 14px;
+  font-size: 15px;
 }
 
 .decision-profiles-card p:last-child,
 .decision-profile-list small {
   margin: 0;
   color: var(--muted);
-  font-size: 8px;
+  font-size: 13px;
   line-height: 1.5;
 }
 
@@ -3641,7 +3728,7 @@ footer {
   border: 0;
   background: transparent;
   color: var(--blue);
-  font: 8px "DM Mono", monospace;
+  font: 13px "DM Mono", monospace;
   cursor: pointer;
 }
 
@@ -3663,7 +3750,7 @@ footer {
   outline: 0;
   background: rgba(17, 17, 27, 0.3);
   color: var(--ink);
-  font-size: 9px;
+  font-size: 14px;
 }
 
 .decision-profile-save button {
@@ -3697,7 +3784,7 @@ footer {
 
 .pairwise-card header p:last-child {
   color: var(--muted);
-  font-size: 9px;
+  font-size: 14px;
 }
 
 .pairwise-standings {
@@ -3707,7 +3794,7 @@ footer {
 
 .pairwise-standings > strong {
   color: var(--pink);
-  font: 8px "DM Mono", monospace;
+  font: 13px "DM Mono", monospace;
   text-transform: uppercase;
 }
 
@@ -3716,13 +3803,13 @@ footer {
   grid-template-columns: 18px 1fr auto;
   gap: 6px;
   color: var(--ink);
-  font-size: 9px;
+  font-size: 14px;
 }
 
 .pairwise-standings span b,
 .pairwise-standings span small {
   color: var(--muted);
-  font: 8px "DM Mono", monospace;
+  font: 13px "DM Mono", monospace;
 }
 
 .pairwise-builder {
@@ -3737,7 +3824,7 @@ footer {
 
 .pairwise-builder > span {
   color: var(--muted);
-  font: 8px "DM Mono", monospace;
+  font: 13px "DM Mono", monospace;
 }
 
 .pairwise-builder button,
@@ -3747,7 +3834,7 @@ footer {
   border-radius: 8px;
   background: rgba(245, 194, 231, 0.08);
   color: var(--pink);
-  font: 8px "DM Mono", monospace;
+  font: 13px "DM Mono", monospace;
   cursor: pointer;
 }
 
@@ -3774,7 +3861,7 @@ footer {
 
 .pairwise-list strong {
   color: var(--cream);
-  font-size: 10px;
+  font-size: 14px;
 }
 
 .pairwise-list strong i {
@@ -3785,7 +3872,7 @@ footer {
 .pairwise-list p {
   margin: 3px 0 0;
   color: var(--muted);
-  font-size: 8px;
+  font-size: 13px;
 }
 
 .local-data-tools {
@@ -3811,12 +3898,12 @@ footer {
 }
 
 .local-data-tools strong {
-  font-size: 13px;
+  font-size: 15px;
 }
 
 .local-data-tools small {
   color: var(--muted);
-  font-size: 10px;
+  font-size: 14px;
 }
 
 .local-data-tools > button {
@@ -3828,7 +3915,7 @@ footer {
   color: var(--pink);
   cursor: pointer;
   font-family: "DM Mono", monospace;
-  font-size: 9px;
+  font-size: 14px;
 }
 
 .history-head > div:last-child {
@@ -3849,7 +3936,7 @@ footer {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  font-size: 9px;
+  font-size: 14px;
 }
 
 .coverage-card > div:first-child span {
@@ -3859,7 +3946,7 @@ footer {
 .coverage-card > div:first-child strong {
   color: var(--pink);
   font-family: "DM Mono", monospace;
-  font-size: 9px;
+  font-size: 14px;
 }
 
 .coverage-meter {
@@ -3881,7 +3968,7 @@ footer {
   margin: 0;
   color: var(--muted);
   font-family: "DM Mono", monospace;
-  font-size: 8px;
+  font-size: 13px;
 }
 
 .pricing-card {
@@ -3902,13 +3989,13 @@ footer {
 .pricing-heading h4 {
   margin: 0 0 5px;
   color: var(--cream);
-  font-size: 12px;
+  font-size: 14px;
 }
 
 .pricing-heading p {
   margin: 0;
   color: var(--muted);
-  font-size: 9px;
+  font-size: 14px;
   line-height: 1.55;
 }
 
@@ -3919,7 +4006,7 @@ footer {
   border-radius: 999px;
   color: var(--muted);
   font-family: "DM Mono", monospace;
-  font-size: 7px;
+  font-size: 13px;
   text-transform: uppercase;
 }
 
@@ -3966,7 +4053,7 @@ footer {
 
 .pricing-plans > a > div:first-child strong {
   color: var(--cream);
-  font-size: 10px;
+  font-size: 14px;
 }
 
 .pricing-plans > a > p {
@@ -3982,7 +4069,7 @@ footer {
 .pricing-plans > a > p small {
   color: var(--muted);
   font-family: "DM Mono", monospace;
-  font-size: 8px;
+  font-size: 13px;
 }
 
 .pricing-plans dl,
@@ -4001,7 +4088,7 @@ footer {
 .pricing-plans dd {
   margin: 0;
   color: var(--muted);
-  font-size: 8px;
+  font-size: 13px;
   line-height: 1.45;
 }
 
@@ -4017,7 +4104,7 @@ footer {
   border: 1px dashed var(--line);
   border-radius: 10px;
   color: var(--muted);
-  font-size: 9px;
+  font-size: 14px;
   text-align: center;
 }
 
@@ -4026,7 +4113,7 @@ footer {
   padding-top: 11px;
   border-top: 1px solid var(--line);
   color: var(--muted);
-  font-size: 8px;
+  font-size: 13px;
   line-height: 1.5;
 }
 
@@ -4034,7 +4121,7 @@ footer {
   margin-right: 7px;
   color: var(--peach);
   font-family: "DM Mono", monospace;
-  font-size: 7px;
+  font-size: 13px;
   text-transform: uppercase;
 }
 
@@ -4056,14 +4143,14 @@ footer {
 .privacy-card h4 {
   margin: 0;
   color: var(--cream);
-  font-size: 13px;
+  font-size: 15px;
 }
 
 .privacy-card > header p,
 .privacy-summary {
   margin: 5px 0 0;
   color: var(--muted);
-  font-size: 8px;
+  font-size: 13px;
   line-height: 1.55;
 }
 
@@ -4074,7 +4161,7 @@ footer {
   border-radius: 9px;
   color: var(--yellow);
   font-family: "DM Mono", monospace;
-  font-size: 8px;
+  font-size: 13px;
   text-align: right;
 }
 
@@ -4086,7 +4173,7 @@ footer {
   display: block;
   margin-bottom: 2px;
   color: var(--subtle);
-  font-size: 6px;
+  font-size: 13px;
   text-transform: uppercase;
 }
 
@@ -4131,13 +4218,13 @@ footer {
 
 .privacy-findings strong {
   color: var(--cream);
-  font-size: 9px;
+  font-size: 14px;
 }
 
 .privacy-findings > a > div span {
   color: var(--subtle);
   font-family: "DM Mono", monospace;
-  font-size: 6px;
+  font-size: 13px;
   text-transform: uppercase;
 }
 
@@ -4145,7 +4232,7 @@ footer {
   min-height: 31px;
   margin: 7px 0;
   color: var(--ink);
-  font-size: 8px;
+  font-size: 13px;
   line-height: 1.45;
 }
 
@@ -4154,14 +4241,14 @@ footer {
   align-items: flex-start;
   gap: 5px;
   color: var(--muted);
-  font-size: 7px;
+  font-size: 13px;
   line-height: 1.4;
 }
 
 .privacy-findings small .evidence-badge {
   flex: 0 0 auto;
   padding: 2px 4px;
-  font-size: 5px;
+  font-size: 13px;
 }
 
 .research-notes-card {
@@ -4185,7 +4272,7 @@ footer {
 .research-notes-card > div:first-child > p:last-child {
   margin: 0;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 14px;
   line-height: 1.65;
 }
 
@@ -4204,7 +4291,7 @@ footer {
   outline: 0;
   background: rgba(17, 17, 27, 0.35);
   color: var(--ink);
-  font-size: 11px;
+  font-size: 14px;
   line-height: 1.65;
 }
 
@@ -4217,7 +4304,7 @@ footer {
   align-self: flex-end;
   color: var(--muted);
   font-family: "DM Mono", monospace;
-  font-size: 8px;
+  font-size: 13px;
 }
 
 @media (max-width: 850px) {

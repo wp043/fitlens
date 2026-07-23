@@ -24,8 +24,7 @@ import { mergeManualEvidence } from "@/lib/evidence";
 import { calibrateComparisonConfidence } from "@/lib/confidence";
 import { calculateWeightedWinner } from "@/lib/scoring";
 import { createRedactedReport } from "@/lib/redaction";
-import { serializeReplayBundle } from "@/lib/reproducibility";
-import { reportToAdr, reportToHtml } from "@/lib/durable-exports";
+import { reportToHtml } from "@/lib/durable-exports";
 import { CandidateInbox } from "@/components/candidate-inbox";
 import { BrandMark } from "@/components/workbench-primitives";
 import { ComparisonProductCard } from "@/components/comparison-product-card";
@@ -668,15 +667,6 @@ export function CompareWorkbench({
     URL.revokeObjectURL(url);
   }
 
-  function exportReplayBundle() {
-    if (!result?.replayBundle) return;
-    downloadArtifact(
-      serializeReplayBundle(result.replayBundle),
-      `${safeFilename(result.title)}.fitlens-replay.json`,
-      "application/json;charset=utf-8",
-    );
-  }
-
   function downloadArtifact(content: string, filename: string, type: string) {
     const url = URL.createObjectURL(new Blob([content], { type }));
     const anchor = document.createElement("a");
@@ -693,16 +683,6 @@ export function CompareWorkbench({
       reportToHtml(report),
       `${safeFilename(report.title)}.html`,
       "text/html;charset=utf-8",
-    );
-  }
-
-  function exportAdr() {
-    const report = currentPortableReport();
-    if (!report) return;
-    downloadArtifact(
-      reportToAdr(report),
-      `${safeFilename(report.title)}.adr.md`,
-      "text/markdown;charset=utf-8",
     );
   }
 
@@ -1392,8 +1372,8 @@ export function CompareWorkbench({
           evidenceLabels={evidenceLabels}
           actions={{
             refresh: () => void refreshAnalysis(), copy: () => void copyBrief(),
-            markdown: exportMarkdown, json: exportJson, replay: exportReplayBundle,
-            html: exportHtml, adr: exportAdr, pdf: exportPdf,
+            markdown: exportMarkdown, json: exportJson,
+            html: exportHtml, pdf: exportPdf,
             redactedMarkdown: exportRedactedMarkdown, redactedJson: exportRedactedJson,
             import: () => importInputRef.current?.click(), startOver,
           }}

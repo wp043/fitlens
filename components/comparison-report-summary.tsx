@@ -25,9 +25,7 @@ interface ReportActions {
   copy(): void;
   markdown(): void;
   json(): void;
-  replay(): void;
   html(): void;
-  adr(): void;
   pdf(): void;
   redactedMarkdown(): void;
   redactedJson(): void;
@@ -97,29 +95,29 @@ export function ComparisonReportSummary({
           <button onClick={actions.copy}>
             {copied ? t.copied : t.copyBrief}
           </button>
-          <button onClick={actions.markdown}>{t.exportMarkdown}</button>
-          <button onClick={actions.json}>{t.exportJson}</button>
-          {result.replayBundle && (
-            <button onClick={actions.replay}>{t.exportReplay}</button>
-          )}
-          <button onClick={actions.html}>{t.exportHtml}</button>
-          <button onClick={actions.adr}>{t.exportAdr}</button>
-          <button onClick={actions.pdf}>{t.exportPdf}</button>
-          <details className="share-menu">
-            <summary>{t.shareSafeCopy}</summary>
+          <details className="export-menu">
+            <summary>{t.exportMenu}</summary>
             <div>
-              <strong>{t.shareSafeTitle}</strong>
-              <p>{t.shareSafeCopyDetail}</p>
-              <button onClick={actions.redactedMarkdown}>
-                {t.shareMarkdown}
-              </button>
-              <button onClick={actions.redactedJson}>{t.shareJson}</button>
+              <button onClick={actions.markdown}>{t.exportMarkdown}</button>
+              <button onClick={actions.json}>{t.exportJson}</button>
+              <button onClick={actions.html}>{t.exportHtml}</button>
+              <button onClick={actions.pdf}>{t.exportPdf}</button>
+              <div className="export-menu-group">
+                <strong>{t.shareSafeTitle}</strong>
+                <p>{t.shareSafeCopyDetail}</p>
+                <button onClick={actions.redactedMarkdown}>
+                  {t.shareMarkdown}
+                </button>
+                <button onClick={actions.redactedJson}>{t.shareJson}</button>
+              </div>
             </div>
           </details>
-          <button onClick={actions.import}>{t.import}</button>
           {!exampleMode && (
             <button onClick={actions.startOver}>{t.newComparison}</button>
           )}
+          <button className="action-secondary" onClick={actions.import}>
+            {t.import}
+          </button>
         </div>
       </div>
       {result.analysisRun && (
