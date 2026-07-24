@@ -211,6 +211,13 @@ async function runWatchlist(
  */
 const CLI_ANALYSIS_BUDGET_MS = 180_000;
 
+/** Human-readable stage labels for interactive progress on stderr. */
+const ANALYSIS_STAGES = {
+  source: "· Collecting sources…",
+  model: "· Asking the model…",
+  finalize: "· Finalizing the comparison…",
+} as const;
+
 /**
  * Inputs the bundled sample recognizes. Keep in sync with
  * `isBundledSampleRequest` in lib/analysis-service.ts.
@@ -365,6 +372,12 @@ async function main() {
       allowBundledSample: demo ? true : options.allowBundledSample,
       signal: controller.signal,
       budgetMs: options.budgetMs ?? CLI_ANALYSIS_BUDGET_MS,
+      // Progress goes to stderr so piped stdout stays clean; only shown on an
+      // interactive terminal. The model stage can take a while, so surface it.
+      onProgress:
+        !demo && process.stderr.isTTY
+          ? (stage) => process.stderr.write(`${ANALYSIS_STAGES[stage]}\n`)
+          : undefined,
     },
   );
   const output = renderResult(result, options.format, Boolean(options.outputFile));

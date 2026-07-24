@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `fitlens analyze` prints progress (collecting sources → asking the model →
+  finalizing) to stderr on an interactive terminal, so the slower Anthropic path
+  no longer looks hung. Piped or redirected stdout stays clean.
+- `pnpm fitlens` auto-loads `.env.local` if present (via Node's
+  `--env-file-if-exists`), so the CLI picks up keys without manual sourcing. The
+  published binary is unchanged — no implicit file loading there.
+
+### Changed
+
+- Removed 18 dead-duplicate CSS rules fully shadowed by the live theme (83 lines),
+  verified pixel-neutral by the home visual test and a computed-style fingerprint.
+- Enlarged the web UI's small text (floor raised to 12px), consolidated the
+  report's export buttons into one menu, and removed the ADR and offline-Replay
+  exports from the UI.
+
 - Anthropic is now a first-class model provider alongside OpenAI. Set
   `ANTHROPIC_API_KEY` (default model `claude-sonnet-5`); if only that key is
   present it is selected automatically, otherwise `FITLENS_MODEL_PROVIDER=anthropic`

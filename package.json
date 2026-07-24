@@ -34,7 +34,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "fitlens": "node --import tsx scripts/fitlens.ts",
+    "fitlens": "node --env-file-if-exists=.env.local --import tsx scripts/fitlens.ts",
     "build:cli": "tsc -p tsconfig.cli.json",
     "prepack": "pnpm build:cli",
     "lint": "eslint .",
