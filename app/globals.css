@@ -94,10 +94,6 @@ a {
   box-shadow: 0 0 0 4px rgba(31, 107, 79, 0.12);
 }
 
-.hero {
-  padding: 112px 0 76px;
-}
-
 .eyebrow,
 .verdict-main > p:first-child {
   margin: 0 0 20px;
@@ -114,10 +110,6 @@ a {
   font-size: clamp(56px, 8vw, 105px);
   line-height: 0.96;
   letter-spacing: -0.075em;
-}
-
-.hero h1 span {
-  color: var(--accent);
 }
 
 .hero-copy {
@@ -204,11 +196,6 @@ a {
   transition: border-color 160ms, box-shadow 160ms;
 }
 
-.url-field > div:focus-within {
-  border-color: var(--ink);
-  box-shadow: inset 0 -3px var(--accent);
-}
-
 .url-field svg {
   width: 19px;
   fill: none;
@@ -284,10 +271,6 @@ a {
   background: #fff;
   color: var(--ink);
   line-height: 1.65;
-}
-
-.context-block textarea:focus {
-  border-color: var(--ink);
 }
 
 .context-block > p,
@@ -379,11 +362,6 @@ a {
   transition: transform 160ms, background 160ms;
 }
 
-.analyze-row button:hover {
-  transform: translate(-2px, -2px);
-  background: var(--accent);
-}
-
 .analyze-row button:disabled {
   opacity: 0.65;
   cursor: wait;
@@ -447,19 +425,11 @@ a {
   z-index: 1;
 }
 
-.verdict-main > p:first-child {
-  color: #c7e3d3;
-}
-
 .verdict-main h2 {
   margin: 0 0 24px;
   font-size: clamp(42px, 6vw, 76px);
   line-height: 1;
   letter-spacing: -0.065em;
-}
-
-.verdict-main h2 span {
-  color: #ffad92;
 }
 
 .verdict-main > p:last-child {
@@ -510,11 +480,6 @@ a {
   background: var(--surface);
 }
 
-.product-card.featured {
-  border-color: var(--green);
-  box-shadow: inset 0 4px var(--green);
-}
-
 .product-card > header {
   display: flex;
   align-items: start;
@@ -563,12 +528,6 @@ a {
   font-family: "DM Mono", monospace;
   font-size: 14px;
   white-space: nowrap;
-}
-
-.source-pill.open-source {
-  border-color: #b6c8ba;
-  background: var(--soft-green);
-  color: var(--green);
 }
 
 .source-dot {
@@ -638,14 +597,6 @@ a {
   font-size: 14px;
 }
 
-.confidence-calibration.moderate > header strong {
-  color: var(--accent);
-}
-
-.confidence-calibration.limited > header strong {
-  color: #a45151;
-}
-
 .confidence-calibration > header span,
 .confidence-calibration li b {
   color: var(--muted);
@@ -712,11 +663,6 @@ a {
   font-size: 14px;
 }
 
-.confidence-calibration li.limiting > span {
-  background: #f4dddd;
-  color: #934747;
-}
-
 .confidence-calibration li p {
   margin: 2px 0 0;
   font-size: 14px;
@@ -770,10 +716,6 @@ a {
   font-weight: 500;
 }
 
-.pros-cons > div:last-child li span {
-  color: var(--accent);
-}
-
 .evidence-stack {
   margin-top: 28px;
   padding-top: 22px;
@@ -812,23 +754,6 @@ a {
   font-family: "DM Mono", monospace;
   font-size: 13px;
   white-space: nowrap;
-}
-
-.evidence-badge.verified {
-  border-color: #99b39f;
-  background: var(--soft-green);
-  color: var(--green);
-}
-
-.evidence-badge.vendor {
-  background: #ece7dd;
-  color: #5a5c56;
-}
-
-.evidence-badge.inferred {
-  border-color: #d5ab9b;
-  background: var(--soft-orange);
-  color: #8b3c28;
 }
 
 .matrix-card {
@@ -893,10 +818,6 @@ a {
   height: 100%;
   display: block;
   background: var(--ink);
-}
-
-.matrix-bars > div:nth-child(2) b {
-  background: var(--accent);
 }
 
 .matrix-bars strong {
@@ -966,10 +887,6 @@ a {
 .trial-card {
   background: var(--ink);
   color: white;
-}
-
-.trial-card .eyebrow {
-  color: #f3aa91;
 }
 
 .trial-card > div {
