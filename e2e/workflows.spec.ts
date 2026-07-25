@@ -41,7 +41,15 @@ test("home and report have no automatically detectable WCAG violations", async (
   }
 });
 
+// Pixel snapshots render differently per OS, so this contract is pinned to one
+// platform — Linux, matching CI. Locally (macOS/Windows) it skips; the other
+// e2e tests still run. Regenerate after an intentional UI change with
+// `pnpm snapshots:update`, which uses the Linux Playwright image.
 test("home visual contract", async ({ page }) => {
+  test.skip(
+    process.platform !== "linux",
+    "Linux-only pixel snapshot; run `pnpm snapshots:update` to regenerate.",
+  );
   await page.goto("/?lang=en");
   await expect(page.locator("html")).toHaveAttribute("lang", "en");
   await page.evaluate(() => document.fonts.ready);

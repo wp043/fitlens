@@ -44,6 +44,7 @@
     "test:coverage-ratchet": "node scripts/check-coverage.mjs",
     "test:e2e": "playwright test",
     "test:e2e:update": "playwright test --update-snapshots",
+    "snapshots:update": "node scripts/update-visual-snapshots.mjs",
     "test:production": "node --import tsx scripts/production-harness.ts",
     "check:code-health": "node scripts/check-code-health.mjs",
     "check": "pnpm test && pnpm test:performance && pnpm test:coverage-ratchet && pnpm check:code-health && pnpm lint && pnpm exec tsc --noEmit && pnpm build",

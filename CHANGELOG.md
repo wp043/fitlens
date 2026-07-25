@@ -18,6 +18,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The home visual-contract snapshot is now pinned to Linux (matching CI) instead
+  of per-platform. It skips on macOS/Windows so local `pnpm test:e2e` no longer
+  fails on OS font-rendering differences, and there is a single snapshot to
+  maintain. `pnpm snapshots:update` regenerates it in the matching Linux
+  Playwright container (requires Docker), so an intentional UI change is a
+  one-command update instead of a two-platform chore. The darwin snapshot is
+  removed.
 - Removed 18 dead-duplicate CSS rules fully shadowed by the live theme (83 lines),
   verified pixel-neutral by the home visual test and a computed-style fingerprint.
 - Enlarged the web UI's small text (floor raised to 12px), consolidated the

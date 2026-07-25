@@ -598,8 +598,9 @@ Curated npm, PyPI, App Store, Chrome Web Store, cmux, and Otty snapshots keep
 real public response shapes under regression coverage without making CI depend
 on third-party availability.
 Playwright covers candidate capture, evidence review, local API rejection,
-browser security headers, automated WCAG checks, and platform-specific
-full-page visual contracts. GitHub Actions runs the core
+browser security headers, automated WCAG checks, and a Linux-pinned full-page
+visual contract (regenerate with `pnpm snapshots:update`, which runs the
+matching Playwright container; it skips on other platforms). GitHub Actions runs the core
 quality gate on Linux, macOS, and Windows, with browser contracts, a hermetic
 production-artifact harness, and production
 dependency auditing on Linux. Dependabot keeps pnpm and workflow dependencies
